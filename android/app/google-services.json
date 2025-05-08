@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "723840251214",
+    "project_id": "food-delivery-around-faculty",
+    "storage_bucket": "food-delivery-around-faculty.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:723840251214:android:7c2f55a30e8d8a85735a1f",
+        "android_client_info": {
+          "package_name": "com.example.eato"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5_-Sbj_gy_kqPeYpnINWauGivif2D0xM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
