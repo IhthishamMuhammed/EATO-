@@ -907,29 +907,18 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
               color: Colors.grey.shade400,
               fontSize: 15,
             ),
-            prefixIcon: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              margin: EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                border: Border(
-                  right: BorderSide(
-                    color: Colors.grey.shade300,
-                    width: 1,
-                  ),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  "+94",
-                  style: TextStyle(
-                    color: EatoTheme.textPrimaryColor,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
-                  ),
+            // Modified prefix implementation for better input handling
+            prefix: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Text(
+                "+94 ",
+                style: TextStyle(
+                  color: EatoTheme.textPrimaryColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
                 ),
               ),
             ),
-            prefixIconConstraints: BoxConstraints(minWidth: 60, minHeight: 0),
             filled: true,
             fillColor: Colors.grey.shade50,
             contentPadding: EdgeInsets.symmetric(
