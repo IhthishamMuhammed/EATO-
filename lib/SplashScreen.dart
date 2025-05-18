@@ -17,7 +17,8 @@ class SplashScreen extends StatefulWidget {
   _SplashScreenState createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   // Animation controllers
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
@@ -198,7 +199,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           break;
         case 'provider_home':
           nextScreen = ProviderHomePage(
-            currentUser: Provider.of<UserProvider>(context, listen: false).currentUser!,
+            currentUser:
+                Provider.of<UserProvider>(context, listen: false).currentUser!,
           );
           break;
         case 'role_selection':
@@ -216,7 +218,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             const end = 1.0;
             const curve = Curves.easeInOut;
 
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var tween =
+                Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
             var fadeAnimation = animation.drive(tween);
 
             return FadeTransition(
@@ -317,7 +320,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: EatoTheme.primaryColor.withOpacity(0.3),
+                                  color:
+                                      EatoTheme.primaryColor.withOpacity(0.3),
                                   blurRadius: 20,
                                   offset: const Offset(0, 10),
                                 ),
@@ -378,7 +382,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
                         CurvedAnimation(
                           parent: _animationController,
-                          curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
+                          curve:
+                              const Interval(0.4, 1.0, curve: Curves.easeOut),
                         ),
                       ),
                       child: Text(
@@ -408,7 +413,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       width: 40,
                       height: 40,
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(EatoTheme.primaryColor),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            EatoTheme.primaryColor),
                         strokeWidth: 3,
                       ),
                     ),

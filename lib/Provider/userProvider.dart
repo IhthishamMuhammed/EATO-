@@ -25,7 +25,7 @@ class UserProvider with ChangeNotifier {
   Future<void> fetchUser(String userId) async {
     _isLoading = true;
     notifyListeners();
-    
+
     try {
       final DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -48,7 +48,7 @@ class UserProvider with ChangeNotifier {
   Future<void> updateUser(CustomUser updatedUser) async {
     _isLoading = true;
     notifyListeners();
-    
+
     try {
       await FirebaseFirestore.instance
           .collection('users')

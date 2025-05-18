@@ -15,13 +15,15 @@ import 'dart:async';
 class ProviderHomePage extends StatefulWidget {
   final CustomUser currentUser;
 
-  const ProviderHomePage({Key? key, required this.currentUser}) : super(key: key);
+  const ProviderHomePage({Key? key, required this.currentUser})
+      : super(key: key);
 
   @override
   _ProviderHomePageState createState() => _ProviderHomePageState();
 }
 
-class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerProviderStateMixin {
+class _ProviderHomePageState extends State<ProviderHomePage>
+    with SingleTickerProviderStateMixin {
   String _selectedMealTime = 'Breakfast';
   int _currentIndex = 2;
   final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
@@ -31,7 +33,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
 
-  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
+      GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
@@ -126,7 +129,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => OrderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                OrderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
@@ -139,7 +143,7 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
         );
         break;
       case 2: // Home - Already here
-      // No action needed
+        // No action needed
         break;
       case 3: // Profile
         Navigator.push(
@@ -283,32 +287,33 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
       appBar: AppBar(
         title: _showSearchBar
             ? TextField(
-          controller: _searchController,
-          autofocus: true,
-          decoration: EatoTheme.inputDecoration(
-            hintText: 'Search foods...',
-            prefixIcon: Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.close),
-              onPressed: () {
-                setState(() {
-                  _showSearchBar = false;
-                  _searchController.clear();
-                });
-                foodProvider.setSearchQuery('');
-              },
-            ),
-          ),
-          style: EatoTheme.bodyMedium,
-        )
+                controller: _searchController,
+                autofocus: true,
+                decoration: EatoTheme.inputDecoration(
+                  hintText: 'Search foods...',
+                  prefixIcon:
+                      Icon(Icons.search, color: EatoTheme.textSecondaryColor),
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        _showSearchBar = false;
+                        _searchController.clear();
+                      });
+                      foodProvider.setSearchQuery('');
+                    },
+                  ),
+                ),
+                style: EatoTheme.bodyMedium,
+              )
             : Text(
-          'My Menu',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: EatoTheme.textPrimaryColor,
-          ),
-        ),
+                'My Menu',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: EatoTheme.textPrimaryColor,
+                ),
+              ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: _showSearchBar ? false : true,
@@ -316,11 +321,12 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
         leading: _showSearchBar
             ? null
             : (Navigator.canPop(context)
-            ? IconButton(
-          icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-          onPressed: () => Navigator.pop(context),
-        )
-            : null),
+                ? IconButton(
+                    icon: Icon(Icons.arrow_back,
+                        color: EatoTheme.textPrimaryColor),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : null),
         actions: [
           if (!_showSearchBar)
             IconButton(
@@ -351,10 +357,11 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: EatoTheme.primaryColor))
+          ? Center(
+              child: CircularProgressIndicator(color: EatoTheme.primaryColor))
           : storeProvider.userStore == null
-          ? _buildNoStoreView()
-          : _buildFoodListView(foodProvider),
+              ? _buildNoStoreView()
+              : _buildFoodListView(foodProvider),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToAddFood,
         backgroundColor: EatoTheme.primaryColor,
@@ -384,14 +391,16 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
           SizedBox(height: 8),
           Text(
             'Add your first food item to start your menu',
-            style: EatoTheme.bodyMedium.copyWith(color: EatoTheme.textSecondaryColor),
+            style: EatoTheme.bodyMedium
+                .copyWith(color: EatoTheme.textSecondaryColor),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () {
               // Navigate to AddFoodPage
-              final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+              final storeProvider =
+                  Provider.of<StoreProvider>(context, listen: false);
               final storeId = storeProvider.userStore?.id ?? '';
 
               Navigator.push(
@@ -453,7 +462,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.add_circle_outline, color: Colors.white, size: 20),
+                    Icon(Icons.add_circle_outline,
+                        color: Colors.white, size: 20),
                     SizedBox(width: 8),
                     Text(
                       'Add New Food',
@@ -474,13 +484,13 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
             child: filteredFoods.isEmpty
                 ? _buildEmptyFoodList()
                 : ListView.builder(
-              padding: EdgeInsets.only(bottom: 80),
-              itemCount: filteredFoods.length,
-              itemBuilder: (context, index) {
-                final food = filteredFoods[index];
-                return _buildFoodCard(food);
-              },
-            ),
+                    padding: EdgeInsets.only(bottom: 80),
+                    itemCount: filteredFoods.length,
+                    itemBuilder: (context, index) {
+                      final food = filteredFoods[index];
+                      return _buildFoodCard(food);
+                    },
+                  ),
           ),
         ],
       ),
@@ -537,40 +547,41 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                   color: Colors.grey[200],
                   child: food.imageUrl.isEmpty
                       ? Center(
-                    child: Icon(
-                      Icons.restaurant,
-                      size: 60,
-                      color: Colors.grey[400],
-                    ),
-                  )
+                          child: Icon(
+                            Icons.restaurant,
+                            size: 60,
+                            color: Colors.grey[400],
+                          ),
+                        )
                       : Image.network(
-                    food.imageUrl,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                              : null,
-                          strokeWidth: 2,
-                          color: EatoTheme.primaryColor,
+                          food.imageUrl,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes !=
+                                        null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                                strokeWidth: 2,
+                                color: EatoTheme.primaryColor,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 60,
+                                color: Colors.grey[400],
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 60,
-                          color: Colors.grey[400],
-                        ),
-                      );
-                    },
-                  ),
                 ),
 
                 // Meal time and food type tags
@@ -580,7 +591,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                   child: Row(
                     children: [
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: EatoTheme.primaryColor,
                           borderRadius: BorderRadius.circular(12),
@@ -597,7 +609,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                       SizedBox(width: 6),
                       if (food.type.isNotEmpty)
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: food.type.toLowerCase().contains('veg')
                                 ? EatoTheme.successColor
@@ -627,7 +640,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                         radius: 16,
                         backgroundColor: Colors.white.withOpacity(0.8),
                         child: IconButton(
-                          icon: Icon(Icons.edit, size: 16, color: EatoTheme.primaryColor),
+                          icon: Icon(Icons.edit,
+                              size: 16, color: EatoTheme.primaryColor),
                           padding: EdgeInsets.zero,
                           constraints: BoxConstraints(),
                           onPressed: () => _navigateToEditFood(food),
@@ -638,10 +652,12 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                         radius: 16,
                         backgroundColor: Colors.white.withOpacity(0.8),
                         child: IconButton(
-                          icon: Icon(Icons.delete, size: 16, color: EatoTheme.errorColor),
+                          icon: Icon(Icons.delete,
+                              size: 16, color: EatoTheme.errorColor),
                           padding: EdgeInsets.zero,
                           constraints: BoxConstraints(),
-                          onPressed: () => _confirmDeleteFood(food.id, food.name),
+                          onPressed: () =>
+                              _confirmDeleteFood(food.id, food.name),
                         ),
                       ),
                     ],
@@ -736,7 +752,6 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                     ],
                   ),
                   SizedBox(height: 20),
-
                   Text(
                     'Food Type',
                     style: EatoTheme.labelLarge,
@@ -772,7 +787,6 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                       );
                     }).toList(),
                   ),
-
                   SizedBox(height: 20),
                   Text(
                     'Food Category',
@@ -789,7 +803,8 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                       'Short Eats',
                       'Hoppers',
                     ].map((category) {
-                      bool isSelected = foodProvider.getFilterCategory() == category;
+                      bool isSelected =
+                          foodProvider.getFilterCategory() == category;
                       return FilterChip(
                         label: Text(category),
                         selected: isSelected,
@@ -811,7 +826,6 @@ class _ProviderHomePageState extends State<ProviderHomePage> with SingleTickerPr
                       );
                     }).toList(),
                   ),
-
                   SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,

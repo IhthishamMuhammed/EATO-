@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
 
-
 // Import home pages directly
 import 'package:eato/pages/customer/customer_home.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
@@ -30,7 +29,8 @@ class PhoneVerificationPage extends StatefulWidget {
   State<PhoneVerificationPage> createState() => _PhoneVerificationPageState();
 }
 
-class _PhoneVerificationPageState extends State<PhoneVerificationPage> with SingleTickerProviderStateMixin {
+class _PhoneVerificationPageState extends State<PhoneVerificationPage>
+    with SingleTickerProviderStateMixin {
   // Firebase Auth instance
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -62,7 +62,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
   late Animation<double> _scaleAnimation;
 
   // Form controllers
-  final List<TextEditingController> _codeControllers = List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _codeControllers =
+      List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   final TextEditingController _pasteController = TextEditingController();
 
@@ -168,9 +169,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
     try {
       // Ensure proper phone number format
       final String phoneNumber = widget.phoneNumber.trim();
-      final String formattedPhoneNumber = phoneNumber.startsWith('+')
-          ? phoneNumber
-          : '+$phoneNumber';
+      final String formattedPhoneNumber =
+          phoneNumber.startsWith('+') ? phoneNumber : '+$phoneNumber';
 
       _debugLog("Attempting to verify phone number: $formattedPhoneNumber");
 
@@ -338,7 +338,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
       });
 
       _showSuccessMessage("Code verified successfully!");
-
     } catch (e) {
       _debugLog("Real-time verification failed: $e");
 
@@ -408,7 +407,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
     }
   }
 
-  Future<void> _handleSignup(PhoneAuthCredential credential, UserProvider userProvider) async {
+  Future<void> _handleSignup(
+      PhoneAuthCredential credential, UserProvider userProvider) async {
     _debugLog("Creating new user account");
     UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
       email: widget.userData!['email']!,
@@ -468,7 +468,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
     _navigateToHome(userProvider.currentUser);
   }
 
-  Future<void> _handleLogin(PhoneAuthCredential credential, UserProvider userProvider) async {
+  Future<void> _handleLogin(
+      PhoneAuthCredential credential, UserProvider userProvider) async {
     _debugLog("Login flow - updating phone number");
     final user = _auth.currentUser;
     if (user != null) {
@@ -535,7 +536,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => CustomerHomePage()),
-            (route) => false, // Clear all previous routes
+        (route) => false, // Clear all previous routes
       );
     } else {
       Navigator.pushAndRemoveUntil(
@@ -545,7 +546,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
             currentUser: user,
           ),
         ),
-            (route) => false, // Clear all previous routes
+        (route) => false, // Clear all previous routes
       );
     }
   }
@@ -628,7 +629,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
       if (widget.isSignUp) {
         // For sign up process - create new user without phone verification
         _debugLog("Creating new user account without phone verification");
-        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        UserCredential userCredential =
+            await _auth.createUserWithEmailAndPassword(
           email: widget.userData!['email']!,
           password: widget.userData!['password']!,
         );
@@ -675,10 +677,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
-              .update({
-            'phoneNumber': widget.phoneNumber,
-            'phoneVerified': false
-          });
+              .update(
+                  {'phoneNumber': widget.phoneNumber, 'phoneVerified': false});
 
           // Get user data
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -687,7 +687,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
               .get();
 
           if (userDoc.exists) {
-            Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+            Map<String, dynamic> userData =
+                userDoc.data() as Map<String, dynamic>;
 
             // Update user in provider
             CustomUser updatedUser = CustomUser(
@@ -727,7 +728,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
         errorMsg = "Too many requests. Try again later";
         break;
       case 'operation-not-allowed':
-        errorMsg = "Phone auth not enabled in Firebase or not allowed for this region";
+        errorMsg =
+            "Phone auth not enabled in Firebase or not allowed for this region";
         break;
       case 'quota-exceeded':
         errorMsg = "SMS quota exceeded for the project";
@@ -878,8 +880,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
                     _buildAlternativeOptions(isSmallScreen),
 
                     // Debug information if in debug mode
-                    if (_debug && _errorMessage.isNotEmpty)
-                      _buildDebugInfo(),
+                    if (_debug && _errorMessage.isNotEmpty) _buildDebugInfo(),
                   ],
                 ),
               ),
@@ -902,32 +903,32 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
             color: _isVerificationSuccessful
                 ? Colors.green.withOpacity(0.1)
                 : _isAutoRetrievalInProgress
-                ? Colors.blue.withOpacity(0.1)
-                : EatoTheme.primaryColor.withOpacity(0.1),
+                    ? Colors.blue.withOpacity(0.1)
+                    : EatoTheme.primaryColor.withOpacity(0.1),
           ),
           child: Center(
             child: _isVerificationSuccessful
                 ? Icon(
-              Icons.check_circle_rounded,
-              size: screenSize.width * 0.25,
-              color: Colors.green.withOpacity(0.7),
-            )
+                    Icons.check_circle_rounded,
+                    size: screenSize.width * 0.25,
+                    color: Colors.green.withOpacity(0.7),
+                  )
                 : _isAutoRetrievalInProgress
-                ? SizedBox(
-              width: screenSize.width * 0.12,
-              height: screenSize.width * 0.12,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Colors.blue.withOpacity(0.7),
-                ),
-              ),
-            )
-                : Icon(
-              Icons.smartphone_rounded,
-              size: screenSize.width * 0.25,
-              color: EatoTheme.primaryColor.withOpacity(0.7),
-            ),
+                    ? SizedBox(
+                        width: screenSize.width * 0.12,
+                        height: screenSize.width * 0.12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.blue.withOpacity(0.7),
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Icons.smartphone_rounded,
+                        size: screenSize.width * 0.25,
+                        color: EatoTheme.primaryColor.withOpacity(0.7),
+                      ),
           ),
         ),
 
@@ -935,7 +936,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
 
         // Title text
         ShaderMask(
-          shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+          shaderCallback: (bounds) =>
+              EatoTheme.primaryGradient.createShader(bounds),
           child: Text(
             _isVerificationSuccessful
                 ? "Verification Successful"
@@ -1020,7 +1022,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
 
                     _showSuccessMessage("Code pasted");
                   } else {
-                    _showErrorMessage("Clipboard doesn't contain a valid 6-digit code");
+                    _showErrorMessage(
+                        "Clipboard doesn't contain a valid 6-digit code");
                   }
                 }
               });
@@ -1335,7 +1338,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(
               6,
-                  (index) => AnimatedContainer(
+              (index) => AnimatedContainer(
                 duration: Duration(milliseconds: 200),
                 width: isSmallScreen ? 38 : 44,
                 height: isSmallScreen ? 50 : 56,
@@ -1351,8 +1354,8 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
                       color: _digitValidation[index] == true
                           ? Colors.green.withOpacity(0.1)
                           : _digitValidation[index] == false
-                          ? Colors.red.withOpacity(0.1)
-                          : Colors.transparent,
+                              ? Colors.red.withOpacity(0.1)
+                              : Colors.transparent,
                       blurRadius: 4,
                       offset: Offset(0, 2),
                     ),
@@ -1384,12 +1387,14 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
                     onChanged: (value) {
                       if (value.isNotEmpty) {
                         if (index < 5) {
-                          FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+                          FocusScope.of(context)
+                              .requestFocus(_focusNodes[index + 1]);
                         } else {
                           FocusScope.of(context).unfocus();
                         }
                       } else if (value.isEmpty && index > 0) {
-                        FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+                        FocusScope.of(context)
+                            .requestFocus(_focusNodes[index - 1]);
                       }
                     },
                   ),
@@ -1460,9 +1465,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(
-            _canResend
-                ? "Resend Code"
-                : "Resend in $_remainingSeconds s",
+            _canResend ? "Resend Code" : "Resend in $_remainingSeconds s",
             style: TextStyle(
               color: _canResend ? EatoTheme.primaryColor : Colors.grey.shade500,
               fontWeight: FontWeight.w500,
@@ -1475,7 +1478,11 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
   }
 
   Widget _buildVerifyButton(bool isSmallScreen) {
-    bool isDisabled = _isVerifying || _isAutoVerifying || !_isCodeSent || _currentCode.length != 6 || _isVerificationSuccessful;
+    bool isDisabled = _isVerifying ||
+        _isAutoVerifying ||
+        !_isCodeSent ||
+        _currentCode.length != 6 ||
+        _isVerificationSuccessful;
 
     return SizedBox(
       width: double.infinity,
@@ -1484,8 +1491,10 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
         onPressed: isDisabled
             ? null
             : _isVerificationSuccessful
-            ? () => _navigateToHome(Provider.of<UserProvider>(context, listen: false).currentUser)
-            : _verifyManually,
+                ? () => _navigateToHome(
+                    Provider.of<UserProvider>(context, listen: false)
+                        .currentUser)
+                : _verifyManually,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
@@ -1500,64 +1509,62 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage> with Sing
           decoration: BoxDecoration(
             gradient: _isVerificationSuccessful
                 ? LinearGradient(
-              colors: [Colors.green.shade500, Colors.green.shade700],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            )
+                    colors: [Colors.green.shade500, Colors.green.shade700],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
                 : isDisabled
-                ? LinearGradient(
-              colors: [Colors.grey.shade400, Colors.grey.shade500],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            )
-                : EatoTheme.primaryGradient,
+                    ? LinearGradient(
+                        colors: [Colors.grey.shade400, Colors.grey.shade500],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : EatoTheme.primaryGradient,
             borderRadius: BorderRadius.circular(16),
             boxShadow: isDisabled
                 ? []
                 : [
-              BoxShadow(
-                color: _isVerificationSuccessful
-                    ? Colors.green.withOpacity(0.3)
-                    : EatoTheme.primaryColor.withOpacity(0.3),
-                blurRadius: 8,
-                offset: Offset(0, 4),
-              ),
-            ],
+                    BoxShadow(
+                      color: _isVerificationSuccessful
+                          ? Colors.green.withOpacity(0.3)
+                          : EatoTheme.primaryColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
           ),
           child: Container(
             height: 55,
             alignment: Alignment.center,
             child: _isVerifying
                 ? SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                 : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  _isVerificationSuccessful
-                      ? "Continue"
-                      : "Verify Code",
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 16 : 18,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _isVerificationSuccessful ? "Continue" : "Verify Code",
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 16 : 18,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(
+                        _isVerificationSuccessful
+                            ? Icons.check_circle
+                            : Icons.lock_open,
+                        size: 20,
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: 8),
-                Icon(
-                  _isVerificationSuccessful
-                      ? Icons.check_circle
-                      : Icons.lock_open,
-                  size: 20,
-                ),
-              ],
-            ),
           ),
         ),
       ),

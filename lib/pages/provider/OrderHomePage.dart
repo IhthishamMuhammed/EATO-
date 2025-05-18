@@ -9,7 +9,6 @@ import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:intl/intl.dart';
 
-
 // Order model
 class Order {
   final String id;
@@ -70,9 +69,13 @@ class OrderProvider with ChangeNotifier {
     if (_searchQuery.isEmpty) return orders;
 
     return orders.where((order) {
-      return order.customerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      return order.customerName
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
           order.foodName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          order.deliveryLocation.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          order.deliveryLocation
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
           order.id.contains(_searchQuery);
     }).toList();
   }
@@ -214,7 +217,8 @@ class OrderProvider with ChangeNotifier {
     await Future.delayed(Duration(milliseconds: 500));
 
     // Find and update the order
-    final orderIndex = _presentOrders.indexWhere((order) => order.id == orderId);
+    final orderIndex =
+        _presentOrders.indexWhere((order) => order.id == orderId);
     if (orderIndex != -1) {
       final currentOrder = _presentOrders[orderIndex];
       final updatedOrder = Order(
@@ -232,22 +236,25 @@ class OrderProvider with ChangeNotifier {
       );
 
       // If the order is delivered or cancelled, move it to past orders
-      if (newStatus == OrderStatus.delivered || newStatus == OrderStatus.cancelled) {
+      if (newStatus == OrderStatus.delivered ||
+          newStatus == OrderStatus.cancelled) {
         _presentOrders.removeAt(orderIndex);
-        _pastOrders.insert(0, Order(
-          id: updatedOrder.id,
-          customerId: updatedOrder.customerId,
-          customerName: updatedOrder.customerName,
-          foodName: updatedOrder.foodName,
-          quantity: updatedOrder.quantity,
-          price: updatedOrder.price,
-          imageUrl: updatedOrder.imageUrl,
-          orderTime: updatedOrder.orderTime,
-          deliveryLocation: updatedOrder.deliveryLocation,
-          contactNumber: updatedOrder.contactNumber,
-          status: updatedOrder.status,
-          isPastOrder: true,
-        ));
+        _pastOrders.insert(
+            0,
+            Order(
+              id: updatedOrder.id,
+              customerId: updatedOrder.customerId,
+              customerName: updatedOrder.customerName,
+              foodName: updatedOrder.foodName,
+              quantity: updatedOrder.quantity,
+              price: updatedOrder.price,
+              imageUrl: updatedOrder.imageUrl,
+              orderTime: updatedOrder.orderTime,
+              deliveryLocation: updatedOrder.deliveryLocation,
+              contactNumber: updatedOrder.contactNumber,
+              status: updatedOrder.status,
+              isPastOrder: true,
+            ));
       } else {
         _presentOrders[orderIndex] = updatedOrder;
       }
@@ -267,8 +274,9 @@ class OrderHomePage extends StatefulWidget {
   _OrderHomePageState createState() => _OrderHomePageState();
 }
 
-class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProviderStateMixin {
-  int _currentIndex = 0;  // Default to Orders tab
+class _OrderHomePageState extends State<OrderHomePage>
+    with SingleTickerProviderStateMixin {
+  int _currentIndex = 0; // Default to Orders tab
   final OrderProvider _orderProvider = OrderProvider();
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
@@ -304,7 +312,7 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
 
     switch (index) {
       case 0: // Orders (current page)
-      // Already on the page
+        // Already on the page
         break;
       case 1: // Requests
         Navigator.pushReplacement(
@@ -318,7 +326,8 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                ProviderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
@@ -361,32 +370,33 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
         appBar: AppBar(
           title: _showSearchBar
               ? TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: EatoTheme.inputDecoration(
-              hintText: 'Search orders...',
-              prefixIcon: Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    _showSearchBar = false;
-                    _searchController.clear();
-                  });
-                  _orderProvider.setSearchQuery('');
-                },
-              ),
-            ),
-            style: EatoTheme.bodyMedium,
-          )
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: EatoTheme.inputDecoration(
+                    hintText: 'Search orders...',
+                    prefixIcon:
+                        Icon(Icons.search, color: EatoTheme.textSecondaryColor),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () {
+                        setState(() {
+                          _showSearchBar = false;
+                          _searchController.clear();
+                        });
+                        _orderProvider.setSearchQuery('');
+                      },
+                    ),
+                  ),
+                  style: EatoTheme.bodyMedium,
+                )
               : Text(
-            'Orders',
-            style: TextStyle(
-              color: EatoTheme.textPrimaryColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+                  'Orders',
+                  style: TextStyle(
+                    color: EatoTheme.textPrimaryColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
           backgroundColor: Colors.white,
           elevation: 0,
           centerTitle: _showSearchBar ? false : true,
@@ -394,11 +404,12 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
           leading: _showSearchBar
               ? null
               : (Navigator.canPop(context)
-              ? IconButton(
-            icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-            onPressed: () => Navigator.pop(context),
-          )
-              : null),
+                  ? IconButton(
+                      icon: Icon(Icons.arrow_back,
+                          color: EatoTheme.textPrimaryColor),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  : null),
           actions: [
             if (!_showSearchBar)
               IconButton(
@@ -519,7 +530,8 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
     }
 
     // Sort dates from newest to oldest
-    final sortedDates = groupedOrders.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedDates = groupedOrders.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
 
     return ListView.builder(
       padding: EdgeInsets.all(0),
@@ -666,21 +678,21 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
                       borderRadius: BorderRadius.circular(8),
                       child: order.imageUrl.isNotEmpty
                           ? Image.network(
-                        order.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.fastfood,
-                            color: Colors.grey[400],
-                            size: 30,
-                          );
-                        },
-                      )
+                              order.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.fastfood,
+                                  color: Colors.grey[400],
+                                  size: 30,
+                                );
+                              },
+                            )
                           : Icon(
-                        Icons.fastfood,
-                        color: Colors.grey[400],
-                        size: 30,
-                      ),
+                              Icons.fastfood,
+                              color: Colors.grey[400],
+                              size: 30,
+                            ),
                     ),
                   ),
                   SizedBox(width: 16),
@@ -748,7 +760,8 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
                       ),
                       SizedBox(height: 8),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
@@ -829,21 +842,21 @@ class _OrderHomePageState extends State<OrderHomePage> with SingleTickerProvider
                   borderRadius: BorderRadius.circular(6),
                   child: order.imageUrl.isNotEmpty
                       ? Image.network(
-                    order.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.fastfood,
-                        color: Colors.grey[400],
-                        size: 22,
-                      );
-                    },
-                  )
+                          order.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.fastfood,
+                              color: Colors.grey[400],
+                              size: 22,
+                            );
+                          },
+                        )
                       : Icon(
-                    Icons.fastfood,
-                    color: Colors.grey[400],
-                    size: 22,
-                  ),
+                          Icons.fastfood,
+                          color: Colors.grey[400],
+                          size: 22,
+                        ),
                 ),
               ),
               SizedBox(width: 12),
@@ -1010,21 +1023,21 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                             color: Colors.grey[300],
                             child: widget.order.imageUrl.isNotEmpty
                                 ? Image.network(
-                              widget.order.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.restaurant,
-                                  size: 40,
-                                  color: Colors.grey[600],
-                                );
-                              },
-                            )
+                                    widget.order.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        Icons.restaurant,
+                                        size: 40,
+                                        color: Colors.grey[600],
+                                      );
+                                    },
+                                  )
                                 : Icon(
-                              Icons.restaurant,
-                              size: 40,
-                              color: Colors.grey[600],
-                            ),
+                                    Icons.restaurant,
+                                    size: 40,
+                                    color: Colors.grey[600],
+                                  ),
                           ),
                         ),
                         SizedBox(width: 20),
@@ -1101,7 +1114,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 _buildInfoTile(
                   icon: Icons.access_time,
                   title: 'Order Time',
-                  value: DateFormat('MMM d, yyyy • h:mm a').format(widget.order.orderTime),
+                  value: DateFormat('MMM d, yyyy • h:mm a')
+                      .format(widget.order.orderTime),
                 ),
 
                 SizedBox(height: 32),
@@ -1196,7 +1210,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          DateFormat('MMM d, yyyy • h:mm a').format(widget.order.orderTime),
+                          DateFormat('MMM d, yyyy • h:mm a')
+                              .format(widget.order.orderTime),
                           style: TextStyle(
                             color: EatoTheme.textSecondaryColor,
                           ),
@@ -1383,7 +1398,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           ),
         );
 
-        if (newStatus == OrderStatus.delivered || newStatus == OrderStatus.cancelled) {
+        if (newStatus == OrderStatus.delivered ||
+            newStatus == OrderStatus.cancelled) {
           Navigator.pop(context); // Go back to orders list
         }
       }
@@ -1410,7 +1426,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Cancel Order?'),
-        content: Text('Are you sure you want to cancel this order? This action cannot be undone.'),
+        content: Text(
+            'Are you sure you want to cancel this order? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

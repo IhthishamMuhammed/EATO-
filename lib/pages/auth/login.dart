@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 
-
 import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
 import 'phoneVerification.dart';
@@ -22,7 +21,8 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage>
+    with SingleTickerProviderStateMixin {
   // Form controllers and focus nodes
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
@@ -175,7 +175,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
       // Login using Firebase Authentication
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
@@ -184,8 +185,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       await userProvider.fetchUser(userCredential.user!.uid);
 
       // Verify role matches
-      if (!_verifyRoleMatches(userProvider.currentUser?.userType, widget.role)) {
-        throw Exception("This account doesn't match your selected role. Please use a ${widget.role} account.");
+      if (!_verifyRoleMatches(
+          userProvider.currentUser?.userType, widget.role)) {
+        throw Exception(
+            "This account doesn't match your selected role. Please use a ${widget.role} account.");
       }
 
       // Navigate to appropriate screen
@@ -282,7 +285,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => CustomerHomePage()),
-              (route) => false,
+          (route) => false,
         );
       } else {
         Navigator.pushAndRemoveUntil(
@@ -290,7 +293,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           MaterialPageRoute(
             builder: (context) => ProviderHomePage(currentUser: user),
           ),
-              (route) => false,
+          (route) => false,
         );
       }
     }
@@ -344,11 +347,13 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           content: Text(errorMessage),
           backgroundColor: EatoTheme.errorColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           action: SnackBarAction(
             label: 'OK',
             textColor: Colors.white,
-            onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+            onPressed: () =>
+                ScaffoldMessenger.of(context).hideCurrentSnackBar(),
           ),
         ),
       );
@@ -384,8 +389,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       builder: (context) => AlertDialog(
         title: Text('Reset Password'),
         content: Text(
-            'We will send a password reset link to ${_emailController.text}. Would you like to proceed?'
-        ),
+            'We will send a password reset link to ${_emailController.text}. Would you like to proceed?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -528,8 +532,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       SizedBox(height: screenSize.height * 0.02),
 
                       // Biometric login
-                      if (_hasBiometrics)
-                        _buildBiometricLogin(),
+                      if (_hasBiometrics) _buildBiometricLogin(),
 
                       SizedBox(height: screenSize.height * 0.03),
 
@@ -554,9 +557,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   Widget _buildLoginHeader(Size screenSize, bool isSmallScreen) {
     final bool isCustomer = widget.role.toLowerCase() == 'customer';
     final String roleName = isCustomer ? 'Customer' : 'Food Provider';
-    final Color roleColor = isCustomer
-        ? EatoTheme.primaryColor
-        : EatoTheme.accentColor;
+    final Color roleColor =
+        isCustomer ? EatoTheme.primaryColor : EatoTheme.accentColor;
 
     return Center(
       child: Column(
@@ -646,7 +648,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       children: [
         SizedBox(height: 30),
         ShaderMask(
-          shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+          shaderCallback: (bounds) =>
+              EatoTheme.primaryGradient.createShader(bounds),
           child: Text(
             "Welcome Back!",
             style: TextStyle(
@@ -899,13 +902,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       height: 55,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: _isLoading ? [] : [
-          BoxShadow(
-            color: EatoTheme.primaryColor.withOpacity(0.3),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
+        boxShadow: _isLoading
+            ? []
+            : [
+                BoxShadow(
+                  color: EatoTheme.primaryColor.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
       ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : () => _loginWithCredentials(context),
@@ -924,13 +929,13 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           decoration: BoxDecoration(
             gradient: _isLoading
                 ? LinearGradient(
-              colors: [
-                Colors.grey.shade400,
-                Colors.grey.shade500,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            )
+                    colors: [
+                      Colors.grey.shade400,
+                      Colors.grey.shade500,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
                 : EatoTheme.primaryGradient,
             borderRadius: BorderRadius.circular(16),
           ),
@@ -938,39 +943,39 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             alignment: Alignment.center,
             child: _isLoading
                 ? SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                 : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Sign In",
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 16 : 18,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Sign In",
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 16 : 18,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: 10),
-                Container(
-                  padding: EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward_ios,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),

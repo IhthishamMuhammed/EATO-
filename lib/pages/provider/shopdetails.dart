@@ -94,7 +94,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                ProviderHomePage(currentUser: widget.currentUser),
           ),
         );
       });
@@ -118,7 +119,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
       ),
       body: storeProvider.isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.purple))
-          : _buildShopDetailsForm(storeProvider, userProvider.currentUser?.id ?? widget.currentUser.id),
+          : _buildShopDetailsForm(storeProvider,
+              userProvider.currentUser?.id ?? widget.currentUser.id),
     );
   }
 
@@ -147,13 +149,15 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                 controller: _shopNameController,
                 decoration: InputDecoration(
                   hintText: "Enter your shop name",
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   border: InputBorder.none,
                 ),
               ),
             ),
             SizedBox(height: 16),
-            Text("Shop Contact Number", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text("Shop Contact Number",
+                style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
@@ -165,7 +169,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   hintText: "Enter your shop contact number",
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   border: InputBorder.none,
                 ),
               ),
@@ -186,7 +191,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         padding: EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
                           color: isPickup ? Colors.purple : Colors.transparent,
-                          borderRadius: BorderRadius.horizontal(left: Radius.circular(30)),
+                          borderRadius: BorderRadius.horizontal(
+                              left: Radius.circular(30)),
                         ),
                         child: Center(
                           child: Text(
@@ -207,7 +213,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         padding: EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
                           color: !isPickup ? Colors.purple : Colors.transparent,
-                          borderRadius: BorderRadius.horizontal(right: Radius.circular(30)),
+                          borderRadius: BorderRadius.horizontal(
+                              right: Radius.circular(30)),
                         ),
                         child: Center(
                           child: Text(
@@ -228,7 +235,8 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
             Center(
               child: Column(
                 children: [
-                  Text("Profile Picture", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text("Profile Picture",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   SizedBox(height: 16),
                   GestureDetector(
                     onTap: _pickImage,
@@ -254,7 +262,9 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         if (_shopNameController.text.isEmpty ||
                             _shopContactController.text.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Please fill all required fields')),
+                            SnackBar(
+                                content:
+                                    Text('Please fill all required fields')),
                           );
                           return;
                         }
@@ -266,7 +276,9 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         try {
                           String imageUrl = '';
                           if (_webImageBytes != null) {
-                            final fileName = DateTime.now().millisecondsSinceEpoch.toString();
+                            final fileName = DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString();
                             final reference = FirebaseStorage.instance
                                 .ref()
                                 .child('store_images')
@@ -277,7 +289,9 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                           }
 
                           final store = Store(
-                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
                             name: _shopNameController.text,
                             contact: _shopContactController.text,
                             isPickup: isPickup,
@@ -285,16 +299,19 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                             foods: [],
                           );
 
-                          await storeProvider.createOrUpdateStore(store, userId);
+                          await storeProvider.createOrUpdateStore(
+                              store, userId);
 
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Shop created successfully')),
+                            SnackBar(
+                                content: Text('Shop created successfully')),
                           );
 
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => AddFoodPage(storeId: store.id),
+                              builder: (context) =>
+                                  AddFoodPage(storeId: store.id),
                             ),
                           );
                         } catch (e) {

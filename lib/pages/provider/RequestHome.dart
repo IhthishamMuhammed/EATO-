@@ -44,7 +44,8 @@ class RequestProvider with ChangeNotifier {
 
   bool get isLoading => _isLoading;
   List<OrderRequest> get newRequests => _filterRequests(_newRequests);
-  List<OrderRequest> get cancellationRequests => _filterRequests(_cancellationRequests);
+  List<OrderRequest> get cancellationRequests =>
+      _filterRequests(_cancellationRequests);
 
   void setSearchQuery(String query) {
     _searchQuery = query;
@@ -55,9 +56,13 @@ class RequestProvider with ChangeNotifier {
     if (_searchQuery.isEmpty) return requests;
 
     return requests.where((request) {
-      return request.customerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      return request.customerName
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
           request.foodName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          request.deliveryLocation.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          request.deliveryLocation
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
           request.id.contains(_searchQuery);
     }).toList();
   }
@@ -202,7 +207,8 @@ class RequestHome extends StatefulWidget {
   _RequestHomeState createState() => _RequestHomeState();
 }
 
-class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStateMixin {
+class _RequestHomeState extends State<RequestHome>
+    with SingleTickerProviderStateMixin {
   int _currentIndex = 1; // Default to Requests tab
   final RequestProvider _requestProvider = RequestProvider();
   bool _showSearchBar = false;
@@ -236,18 +242,20 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => OrderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                OrderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
       case 1: // Requests - current page
-      // Already on this page
+        // Already on this page
         break;
       case 2: // Menu
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                ProviderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
@@ -289,7 +297,9 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                request.isCancellationRequest ? 'Cancellation Request' : 'New Order Request',
+                request.isCancellationRequest
+                    ? 'Cancellation Request'
+                    : 'New Order Request',
                 style: EatoTheme.headingMedium,
               ),
               IconButton(
@@ -386,24 +396,24 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                 ),
                 child: request.imageUrl.isNotEmpty
                     ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    request.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          request.imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.fastfood,
+                              color: Colors.grey[400],
+                              size: 30,
+                            );
+                          },
+                        ),
+                      )
+                    : Icon(
                         Icons.fastfood,
                         color: Colors.grey[400],
                         size: 30,
-                      );
-                    },
-                  ),
-                )
-                    : Icon(
-                  Icons.fastfood,
-                  color: Colors.grey[400],
-                  size: 30,
-                ),
+                      ),
               ),
               SizedBox(width: 16),
 
@@ -502,7 +512,8 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                     ),
                     SizedBox(height: 4),
                     Text(
-                      DateFormat('MMM d, yyyy • h:mm a').format(request.requestTime),
+                      DateFormat('MMM d, yyyy • h:mm a')
+                          .format(request.requestTime),
                       style: TextStyle(
                         fontSize: 16,
                       ),
@@ -586,32 +597,33 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
         appBar: AppBar(
           title: _showSearchBar
               ? TextField(
-            controller: _searchController,
-            autofocus: true,
-            decoration: EatoTheme.inputDecoration(
-              hintText: 'Search requests...',
-              prefixIcon: Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.close),
-                onPressed: () {
-                  setState(() {
-                    _showSearchBar = false;
-                    _searchController.clear();
-                  });
-                  _requestProvider.setSearchQuery('');
-                },
-              ),
-            ),
-            style: EatoTheme.bodyMedium,
-          )
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: EatoTheme.inputDecoration(
+                    hintText: 'Search requests...',
+                    prefixIcon:
+                        Icon(Icons.search, color: EatoTheme.textSecondaryColor),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () {
+                        setState(() {
+                          _showSearchBar = false;
+                          _searchController.clear();
+                        });
+                        _requestProvider.setSearchQuery('');
+                      },
+                    ),
+                  ),
+                  style: EatoTheme.bodyMedium,
+                )
               : Text(
-            'Requests',
-            style: TextStyle(
-              color: EatoTheme.textPrimaryColor,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+                  'Requests',
+                  style: TextStyle(
+                    color: EatoTheme.textPrimaryColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
           backgroundColor: Colors.white,
           elevation: 0,
           centerTitle: _showSearchBar ? false : true,
@@ -619,11 +631,12 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
           leading: _showSearchBar
               ? null
               : (Navigator.canPop(context)
-              ? IconButton(
-            icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-            onPressed: () => Navigator.pop(context),
-          )
-              : null),
+                  ? IconButton(
+                      icon: Icon(Icons.arrow_back,
+                          color: EatoTheme.textPrimaryColor),
+                      onPressed: () => Navigator.pop(context),
+                    )
+                  : null),
           actions: [
             if (!_showSearchBar)
               IconButton(
@@ -684,7 +697,8 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                             ),
                             SizedBox(width: 8),
                             Container(
-                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: EatoTheme.primaryColor,
                                 borderRadius: BorderRadius.circular(12),
@@ -706,28 +720,29 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                       // New Order Requests
                       requestProvider.newRequests.isEmpty
                           ? Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 24.0,
-                          horizontal: 16.0,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'No new order requests',
-                            style: TextStyle(color: EatoTheme.textSecondaryColor),
-                          ),
-                        ),
-                      )
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 24.0,
+                                horizontal: 16.0,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'No new order requests',
+                                  style: TextStyle(
+                                      color: EatoTheme.textSecondaryColor),
+                                ),
+                              ),
+                            )
                           : ListView.builder(
-                        physics: NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: requestProvider.newRequests.length,
-                        itemBuilder: (context, index) {
-                          return _buildRequestCard(
-                            requestProvider.newRequests[index],
-                            requestProvider,
-                          );
-                        },
-                      ),
+                              physics: NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              itemCount: requestProvider.newRequests.length,
+                              itemBuilder: (context, index) {
+                                return _buildRequestCard(
+                                  requestProvider.newRequests[index],
+                                  requestProvider,
+                                );
+                              },
+                            ),
 
                       SizedBox(height: 24),
 
@@ -748,7 +763,8 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                             ),
                             SizedBox(width: 8),
                             Container(
-                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
                                 color: EatoTheme.errorColor,
                                 borderRadius: BorderRadius.circular(12),
@@ -770,28 +786,30 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                       // Cancel Order Requests
                       requestProvider.cancellationRequests.isEmpty
                           ? Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 24.0,
-                          horizontal: 16.0,
-                        ),
-                        child: Center(
-                          child: Text(
-                            'No cancellation requests',
-                            style: TextStyle(color: EatoTheme.textSecondaryColor),
-                          ),
-                        ),
-                      )
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 24.0,
+                                horizontal: 16.0,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'No cancellation requests',
+                                  style: TextStyle(
+                                      color: EatoTheme.textSecondaryColor),
+                                ),
+                              ),
+                            )
                           : ListView.builder(
-                        physics: NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: requestProvider.cancellationRequests.length,
-                        itemBuilder: (context, index) {
-                          return _buildRequestCard(
-                            requestProvider.cancellationRequests[index],
-                            requestProvider,
-                          );
-                        },
-                      ),
+                              physics: NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              itemCount:
+                                  requestProvider.cancellationRequests.length,
+                              itemBuilder: (context, index) {
+                                return _buildRequestCard(
+                                  requestProvider.cancellationRequests[index],
+                                  requestProvider,
+                                );
+                              },
+                            ),
 
                       SizedBox(height: 24),
                     ],
@@ -919,21 +937,21 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(8),
                       child: request.imageUrl.isNotEmpty
                           ? Image.network(
-                        request.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.fastfood,
-                            color: Colors.grey[400],
-                            size: 30,
-                          );
-                        },
-                      )
+                              request.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.fastfood,
+                                  color: Colors.grey[400],
+                                  size: 30,
+                                );
+                              },
+                            )
                           : Icon(
-                        Icons.fastfood,
-                        color: Colors.grey[400],
-                        size: 30,
-                      ),
+                              Icons.fastfood,
+                              color: Colors.grey[400],
+                              size: 30,
+                            ),
                     ),
                   ),
                   SizedBox(width: 16),
@@ -1015,7 +1033,8 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
 
             // Action buttons
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: Row(
                 children: [
                   Expanded(
@@ -1060,7 +1079,9 @@ class _RequestHomeState extends State<RequestHome> with SingleTickerProviderStat
                         ),
                       ),
                       child: Text(
-                        request.isCancellationRequest ? 'Accept cancel' : 'Accept',
+                        request.isCancellationRequest
+                            ? 'Accept cancel'
+                            : 'Accept',
                       ),
                     ),
                   ),
