@@ -54,6 +54,26 @@ class _AddFoodPageState extends State<AddFoodPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Validate storeId on init
+    if (widget.storeId.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Store ID is missing. Please set up your store first.'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // Navigate back after showing error
+        Navigator.pop(context);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
@@ -104,9 +124,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
     try {
       final fileName = 'food_${DateTime.now().millisecondsSinceEpoch}';
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('food_images/$fileName');
+      final storageRef =
+          FirebaseStorage.instance.ref().child('food_images/$fileName');
 
       if (kIsWeb) {
         // Upload data for web
@@ -123,6 +142,19 @@ class _AddFoodPageState extends State<AddFoodPage> {
   }
 
   Future<void> _saveFood() async {
+    // Check if storeId is valid
+    if (widget.storeId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Store setup required. Please set up your store first.'),
+          backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // Validate form
     if (!_formKey.currentState!.validate()) {
       return;
@@ -148,9 +180,12 @@ class _AddFoodPageState extends State<AddFoodPage> {
       // Upload image
       await _uploadImage();
 
+      // Generate a unique id for the food
+      final foodId = 'food_${DateTime.now().millisecondsSinceEpoch}';
+
       // Create food object
       final food = Food(
-        id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+        id: foodId,
         name: _nameController.text.trim(),
         type: _selectedFoodType,
         category: _selectedFoodCategory,
@@ -285,10 +320,12 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                     width: 150,
                                     height: 150,
                                     decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor.withOpacity(0.1),
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: EatoTheme.primaryColor.withOpacity(0.5),
+                                        color: EatoTheme.primaryColor
+                                            .withOpacity(0.5),
                                         width: 1,
                                       ),
                                     ),
@@ -329,7 +366,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                           SizedBox(height: 8),
                           TextFormField(
                             controller: _priceController,
-                            keyboardType: TextInputType.numberWithOptions(decimal: true),
+                            keyboardType:
+                                TextInputType.numberWithOptions(decimal: true),
                             decoration: EatoTheme.inputDecoration(
                               hintText: 'Enter price in rupees',
                             ),
@@ -415,7 +453,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                           SizedBox(height: 16),
 
                           // Description
-                          Text('Description (Optional)', style: EatoTheme.labelLarge),
+                          Text('Description (Optional)',
+                              style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           TextFormField(
                             controller: _descriptionController,
@@ -435,23 +474,24 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                 onPressed: _isLoading ? null : _saveFood,
                                 style: EatoTheme.primaryButtonStyle,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12.0),
                                   child: _isLoading
                                       ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
                                       : Text(
-                                    'Save Food',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                          'Save Food',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),
@@ -480,7 +520,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(color: EatoTheme.primaryColor),
+                        CircularProgressIndicator(
+                            color: EatoTheme.primaryColor),
                         SizedBox(height: 16),
                         Text(
                           'Saving food item...',

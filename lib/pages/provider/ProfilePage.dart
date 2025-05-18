@@ -13,8 +13,8 @@ import 'dart:io' as io;
 
 import '../../Model/Food&Store.dart';
 import 'OrderHomePage.dart';
-import 'ProviderHomePage.dart';
 import 'RequestHome.dart';
+import 'ProviderHomePage.dart';
 
 class ProfilePage extends StatefulWidget {
   final CustomUser currentUser;
@@ -55,7 +55,8 @@ class _ProfilePageState extends State<ProfilePage> {
     // Initialize controllers with current user data
     _nameController = TextEditingController(text: widget.currentUser.name);
     _emailController = TextEditingController(text: widget.currentUser.email);
-    _phoneController = TextEditingController(text: widget.currentUser.phoneNumber ?? '');
+    _phoneController =
+        TextEditingController(text: widget.currentUser.phoneNumber ?? '');
     _locationController = TextEditingController(text: '');
 
     // Initialize store controllers
@@ -106,7 +107,8 @@ class _ProfilePageState extends State<ProfilePage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => OrderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                OrderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
@@ -114,7 +116,7 @@ class _ProfilePageState extends State<ProfilePage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) =>RequestHome(currentUser: widget.currentUser),
+            builder: (context) => RequestHome(currentUser: widget.currentUser),
           ),
         );
         break;
@@ -122,15 +124,17 @@ class _ProfilePageState extends State<ProfilePage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: widget.currentUser),
+            builder: (context) =>
+                ProviderHomePage(currentUser: widget.currentUser),
           ),
         );
         break;
       case 3: // Profile - current page
-      // Already on this page
+        // Already on this page
         break;
     }
   }
+
   Future<void> _pickProfileImage() async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -195,8 +199,10 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_pickedProfileImage == null) return null;
 
     try {
-      final fileName = 'profile_${widget.currentUser.id}_${DateTime.now().millisecondsSinceEpoch}';
-      final ref = FirebaseStorage.instance.ref().child('profile_images/$fileName');
+      final fileName =
+          'profile_${widget.currentUser.id}_${DateTime.now().millisecondsSinceEpoch}';
+      final ref =
+          FirebaseStorage.instance.ref().child('profile_images/$fileName');
 
       if (kIsWeb) {
         await ref.putData(_webProfileImageData!);
@@ -215,7 +221,8 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_pickedShopImage == null) return null;
 
     try {
-      final fileName = 'shop_${widget.currentUser.id}_${DateTime.now().millisecondsSinceEpoch}';
+      final fileName =
+          'shop_${widget.currentUser.id}_${DateTime.now().millisecondsSinceEpoch}';
       final ref = FirebaseStorage.instance.ref().child('shop_images/$fileName');
 
       if (kIsWeb) {
@@ -308,7 +315,8 @@ class _ProfilePageState extends State<ProfilePage> {
           imageUrl: shopImageUrl ?? currentStore.imageUrl,
         );
 
-        await storeProvider.createOrUpdateStore(updatedStore, widget.currentUser.id);
+        await storeProvider.createOrUpdateStore(
+            updatedStore, widget.currentUser.id);
       } else {
         // Create new store
         final newStore = Store(
@@ -320,7 +328,8 @@ class _ProfilePageState extends State<ProfilePage> {
           foods: [],
         );
 
-        await storeProvider.createOrUpdateStore(newStore, widget.currentUser.id);
+        await storeProvider.createOrUpdateStore(
+            newStore, widget.currentUser.id);
       }
 
       setState(() {
@@ -411,182 +420,187 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: EatoTheme.primaryColor))
+          ? Center(
+              child: CircularProgressIndicator(color: EatoTheme.primaryColor))
           : SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Profile Header with Image
-              Container(
-                color: EatoTheme.primaryColor.withOpacity(0.05),
-                padding: EdgeInsets.all(24),
+              child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Profile Image
-                    GestureDetector(
-                      onTap: _isEditingProfile ? _pickProfileImage : null,
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          Container(
-                            width: 120,
-                            height: 120,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: EatoTheme.primaryColor.withOpacity(0.2),
-                              border: Border.all(
-                                color: EatoTheme.primaryColor,
-                                width: 2,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: _buildProfileImage(user),
-                            ),
-                          ),
-                          if (_isEditingProfile)
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: EatoTheme.primaryColor,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // User Name
-                    Text(
-                      user.name,
-                      style: EatoTheme.headingMedium,
-                    ),
-                    SizedBox(height: 4),
-
-                    // User Role
+                    // Profile Header with Image
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: EatoTheme.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        user.userType,
-                        style: TextStyle(
-                          color: EatoTheme.primaryColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Section Divider
-              SizedBox(height: 8),
-
-              // Personal Details Section
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Personal Details',
-                          style: EatoTheme.headingSmall,
-                        ),
-                        if (!_isEditingProfile && !_isEditingShop)
-                          TextButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _isEditingProfile = true;
-                              });
-                            },
-                            icon: Icon(Icons.edit, size: 18),
-                            label: Text('Edit'),
-                            style: EatoTheme.textButtonStyle,
-                          ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-
-                    // Personal Details Form or View
-                    _isEditingProfile
-                        ? _buildProfileEditForm(user)
-                        : _buildProfileViewDetails(user),
-
-                    SizedBox(height: 24),
-
-                    // Store Details Section (for providers only)
-                    if (user.userType.toLowerCase().contains('provider')) ...[
-                      Divider(height: 32, thickness: 1),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      color: EatoTheme.primaryColor.withOpacity(0.05),
+                      padding: EdgeInsets.all(24),
+                      child: Column(
                         children: [
-                          Text(
-                            'Shop Details',
-                            style: EatoTheme.headingSmall,
-                          ),
-                          if (!_isEditingProfile && !_isEditingShop)
-                            TextButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _isEditingShop = true;
-                                });
-                              },
-                              icon: Icon(Icons.edit, size: 18),
-                              label: Text('Edit'),
-                              style: EatoTheme.textButtonStyle,
+                          // Profile Image
+                          GestureDetector(
+                            onTap: _isEditingProfile ? _pickProfileImage : null,
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        EatoTheme.primaryColor.withOpacity(0.2),
+                                    border: Border.all(
+                                      color: EatoTheme.primaryColor,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: ClipOval(
+                                    child: _buildProfileImage(user),
+                                  ),
+                                ),
+                                if (_isEditingProfile)
+                                  Container(
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: EatoTheme.primaryColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
+                          SizedBox(height: 16),
+
+                          // User Name
+                          Text(
+                            user.name,
+                            style: EatoTheme.headingMedium,
+                          ),
+                          SizedBox(height: 4),
+
+                          // User Role
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: EatoTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              user.userType,
+                              style: TextStyle(
+                                color: EatoTheme.primaryColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      SizedBox(height: 16),
+                    ),
 
-                      // Store Details Form or View
-                      _isEditingShop
-                          ? _buildShopEditForm(store)
-                          : _buildShopViewDetails(store),
-                    ],
+                    // Section Divider
+                    SizedBox(height: 8),
 
-                    SizedBox(height: 32),
-
-                    // Logout Button
-                    if (!_isEditingProfile && !_isEditingShop)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _handleLogout,
-                          icon: Icon(Icons.logout),
-                          label: Text('Logout'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: EatoTheme.errorColor,
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                    // Personal Details Section
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Personal Details',
+                                style: EatoTheme.headingSmall,
+                              ),
+                              if (!_isEditingProfile && !_isEditingShop)
+                                TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditingProfile = true;
+                                    });
+                                  },
+                                  icon: Icon(Icons.edit, size: 18),
+                                  label: Text('Edit'),
+                                  style: EatoTheme.textButtonStyle,
+                                ),
+                            ],
                           ),
-                        ),
-                      ),
+                          SizedBox(height: 16),
 
-                    SizedBox(height: 24),
+                          // Personal Details Form or View
+                          _isEditingProfile
+                              ? _buildProfileEditForm(user)
+                              : _buildProfileViewDetails(user),
+
+                          SizedBox(height: 24),
+
+                          // Store Details Section (for providers only)
+                          if (user.userType
+                              .toLowerCase()
+                              .contains('provider')) ...[
+                            Divider(height: 32, thickness: 1),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Shop Details',
+                                  style: EatoTheme.headingSmall,
+                                ),
+                                if (!_isEditingProfile && !_isEditingShop)
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _isEditingShop = true;
+                                      });
+                                    },
+                                    icon: Icon(Icons.edit, size: 18),
+                                    label: Text('Edit'),
+                                    style: EatoTheme.textButtonStyle,
+                                  ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+
+                            // Store Details Form or View
+                            _isEditingShop
+                                ? _buildShopEditForm(store)
+                                : _buildShopViewDetails(store),
+                          ],
+
+                          SizedBox(height: 32),
+
+                          // Logout Button
+                          if (!_isEditingProfile && !_isEditingShop)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _handleLogout,
+                                icon: Icon(Icons.logout),
+                                label: Text('Logout'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: EatoTheme.errorColor,
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
@@ -609,7 +623,8 @@ class _ProfilePageState extends State<ProfilePage> {
           height: 120,
         );
       }
-    } else if (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty) {
+    } else if (user.profileImageUrl != null &&
+        user.profileImageUrl!.isNotEmpty) {
       // Show existing profile image
       return Image.network(
         user.profileImageUrl!,
@@ -622,7 +637,7 @@ class _ProfilePageState extends State<ProfilePage> {
             child: CircularProgressIndicator(
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded /
-                  loadingProgress.expectedTotalBytes!
+                      loadingProgress.expectedTotalBytes!
                   : null,
               strokeWidth: 2,
               color: EatoTheme.primaryColor,
@@ -678,7 +693,7 @@ class _ProfilePageState extends State<ProfilePage> {
             child: CircularProgressIndicator(
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded /
-                  loadingProgress.expectedTotalBytes!
+                      loadingProgress.expectedTotalBytes!
                   : null,
               strokeWidth: 2,
               color: EatoTheme.primaryColor,
@@ -916,7 +931,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Container(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: store?.isPickup ?? true ? EatoTheme.primaryColor : Colors.transparent,
+                        color: store?.isPickup ?? true
+                            ? EatoTheme.primaryColor
+                            : Colors.transparent,
                         borderRadius: BorderRadius.horizontal(
                           left: Radius.circular(11),
                         ),
@@ -925,7 +942,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Text(
                           'Pickup',
                           style: TextStyle(
-                            color: store?.isPickup ?? true ? Colors.white : Colors.black,
+                            color: store?.isPickup ?? true
+                                ? Colors.white
+                                : Colors.black,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -933,7 +952,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                 ),
-
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
@@ -948,7 +966,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Container(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: !(store?.isPickup ?? true) ? EatoTheme.primaryColor : Colors.transparent,
+                        color: !(store?.isPickup ?? true)
+                            ? EatoTheme.primaryColor
+                            : Colors.transparent,
                         borderRadius: BorderRadius.horizontal(
                           right: Radius.circular(11),
                         ),
@@ -957,7 +977,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Text(
                           'Delivery',
                           style: TextStyle(
-                            color: !(store?.isPickup ?? true) ? Colors.white : Colors.black,
+                            color: !(store?.isPickup ?? true)
+                                ? Colors.white
+                                : Colors.black,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1113,7 +1135,9 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         SizedBox(height: 8),
         _buildInfoTile(
-          icon: store.isPickup ? Icons.local_shipping_outlined : Icons.delivery_dining,
+          icon: store.isPickup
+              ? Icons.local_shipping_outlined
+              : Icons.delivery_dining,
           title: 'Delivery Mode',
           value: store.isPickup ? 'Pickup' : 'Delivery',
         ),
