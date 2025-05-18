@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 
 class ActivityPage extends StatelessWidget {
-  const ActivityPage({Key? key}) : super(key: key);
+  final bool showBottomNav;
+
+  const ActivityPage({Key? key, this.showBottomNav = true}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -41,17 +43,19 @@ class ActivityPage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 3,
-        onTap: (index) {
-          if (index != 3) {
-            Navigator.pushReplacementNamed(
-              context,
-              _getRouteNameForIndex(index),
-            );
-          }
-        },
-      ),
+      bottomNavigationBar: showBottomNav
+          ? BottomNavBar(
+              currentIndex: 3,
+              onTap: (index) {
+                if (index != 3) {
+                  Navigator.pushReplacementNamed(
+                    context,
+                    _getRouteNameForIndex(index),
+                  );
+                }
+              },
+            )
+          : null,
     );
   }
 

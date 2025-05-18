@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/meal_pages.dart';
 import 'package:eato/pages/customer/account_page.dart';
+import 'package:eato/pages/customer/activity_page.dart'; // Import actual ActivityPage
+import 'package:eato/pages/customer/orders_page.dart'; // Import actual OrdersPage
+import 'package:eato/pages/customer/subscribed_page.dart'; // Import actual SubscribedPage
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({Key? key}) : super(key: key);
@@ -19,12 +22,6 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     setState(() {
       _currentIndex = index;
     });
-
-    // Handle navigation to appropriate screen based on index
-    if (index != 0) {
-      // Navigate to the appropriate screen based on index
-      // This is handled by the BottomNavBar widget itself now
-    }
   }
 
   // Navigate to meal type page
@@ -32,7 +29,10 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MealPage(mealType: mealType),
+        builder: (context) => MealPage(
+          mealType: mealType,
+          showBottomNav: false,
+        ),
       ),
     );
   }
@@ -47,22 +47,30 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
         currentPage = _buildHomePage(context);
         break;
       case 1:
-        currentPage = const SubscribedPage();
+        currentPage = const SubscribedPage(showBottomNav: false);
         break;
       case 2:
-        currentPage = const OrdersPage();
+        currentPage = const OrdersPage(showBottomNav: false);
         break;
       case 3:
-        currentPage = const ActivityPage();
+        currentPage = const ActivityPage(showBottomNav: false);
         break;
       case 4:
-        currentPage = const AccountPage();
+        currentPage = const AccountPage(showBottomNav: false);
         break;
       default:
         currentPage = _buildHomePage(context);
     }
 
     return Scaffold(
+      appBar: _currentIndex == 0
+          ? AppBar(
+              title: const Text('Home'),
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              elevation: 0,
+            )
+          : null,
       body: currentPage,
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
@@ -73,13 +81,14 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
 
   // Build the main home page with meal options
   Widget _buildHomePage(BuildContext context) {
-    return SafeArea(
+    return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 20),
             const Text(
               'WELCOME',
               style: TextStyle(
@@ -87,32 +96,90 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
             const Text(
               'Select your meal option',
               style: TextStyle(fontSize: 18, color: Colors.black54),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
-            // Breakfast Button
-            MealButton(
+            const SizedBox(height: 20),
+
+            // Breakfast Button - Updated to match the second image
+            _buildMealButtonWithImage(
               title: 'BREAKFAST',
               imagePath: 'assets/breakfast.jpg',
               onTap: () => _navigateToMealPage(context, 'Breakfast'),
             ),
             const SizedBox(height: 20),
-            // Lunch Button
-            MealButton(
+
+            // Lunch Button - Updated to match the second image
+            _buildMealButtonWithImage(
               title: 'LUNCH',
               imagePath: 'assets/lunch.jpg',
               onTap: () => _navigateToMealPage(context, 'Lunch'),
             ),
             const SizedBox(height: 20),
-            // Dinner Button
-            MealButton(
+
+            // Dinner Button - Updated to match the second image
+            _buildMealButtonWithImage(
               title: 'DINNER',
               imagePath: 'assets/dinner.jpg',
               onTap: () => _navigateToMealPage(context, 'Dinner'),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // New method for meal buttons that look like the ones in image 2
+  Widget _buildMealButtonWithImage({
+    required String title,
+    required String imagePath,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 100,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          image: DecorationImage(
+            image: AssetImage(imagePath),
+            fit: BoxFit.cover,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              spreadRadius: 1,
+              blurRadius: 5,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Overlay for better text visibility
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                color: Colors.black.withOpacity(0.4),
+              ),
+            ),
+            // Title Text
+            Center(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
             ),
           ],
         ),
@@ -121,7 +188,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   }
 }
 
-// Meal Button widget
+// Keep the MealButton class but it's not being used now
 class MealButton extends StatelessWidget {
   final String title;
   final String imagePath;
@@ -197,133 +264,6 @@ class MealButton extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// Placeholder pages for the bottom navigation tabs
-class SubscribedPage extends StatelessWidget {
-  const SubscribedPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.favorite,
-              size: 80,
-              color: Colors.purple.withOpacity(0.5),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'My Subscriptions',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Your subscribed food providers will appear here',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class OrdersPage extends StatelessWidget {
-  const OrdersPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.shopping_cart,
-              size: 80,
-              color: Colors.purple.withOpacity(0.5),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'My Orders',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Your orders will appear here',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ActivityPage extends StatelessWidget {
-  const ActivityPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble,
-              size: 80,
-              color: Colors.purple.withOpacity(0.5),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Activity',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Your recent activity and notifications will appear here',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:eato/pages/onboarding/RoleSelectionPage.dart'; // Correct import path
+import 'package:eato/pages/onboarding/RoleSelectionPage.dart';
 
 class AccountPage extends StatelessWidget {
-  const AccountPage({Key? key}) : super(key: key);
+  final bool showBottomNav;
+
+  const AccountPage({Key? key, this.showBottomNav = true}) : super(key: key);
 
   // Logout method
   Future<void> _logout(BuildContext context) async {
@@ -92,17 +94,17 @@ class AccountPage extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 4,
-        onTap: (index) {
-          if (index != 4) {
-            Navigator.pushReplacementNamed(
-              context,
-              _getRouteNameForIndex(index),
-            );
-          }
-        },
-      ),
+      bottomNavigationBar: showBottomNav
+          ? BottomNavBar(
+              currentIndex: 4,
+              onTap: (index) {
+                if (index != 4) {
+                  String routeName = _getRouteNameForIndex(index);
+                  Navigator.pushReplacementNamed(context, routeName);
+                }
+              },
+            )
+          : null,
     );
   }
 
