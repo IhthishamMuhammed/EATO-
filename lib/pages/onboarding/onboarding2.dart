@@ -1,4 +1,4 @@
-import 'package:eato/pages/onboarding/onboarding2.dart';
+import 'package:eato/pages/onboarding/onboarding1.dart'; // Import for WelcomePage
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +12,8 @@ class FreeMembershipPage extends StatefulWidget {
   State<FreeMembershipPage> createState() => _FreeMembershipPageState();
 }
 
-class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTickerProviderStateMixin {
+class _FreeMembershipPageState extends State<FreeMembershipPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   late Animation<Offset> _slideAnimation;
@@ -30,7 +31,8 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
@@ -61,7 +63,10 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
           icon: const Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
           onPressed: () {
             HapticFeedback.lightImpact();
-            Navigator.pop(context);
+            Navigator.push(
+              context,
+              EatoTheme.fadeTransition(page: const WelcomePage()),
+            );
           },
         ),
       ),
@@ -71,7 +76,8 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
           child: SlideTransition(
             position: _slideAnimation,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
+              padding:
+                  EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -97,9 +103,7 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                       ),
                     ),
                   ),
-
                   SizedBox(height: screenSize.height * 0.03),
-
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -108,7 +112,8 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           ShaderMask(
-                            shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+                            shaderCallback: (bounds) =>
+                                EatoTheme.primaryGradient.createShader(bounds),
                             child: Text(
                               "Free Membership!",
                               style: EatoTheme.headingMedium.copyWith(
@@ -125,7 +130,6 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                               height: 1.5,
                             ),
                           ),
-
                           Padding(
                             padding: const EdgeInsets.only(top: 24, bottom: 16),
                             child: Container(
@@ -139,10 +143,13 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor.withOpacity(0.1),
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.1),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.school_rounded, color: EatoTheme.primaryColor, size: 24),
+                                    child: const Icon(Icons.school_rounded,
+                                        color: EatoTheme.primaryColor,
+                                        size: 24),
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
@@ -158,12 +165,11 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                               ),
                             ),
                           ),
-
-                          _buildBenefitItem(Icons.local_offer_rounded, "Exclusive discounts", isSmallScreen),
-                          _buildBenefitItem(Icons.delivery_dining_rounded, "Free delivery on 3 orders", isSmallScreen),
-
+                          _buildBenefitItem(Icons.local_offer_rounded,
+                              "Exclusive discounts", isSmallScreen),
+                          _buildBenefitItem(Icons.delivery_dining_rounded,
+                              "Free delivery on 3 orders", isSmallScreen),
                           const Spacer(),
-
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -173,7 +179,8 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.fadeTransition(page: const RoleSelectionPage()),
+                                    EatoTheme.fadeTransition(
+                                        page: const RoleSelectionPage()),
                                   );
                                 },
                                 child: const Text("Skip"),
@@ -184,14 +191,14 @@ class _FreeMembershipPageState extends State<FreeMembershipPage> with SingleTick
                                   HapticFeedback.mediumImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.slideTransition(page: const RoleSelectionPage()),
+                                    EatoTheme.slideTransition(
+                                        page: const RoleSelectionPage()),
                                   );
                                 },
                                 child: const Text("Next"),
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 16),
                           Center(child: EatoTheme.buildPageIndicators(4, 1)),
                         ],

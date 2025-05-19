@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:eato/pages/onboarding/onboarding2.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/pages/onboarding/GetStartedPage.dart'; // Import for GetStartedPage
 
 import 'RoleSelectionPage.dart';
 
@@ -12,7 +13,8 @@ class WelcomePage extends StatefulWidget {
   State<WelcomePage> createState() => _WelcomePageState();
 }
 
-class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStateMixin {
+class _WelcomePageState extends State<WelcomePage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   late Animation<Offset> _slideAnimation;
@@ -30,7 +32,8 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
@@ -59,6 +62,20 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              EatoTheme.fadeTransition(page: const GetStartedPage()),
+            );
+          },
+        ),
+      ),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeInAnimation,
@@ -149,9 +166,12 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                             ),
                           ),
                           const SizedBox(height: 24),
-                          _buildFeatureItem(Icons.restaurant, "Variety of restaurants", isSmallScreen),
-                          _buildFeatureItem(Icons.delivery_dining, "Fast and reliable delivery", isSmallScreen),
-                          _buildFeatureItem(Icons.local_offer, "Exclusive offers", isSmallScreen),
+                          _buildFeatureItem(Icons.restaurant,
+                              "Variety of restaurants", isSmallScreen),
+                          _buildFeatureItem(Icons.delivery_dining,
+                              "Fast and reliable delivery", isSmallScreen),
+                          _buildFeatureItem(Icons.local_offer,
+                              "Exclusive offers", isSmallScreen),
                           const Spacer(),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -162,7 +182,8 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.fadeTransition(page: const RoleSelectionPage()),
+                                    EatoTheme.fadeTransition(
+                                        page: const RoleSelectionPage()),
                                   );
                                 },
                                 child: const Text("Skip"),
@@ -173,7 +194,8 @@ class _WelcomePageState extends State<WelcomePage> with SingleTickerProviderStat
                                   HapticFeedback.mediumImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.slideTransition(page: const FreeMembershipPage()),
+                                    EatoTheme.slideTransition(
+                                        page: const FreeMembershipPage()),
                                   );
                                 },
                                 child: const Text("Next"),
