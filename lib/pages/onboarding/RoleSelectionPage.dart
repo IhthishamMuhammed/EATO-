@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/pages/auth/login.dart';
+import 'package:eato/pages/onboarding/onboarding2.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({Key? key}) : super(key: key);
@@ -10,7 +11,8 @@ class RoleSelectionPage extends StatefulWidget {
   State<RoleSelectionPage> createState() => _RoleSelectionPageState();
 }
 
-class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTickerProviderStateMixin {
+class _RoleSelectionPageState extends State<RoleSelectionPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   String? _selectedRole;
@@ -78,9 +80,16 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
                 ),
               ],
             ),
-            child: const Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor, size: 20),
+            child: const Icon(Icons.arrow_back,
+                color: EatoTheme.textPrimaryColor, size: 20),
           ),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.push(
+              context,
+              EatoTheme.fadeTransition(page: const FreeMembershipPage()),
+            );
+          },
         ),
       ),
       body: Stack(
@@ -126,7 +135,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
             child: FadeTransition(
               opacity: _fadeInAnimation,
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
+                padding:
+                    EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -153,7 +163,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
                     ),
                     SizedBox(height: screenSize.height * 0.03),
                     ShaderMask(
-                      shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+                      shaderCallback: (bounds) =>
+                          EatoTheme.primaryGradient.createShader(bounds),
                       child: Text(
                         "Select your role",
                         style: EatoTheme.headingLarge.copyWith(
@@ -164,7 +175,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
                     ),
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(30),
@@ -201,7 +213,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
                           const SizedBox(height: 24),
                           _buildRoleOption(
                             title: "Meal Provider",
-                            description: "Manage your restaurant and receive orders",
+                            description:
+                                "Manage your restaurant and receive orders",
                             role: "mealprovider",
                             icon: Icons.restaurant_menu,
                             iconBackground: Colors.orange.shade100,
@@ -316,7 +329,8 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> with SingleTicker
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected ? EatoTheme.primaryColor : Colors.grey.shade100,
+                color:
+                    isSelected ? EatoTheme.primaryColor : Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
               child: Icon(
