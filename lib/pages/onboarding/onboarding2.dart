@@ -2,7 +2,7 @@ import 'package:eato/pages/onboarding/onboarding1.dart'; // Import for WelcomePa
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'GetStartedPage.dart';
 import 'RoleSelectionPage.dart';
 
 class FreeMembershipPage extends StatefulWidget {
@@ -192,7 +192,7 @@ class _FreeMembershipPageState extends State<FreeMembershipPage>
                                   Navigator.push(
                                     context,
                                     EatoTheme.slideTransition(
-                                        page: const RoleSelectionPage()),
+                                        page: const GetStartedPage()),
                                   );
                                 },
                                 child: const Text("Next"),

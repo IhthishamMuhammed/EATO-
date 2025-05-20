@@ -190,6 +190,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
         price: double.tryParse(_priceController.text) ?? 0,
         time: _selectedMealTime,
         imageUrl: _uploadedImageUrl ?? '',
+        description: _descriptionController.text.trim(),
       );
 
       // Add food to database
@@ -273,8 +274,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                 style: TextStyle(
                                   color: isActive
                                       ? EatoTheme.primaryColor
-                                      : const Color.fromARGB(
-                                          255, 255, 248, 248),
+                                      : Colors.grey, // Fixed color visibility
                                   fontWeight: isActive
                                       ? FontWeight.bold
                                       : FontWeight.normal,
@@ -343,54 +343,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
                           SizedBox(height: 24),
 
-                          // Food name
-                          Text('Food Name *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food name',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter food name';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // Food price
-                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _priceController,
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter price in rupees',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter price';
-                              }
-
-                              if (double.tryParse(value) == null) {
-                                return 'Please enter a valid number';
-                              }
-
-                              if (double.parse(value) <= 0) {
-                                return 'Price must be greater than zero';
-                              }
-
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // Food category
+                          // REORDERED FIELDS as requested:
+                          // 1. Food category
                           Text('Food Category *', style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           DropdownButtonFormField<String>(
@@ -421,7 +375,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
                           SizedBox(height: 16),
 
-                          // Food type
+                          // 2. Food type
                           Text('Food Type *', style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           DropdownButtonFormField<String>(
@@ -452,7 +406,54 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
                           SizedBox(height: 16),
 
-                          // Description
+                          // 3. Food name
+                          Text('Food Name *', style: EatoTheme.labelLarge),
+                          SizedBox(height: 8),
+                          TextFormField(
+                            controller: _nameController,
+                            decoration: EatoTheme.inputDecoration(
+                              hintText: 'Enter food name',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter food name';
+                              }
+                              return null;
+                            },
+                          ),
+
+                          SizedBox(height: 16),
+
+                          // 4. Food price
+                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
+                          SizedBox(height: 8),
+                          TextFormField(
+                            controller: _priceController,
+                            keyboardType:
+                                TextInputType.numberWithOptions(decimal: true),
+                            decoration: EatoTheme.inputDecoration(
+                              hintText: 'Enter price in rupees',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter price';
+                              }
+
+                              if (double.tryParse(value) == null) {
+                                return 'Please enter a valid number';
+                              }
+
+                              if (double.parse(value) <= 0) {
+                                return 'Price must be greater than zero';
+                              }
+
+                              return null;
+                            },
+                          ),
+
+                          SizedBox(height: 16),
+
+                          // 5. Description
                           Text('Description (Optional)',
                               style: EatoTheme.labelLarge),
                           SizedBox(height: 8),

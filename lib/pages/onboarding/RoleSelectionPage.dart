@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/pages/auth/login.dart';
 import 'package:eato/pages/onboarding/onboarding2.dart';
+import 'GetStartedPage.dart';
 
 class RoleSelectionPage extends StatefulWidget {
   const RoleSelectionPage({Key? key}) : super(key: key);
@@ -87,7 +88,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
             HapticFeedback.lightImpact();
             Navigator.push(
               context,
-              EatoTheme.fadeTransition(page: const FreeMembershipPage()),
+              EatoTheme.fadeTransition(page: const GetStartedPage()),
             );
           },
         ),

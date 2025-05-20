@@ -62,20 +62,6 @@ class _WelcomePageState extends State<WelcomePage>
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            Navigator.push(
-              context,
-              EatoTheme.fadeTransition(page: const GetStartedPage()),
-            );
-          },
-        ),
-      ),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeInAnimation,

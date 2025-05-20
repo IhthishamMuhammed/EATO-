@@ -65,7 +65,11 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
     // Initialize controllers with existing food data
     _nameController = TextEditingController(text: widget.food.name);
-    _priceController = TextEditingController(text: widget.food.price.toString());
+    _priceController =
+        TextEditingController(text: widget.food.price.toString());
+    // Fixed: Initialize the description controller properly
+    _descriptionController =
+        TextEditingController(text: widget.food.description ?? '');
 
     // Initialize drop-down values
     _selectedMealTime = widget.food.time;
@@ -146,7 +150,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
     try {
       final fileName = 'food_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final storageRef = FirebaseStorage.instance.ref().child('food_images/$fileName');
+      final storageRef =
+          FirebaseStorage.instance.ref().child('food_images/$fileName');
 
       if (kIsWeb) {
         await storageRef.putData(_webImageData!);
@@ -182,6 +187,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
         price: double.tryParse(_priceController.text) ?? 0,
         time: _selectedMealTime,
         imageUrl: _uploadedImageUrl ?? widget.food.imageUrl,
+        description: _descriptionController.text.trim(), // Save the description
       );
 
       // Update food via provider
@@ -196,7 +202,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate successful update
+        Navigator.pop(
+            context, true); // Return true to indicate successful update
       }
     } catch (e) {
       if (mounted) {
@@ -229,7 +236,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Discard Changes?'),
-        content: Text('You have unsaved changes. Are you sure you want to discard them?'),
+        content: Text(
+            'You have unsaved changes. Are you sure you want to discard them?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -319,15 +327,21 @@ class _EditFoodPageState extends State<EditFoodPage> {
                               child: Text(
                                 mealTime,
                                 style: TextStyle(
-                                  color: isActive ? EatoTheme.primaryColor : Colors.grey,
-                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                  color: isActive
+                                      ? EatoTheme.primaryColor
+                                      : Colors.grey,
+                                  fontWeight: isActive
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
                             ),
                             Container(
                               height: 2,
                               width: screenSize.width / _mealTimes.length - 24,
-                              color: isActive ? EatoTheme.primaryColor : Colors.transparent,
+                              color: isActive
+                                  ? EatoTheme.primaryColor
+                                  : Colors.transparent,
                             ),
                           ],
                         ),
@@ -366,10 +380,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
                                     width: 150,
                                     height: 150,
                                     decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor.withOpacity(0.1),
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: EatoTheme.primaryColor.withOpacity(0.5),
+                                        color: EatoTheme.primaryColor
+                                            .withOpacity(0.5),
                                         width: 1,
                                       ),
                                     ),
@@ -389,57 +405,15 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           ),
                           SizedBox(height: 24),
 
-                          // Food name
-                          Text('Food Name *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food name',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter food name';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16),
-
-                          // Food price
-                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _priceController,
-                            keyboardType: TextInputType.numberWithOptions(decimal: true),
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter price in rupees',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter price';
-                              }
-
-                              if (double.tryParse(value) == null) {
-                                return 'Please enter a valid number';
-                              }
-
-                              if (double.parse(value) <= 0) {
-                                return 'Price must be greater than zero';
-                              }
-
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16),
-
-                          // Food category
+                          // REORDERED FIELDS to match AddFoodPage
+                          // 1. Food category
                           Text('Food Category *', style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            value: _foodCategories.contains(_selectedFoodCategory)
-                                ? _selectedFoodCategory
-                                : _foodCategories.first,
+                            value:
+                                _foodCategories.contains(_selectedFoodCategory)
+                                    ? _selectedFoodCategory
+                                    : _foodCategories.first,
                             decoration: EatoTheme.inputDecoration(
                               hintText: 'Select food category',
                             ),
@@ -463,7 +437,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           ),
                           SizedBox(height: 16),
 
-                          // Food type
+                          // 2. Food type
                           Text('Food Type *', style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           DropdownButtonFormField<String>(
@@ -493,8 +467,54 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           ),
                           SizedBox(height: 16),
 
-                          // Description
-                          Text('Description (Optional)', style: EatoTheme.labelLarge),
+                          // 3. Food name
+                          Text('Food Name *', style: EatoTheme.labelLarge),
+                          SizedBox(height: 8),
+                          TextFormField(
+                            controller: _nameController,
+                            decoration: EatoTheme.inputDecoration(
+                              hintText: 'Enter food name',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter food name';
+                              }
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: 16),
+
+                          // 4. Food price
+                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
+                          SizedBox(height: 8),
+                          TextFormField(
+                            controller: _priceController,
+                            keyboardType:
+                                TextInputType.numberWithOptions(decimal: true),
+                            decoration: EatoTheme.inputDecoration(
+                              hintText: 'Enter price in rupees',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter price';
+                              }
+
+                              if (double.tryParse(value) == null) {
+                                return 'Please enter a valid number';
+                              }
+
+                              if (double.parse(value) <= 0) {
+                                return 'Price must be greater than zero';
+                              }
+
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: 16),
+
+                          // 5. Description
+                          Text('Description (Optional)',
+                              style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           TextFormField(
                             controller: _descriptionController,
@@ -514,23 +534,24 @@ class _EditFoodPageState extends State<EditFoodPage> {
                                 onPressed: _isLoading ? null : _updateFood,
                                 style: EatoTheme.primaryButtonStyle,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12.0),
                                   child: _isLoading
                                       ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
                                       : Text(
-                                    'Update Food',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                          'Update Food',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),
@@ -559,7 +580,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(color: EatoTheme.primaryColor),
+                        CircularProgressIndicator(
+                            color: EatoTheme.primaryColor),
                         SizedBox(height: 16),
                         Text(
                           'Updating food item...',
@@ -615,7 +637,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
                     ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
+                        loadingProgress.expectedTotalBytes!
                     : null,
                 strokeWidth: 2,
                 color: EatoTheme.primaryColor,

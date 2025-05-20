@@ -43,7 +43,7 @@ class OrdersPage extends StatelessWidget {
     );
   }
 
-  String _getRouteNameForIndex(int index) {
+  /* String _getRouteNameForIndex(int index) {
     switch (index) {
       case 0:
         return '/home';
@@ -58,5 +58,5 @@ class OrdersPage extends StatelessWidget {
       default:
         return '/home';
     }
-  }
+  }*/
 }

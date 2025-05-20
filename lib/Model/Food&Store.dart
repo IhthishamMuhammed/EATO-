@@ -349,6 +349,8 @@ class Store {
         isActive.hashCode;
   }
 
+  double? get latitude => null;
+
   // Convert to string for debugging
   @override
   String toString() {

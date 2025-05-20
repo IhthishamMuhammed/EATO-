@@ -11,7 +11,7 @@ class FoodProvider with ChangeNotifier {
   String _searchQuery = '';
   String _filterMealTime = '';
   String _filterCategory = '';
-  String _filterType = ''; // Added missing filter type variable
+  String _filterType = '';
 
   // Getters
   List<Food> get foods => _getFilteredFoods();
@@ -19,9 +19,12 @@ class FoodProvider with ChangeNotifier {
   String? get error => _error;
 
   // Filtered getters
-  List<Food> get breakfastFoods => _foods.where((food) => food.time.toLowerCase() == 'breakfast').toList();
-  List<Food> get lunchFoods => _foods.where((food) => food.time.toLowerCase() == 'lunch').toList();
-  List<Food> get dinnerFoods => _foods.where((food) => food.time.toLowerCase() == 'dinner').toList();
+  List<Food> get breakfastFoods =>
+      _foods.where((food) => food.time.toLowerCase() == 'breakfast').toList();
+  List<Food> get lunchFoods =>
+      _foods.where((food) => food.time.toLowerCase() == 'lunch').toList();
+  List<Food> get dinnerFoods =>
+      _foods.where((food) => food.time.toLowerCase() == 'dinner').toList();
 
   // Search and filter methods
   void setSearchQuery(String query) {
@@ -65,31 +68,38 @@ class FoodProvider with ChangeNotifier {
 
     // Apply search query filter
     if (_searchQuery.isNotEmpty) {
-      filteredList = filteredList.where((food) =>
-      food.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          food.type.toLowerCase().contains(_searchQuery.toLowerCase())
-      ).toList();
+      filteredList = filteredList
+          .where((food) =>
+              food.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              food.type.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              (food.description
+                      ?.toLowerCase()
+                      .contains(_searchQuery.toLowerCase()) ??
+                  false))
+          .toList();
     }
 
     // Apply meal time filter
     if (_filterMealTime.isNotEmpty) {
-      filteredList = filteredList.where((food) =>
-      food.time.toLowerCase() == _filterMealTime.toLowerCase()
-      ).toList();
+      filteredList = filteredList
+          .where((food) =>
+              food.time.toLowerCase() == _filterMealTime.toLowerCase())
+          .toList();
     }
 
     // Apply category filter
     if (_filterCategory.isNotEmpty) {
-      filteredList = filteredList.where((food) =>
-      food.category.toLowerCase() == _filterCategory.toLowerCase()
-      ).toList();
+      filteredList = filteredList
+          .where((food) =>
+              food.category.toLowerCase() == _filterCategory.toLowerCase())
+          .toList();
     }
 
     // Apply type filter
     if (_filterType.isNotEmpty) {
-      filteredList = filteredList.where((food) =>
-      food.type.toLowerCase() == _filterType.toLowerCase()
-      ).toList();
+      filteredList = filteredList
+          .where((food) => food.type.toLowerCase() == _filterType.toLowerCase())
+          .toList();
     }
 
     return filteredList;
@@ -108,26 +118,16 @@ class FoodProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final foodsRef = _firestore.collection('stores').doc(storeId).collection('foods');
+      final foodsRef =
+          _firestore.collection('stores').doc(storeId).collection('foods');
       final snapshot = await foodsRef.get();
 
       _foods = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Food(
-          id: doc.id,
-          name: data['name'] ?? '',
-          type: data['type'] ?? '',
-          category: data['category'] ?? '',
-          price: (data['price'] ?? 0).toDouble(),
-          time: data['time'] ?? '',
-          imageUrl: data['imageUrl'] ?? '',
-
-        );
+        return Food.fromFirestore(doc);
       }).toList();
 
       // Sort foods by name for consistency
       _foods.sort((a, b) => a.name.compareTo(b.name));
-
     } catch (e) {
       _error = e.toString();
       print("Error fetching foods: $_error");
@@ -154,7 +154,11 @@ class FoodProvider with ChangeNotifier {
       }
 
       // Create food document
-      final foodRef = _firestore.collection('stores').doc(storeId).collection('foods').doc();
+      final foodRef = _firestore
+          .collection('stores')
+          .doc(storeId)
+          .collection('foods')
+          .doc();
 
       await foodRef.set({
         'name': food.name,
@@ -163,26 +167,19 @@ class FoodProvider with ChangeNotifier {
         'price': food.price,
         'time': food.time,
         'imageUrl': food.imageUrl,
+        'isAvailable': food.isAvailable,
+        'description': food.description,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       // Create food object with generated ID
-      final newFood = Food(
-        id: foodRef.id,
-        name: food.name,
-        type: food.type,
-        category: food.category,
-        price: food.price,
-        time: food.time,
-        imageUrl: food.imageUrl,
-      );
+      final newFood = food.copyWith(id: foodRef.id);
 
       // Add to local list
       _foods.add(newFood);
 
       // Sort foods by name
       _foods.sort((a, b) => a.name.compareTo(b.name));
-
     } catch (e) {
       _error = e.toString();
       print("Error adding food: $_error");
@@ -222,6 +219,8 @@ class FoodProvider with ChangeNotifier {
         'price': updatedFood.price,
         'time': updatedFood.time,
         'imageUrl': updatedFood.imageUrl,
+        'isAvailable': updatedFood.isAvailable,
+        'description': updatedFood.description,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -233,7 +232,6 @@ class FoodProvider with ChangeNotifier {
 
       // Sort foods by name
       _foods.sort((a, b) => a.name.compareTo(b.name));
-
     } catch (e) {
       _error = e.toString();
       print("Error updating food: $_error");
@@ -265,7 +263,6 @@ class FoodProvider with ChangeNotifier {
 
       // Remove from local list
       _foods.removeWhere((food) => food.id == foodId);
-
     } catch (e) {
       _error = e.toString();
       print("Error deleting food: $_error");
@@ -287,23 +284,23 @@ class FoodProvider with ChangeNotifier {
 
   // Get foods by meal time
   List<Food> getFoodsByMealTime(String mealTime) {
-    return _foods.where((food) =>
-    food.time.toLowerCase() == mealTime.toLowerCase()
-    ).toList();
+    return _foods
+        .where((food) => food.time.toLowerCase() == mealTime.toLowerCase())
+        .toList();
   }
 
   // Get foods by category
   List<Food> getFoodsByCategory(String category) {
-    return _foods.where((food) =>
-    food.category.toLowerCase() == category.toLowerCase()
-    ).toList();
+    return _foods
+        .where((food) => food.category.toLowerCase() == category.toLowerCase())
+        .toList();
   }
 
   // Get foods by type
   List<Food> getFoodsByType(String type) {
-    return _foods.where((food) =>
-    food.type.toLowerCase() == type.toLowerCase()
-    ).toList();
+    return _foods
+        .where((food) => food.type.toLowerCase() == type.toLowerCase())
+        .toList();
   }
 
   // Helper methods for batch operations
@@ -332,7 +329,6 @@ class FoodProvider with ChangeNotifier {
 
       // Update local list
       _foods.removeWhere((food) => foodIds.contains(food.id));
-
     } catch (e) {
       _error = e.toString();
       print("Error in batch delete: $_error");
@@ -344,7 +340,8 @@ class FoodProvider with ChangeNotifier {
   }
 
   // Update many foods at once (for bulk operations)
-  Future<void> updateManyFoods(String storeId, Map<String, Map<String, dynamic>> foodUpdates) async {
+  Future<void> updateManyFoods(
+      String storeId, Map<String, Map<String, dynamic>> foodUpdates) async {
     if (storeId.isEmpty || foodUpdates.isEmpty) {
       return;
     }
@@ -375,14 +372,15 @@ class FoodProvider with ChangeNotifier {
         if (index != -1) {
           // Update only fields in the data
           Food oldFood = _foods[index];
-          Food updatedFood = Food(
-            id: oldFood.id,
-            name: data['name'] ?? oldFood.name,
-            type: data['type'] ?? oldFood.type,
-            category: data['category'] ?? oldFood.category,
-            price: data['price']?.toDouble() ?? oldFood.price,
-            time: data['time'] ?? oldFood.time,
-            imageUrl: data['imageUrl'] ?? oldFood.imageUrl,
+          Food updatedFood = oldFood.copyWith(
+            name: data['name'],
+            type: data['type'],
+            category: data['category'],
+            price: data['price']?.toDouble(),
+            time: data['time'],
+            imageUrl: data['imageUrl'],
+            description: data['description'],
+            isAvailable: data['isAvailable'],
           );
           _foods[index] = updatedFood;
         }
@@ -390,7 +388,6 @@ class FoodProvider with ChangeNotifier {
 
       // Sort foods by name
       _foods.sort((a, b) => a.name.compareTo(b.name));
-
     } catch (e) {
       _error = e.toString();
       print("Error in batch update: $_error");
@@ -398,6 +395,153 @@ class FoodProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // NEW METHODS FOR CUSTOMER SIDE
+
+  // Get all meal types for a specific category
+  Future<List<Food>> getMealsByCategory(String category) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // First, get all stores
+      final storesSnapshot = await _firestore.collection('stores').get();
+      Set<String> uniqueMealNames = {}; // To track unique meal names
+      List<Food> uniqueMeals = [];
+
+      // For each store, check their foods
+      for (var storeDoc in storesSnapshot.docs) {
+        final foodsSnapshot = await _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .where('category', isEqualTo: category)
+            .where('isAvailable', isEqualTo: true)
+            .get();
+
+        for (var foodDoc in foodsSnapshot.docs) {
+          Food food = Food.fromFirestore(foodDoc);
+          // Only add if we haven't seen this meal name before
+          if (!uniqueMealNames.contains(food.name)) {
+            uniqueMealNames.add(food.name);
+            uniqueMeals.add(food);
+          }
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return uniqueMeals;
+    } catch (e) {
+      _error = e.toString();
+      print('Error getting meals by category: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
+  // Get shops that offer a specific meal
+  Future<List<Map<String, dynamic>>> getShopsForMeal(
+      String mealTitle, String category) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // First, get all stores
+      final storesSnapshot = await _firestore.collection('stores').get();
+      List<Map<String, dynamic>> shopItems = [];
+
+      // For each store, check if they have the specified food
+      for (var storeDoc in storesSnapshot.docs) {
+        Store store = Store.fromFirestore(storeDoc);
+
+        // Skip inactive stores
+        if (!store.isActive || !(store.isAvailable ?? true)) {
+          continue;
+        }
+
+        // Get foods from this store that match the meal title and category
+        final foodsSnapshot = await _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .where('name', isEqualTo: mealTitle)
+            .where('category', isEqualTo: category)
+            .where('isAvailable', isEqualTo: true)
+            .get();
+
+        // If this store offers the meal, add it to the result
+        for (var foodDoc in foodsSnapshot.docs) {
+          Food food = Food.fromFirestore(foodDoc);
+          shopItems.add({
+            'store': store,
+            'food': food,
+          });
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return shopItems;
+    } catch (e) {
+      _error = e.toString();
+      print('Error getting shops for meal: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
+  // Get all available categories
+  Future<List<String>> getAllCategories() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // First, get all stores
+      final storesSnapshot = await _firestore.collection('stores').get();
+      Set<String> uniqueCategories = {};
+
+      // For each store, get all their foods
+      for (var storeDoc in storesSnapshot.docs) {
+        // Only check active stores
+        final storeData = storeDoc.data();
+        final isActive = storeData['isActive'] ?? true;
+        final isAvailable = storeData['isAvailable'] ?? true;
+
+        if (!isActive || !isAvailable) {
+          continue;
+        }
+
+        final foodsSnapshot = await _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .where('isAvailable', isEqualTo: true)
+            .get();
+
+        // Extract unique categories
+        for (var foodDoc in foodsSnapshot.docs) {
+          final foodData = foodDoc.data();
+          final category = foodData['category'] as String?;
+          if (category != null && category.isNotEmpty) {
+            uniqueCategories.add(category);
+          }
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return uniqueCategories.toList();
+    } catch (e) {
+      _error = e.toString();
+      print('Error getting all categories: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
     }
   }
 }
