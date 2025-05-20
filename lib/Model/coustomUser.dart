@@ -5,6 +5,7 @@ class CustomUser {
   final String? phoneNumber;
   final String userType; // Main field used for role identification
   final String? profileImageUrl;
+  final String? address; // Added address property to match ProfilePage usage
 
   CustomUser({
     required this.id,
@@ -13,6 +14,7 @@ class CustomUser {
     this.phoneNumber,
     required this.userType,
     this.profileImageUrl,
+    this.address, // Added to constructor
   });
 
   // Convert a CustomUser instance to a Map for Firestore
@@ -24,6 +26,7 @@ class CustomUser {
       'phoneNumber': phoneNumber,
       'userType': userType,
       'profileImageUrl': profileImageUrl,
+      'address': address, // Added to map
     };
   }
 
@@ -35,6 +38,7 @@ class CustomUser {
     String? phoneNumber,
     String? userType,
     String? profileImageUrl,
+    String? address, // Added to copyWith
   }) {
     return CustomUser(
       id: id ?? this.id,
@@ -43,6 +47,7 @@ class CustomUser {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       userType: userType ?? this.userType,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+      address: address ?? this.address, // Added to copyWith
     );
   }
 
@@ -55,6 +60,7 @@ class CustomUser {
       phoneNumber: map['phoneNumber'],
       userType: map['userType'] ?? '', // Primary field for role
       profileImageUrl: map['profileImageUrl'],
+      address: map['address'], // Extract address from map
     );
   }
 

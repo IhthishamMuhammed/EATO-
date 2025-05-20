@@ -61,8 +61,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('Store ID is missing. Please set up your store first.'),
+            content: Text('Please set up your store first.'),
             backgroundColor: EatoTheme.errorColor,
             behavior: SnackBarBehavior.floating,
           ),
@@ -146,8 +145,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
     if (widget.storeId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Store setup required. Please set up your store first.'),
+          content: Text(' Please set up your store first.'),
           backgroundColor: EatoTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -275,7 +273,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                 style: TextStyle(
                                   color: isActive
                                       ? EatoTheme.primaryColor
-                                      : EatoTheme.textSecondaryColor,
+                                      : const Color.fromARGB(
+                                          255, 255, 248, 248),
                                   fontWeight: isActive
                                       ? FontWeight.bold
                                       : FontWeight.normal,
@@ -324,7 +323,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                           .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: EatoTheme.primaryColor
+                                        color: const Color.fromARGB(
+                                                255, 255, 255, 255)
                                             .withOpacity(0.5),
                                         width: 1,
                                       ),
