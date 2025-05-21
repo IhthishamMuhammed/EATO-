@@ -12,6 +12,7 @@ class Food {
   final Map<String, dynamic>? additionalInfo;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? description; // Added for backward compatibility
 
   Food({
     required this.id,
@@ -25,6 +26,7 @@ class Food {
     this.additionalInfo,
     this.createdAt,
     this.updatedAt,
+    this.description, // Added for backward compatibility
   });
 
   // Create from Firestore document
@@ -47,6 +49,7 @@ class Food {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      description: data['description'], // Added for backward compatibility
     );
   }
 
@@ -62,6 +65,7 @@ class Food {
       'isAvailable': isAvailable,
       'additionalInfo': additionalInfo,
       'updatedAt': FieldValue.serverTimestamp(),
+      'description': description, // Added for backward compatibility
     };
   }
 
@@ -79,6 +83,7 @@ class Food {
       'additionalInfo': additionalInfo,
       'createdAt': createdAt?.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
+      'description': description, // Added for backward compatibility
     };
   }
 
@@ -95,6 +100,7 @@ class Food {
     Map<String, dynamic>? additionalInfo,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? description, // Added for backward compatibility
   }) {
     return Food(
       id: id ?? this.id,
@@ -108,6 +114,8 @@ class Food {
       additionalInfo: additionalInfo ?? this.additionalInfo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      description:
+          description ?? this.description, // Added for backward compatibility
     );
   }
 
@@ -130,13 +138,13 @@ class Food {
   @override
   int get hashCode {
     return id.hashCode ^
-    name.hashCode ^
-    type.hashCode ^
-    category.hashCode ^
-    price.hashCode ^
-    time.hashCode ^
-    imageUrl.hashCode ^
-    isAvailable.hashCode;
+        name.hashCode ^
+        type.hashCode ^
+        category.hashCode ^
+        price.hashCode ^
+        time.hashCode ^
+        imageUrl.hashCode ^
+        isAvailable.hashCode;
   }
 
   // Convert to string for debugging
@@ -160,6 +168,9 @@ class Store {
   final Map<String, dynamic>? metadata;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  // Added for backward compatibility
+  final bool? isAvailable;
+  final double? rating;
 
   Store({
     required this.id,
@@ -175,10 +186,12 @@ class Store {
     this.metadata,
     this.createdAt,
     this.updatedAt,
+    this.isAvailable,
+    this.rating,
   });
 
   // Create from Firestore document
-  factory Store.fromFirestore(DocumentSnapshot doc, String id, {List<Food>? foods}) {
+  factory Store.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
     return Store(
@@ -187,7 +200,7 @@ class Store {
       contact: data['contact'] ?? '',
       isPickup: data['isPickup'] ?? true,
       imageUrl: data['imageUrl'] ?? '',
-      foods: foods ?? [],
+      foods: [], // Foods are loaded separately
       location: data['location'],
       coordinates: data['coordinates'],
       ownerUid: data['ownerUid'],
@@ -199,6 +212,35 @@ class Store {
       updatedAt: data['updatedAt'] != null
           ? (data['updatedAt'] as Timestamp).toDate()
           : null,
+      isAvailable: data['isAvailable'] ?? true,
+      rating: data['rating']?.toDouble(),
+    );
+  }
+
+  // Create from Firestore document with user ID
+  factory Store.fromFirestore2(DocumentSnapshot doc, String userId) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    return Store(
+      id: userId, // Use user ID as store ID
+      name: data['name'] ?? '',
+      contact: data['contact'] ?? '',
+      isPickup: data['isPickup'] ?? true,
+      imageUrl: data['imageUrl'] ?? '',
+      foods: [], // Foods are loaded separately
+      location: data['location'],
+      coordinates: data['coordinates'],
+      ownerUid: data['ownerUid'] ?? userId,
+      isActive: data['isActive'] ?? true,
+      metadata: data['metadata'],
+      createdAt: data['createdAt'] != null
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
+      updatedAt: data['updatedAt'] != null
+          ? (data['updatedAt'] as Timestamp).toDate()
+          : null,
+      isAvailable: data['isAvailable'] ?? true,
+      rating: data['rating']?.toDouble(),
     );
   }
 
@@ -215,6 +257,8 @@ class Store {
       'isActive': isActive,
       'metadata': metadata,
       'updatedAt': FieldValue.serverTimestamp(),
+      'isAvailable': isAvailable ?? true,
+      'rating': rating,
     };
   }
 
@@ -229,13 +273,18 @@ class Store {
       'foods': foods.map((food) => food.toMap()).toList(),
       'location': location,
       'coordinates': coordinates != null
-          ? {'latitude': coordinates!.latitude, 'longitude': coordinates!.longitude}
+          ? {
+              'latitude': coordinates!.latitude,
+              'longitude': coordinates!.longitude
+            }
           : null,
       'ownerUid': ownerUid,
       'isActive': isActive,
       'metadata': metadata,
       'createdAt': createdAt?.millisecondsSinceEpoch,
       'updatedAt': updatedAt?.millisecondsSinceEpoch,
+      'isAvailable': isAvailable,
+      'rating': rating,
     };
   }
 
@@ -254,6 +303,8 @@ class Store {
     Map<String, dynamic>? metadata,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isAvailable,
+    double? rating,
   }) {
     return Store(
       id: id ?? this.id,
@@ -269,6 +320,8 @@ class Store {
       metadata: metadata ?? this.metadata,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isAvailable: isAvailable ?? this.isAvailable,
+      rating: rating ?? this.rating,
     );
   }
 
@@ -289,12 +342,14 @@ class Store {
   @override
   int get hashCode {
     return id.hashCode ^
-    name.hashCode ^
-    contact.hashCode ^
-    isPickup.hashCode ^
-    imageUrl.hashCode ^
-    isActive.hashCode;
+        name.hashCode ^
+        contact.hashCode ^
+        isPickup.hashCode ^
+        imageUrl.hashCode ^
+        isActive.hashCode;
   }
+
+  double? get latitude => null;
 
   // Convert to string for debugging
   @override
@@ -303,7 +358,7 @@ class Store {
   }
 }
 
-// Order related models
+// Rest of the Order-related models remain unchanged
 enum OrderStatus {
   pending,
   confirmed,
@@ -500,7 +555,8 @@ class Order {
       'deliveryLocation': deliveryLocation,
       'isPickup': isPickup,
       'orderTime': Timestamp.fromDate(orderTime),
-      'deliveryTime': deliveryTime != null ? Timestamp.fromDate(deliveryTime!) : null,
+      'deliveryTime':
+          deliveryTime != null ? Timestamp.fromDate(deliveryTime!) : null,
       'notes': notes,
       'metadata': metadata,
       'updatedAt': FieldValue.serverTimestamp(),

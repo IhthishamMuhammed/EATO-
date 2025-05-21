@@ -13,7 +13,8 @@ class SignUpPage extends StatefulWidget {
   State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateMixin {
+class _SignUpPageState extends State<SignUpPage>
+    with SingleTickerProviderStateMixin {
   // Current form step
   int _currentStep = 0;
   final int _totalSteps = 2;
@@ -26,7 +27,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneNumberController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   // Focus nodes
   final FocusNode _nameFocus = FocusNode();
@@ -242,11 +244,11 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
               PhoneVerificationPage(
-                phoneNumber: fullPhoneNumber,
-                userType: widget.role,
-                isSignUp: true,
-                userData: userData,
-              ),
+            phoneNumber: fullPhoneNumber,
+            userType: widget.role,
+            isSignUp: true,
+            userData: userData,
+          ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             var begin = const Offset(1.0, 0.0);
             var end = Offset.zero;
@@ -382,9 +384,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
   Widget _buildSignupHeader(Size screenSize, bool isSmallScreen) {
     final bool isCustomer = widget.role.toLowerCase() == 'customer';
     final String roleText = isCustomer ? 'Customer' : 'Food Provider';
-    final Color roleColor = isCustomer
-        ? EatoTheme.primaryColor
-        : EatoTheme.accentColor;
+    final Color roleColor =
+        isCustomer ? EatoTheme.primaryColor : EatoTheme.accentColor;
 
     return Container(
       height: screenSize.height * 0.15,
@@ -468,7 +469,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                     ),
                     SizedBox(height: 8),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: roleColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
@@ -509,9 +511,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                 height: 4,
                 margin: EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? EatoTheme.primaryColor
-                      : Colors.grey.shade300,
+                  color:
+                      isActive ? EatoTheme.primaryColor : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(2),
                 ),
                 child: isCurrent ? _buildProgressAnimation() : null,
@@ -617,7 +618,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
             children: [
               // Step title
               ShaderMask(
-                shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+                shaderCallback: (bounds) =>
+                    EatoTheme.primaryGradient.createShader(bounds),
                 child: Text(
                   "Create Your Account",
                   style: TextStyle(
@@ -648,7 +650,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                 keyboardType: TextInputType.name,
                 textCapitalization: TextCapitalization.words,
                 prefixIcon: Icons.person_outline,
-                onFieldSubmitted: () => FocusScope.of(context).requestFocus(_emailFocus),
+                onFieldSubmitted: () =>
+                    FocusScope.of(context).requestFocus(_emailFocus),
               ),
               SizedBox(height: 20),
 
@@ -662,7 +665,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                 textInputAction: TextInputAction.next,
                 keyboardType: TextInputType.emailAddress,
                 prefixIcon: Icons.email_outlined,
-                onFieldSubmitted: () => FocusScope.of(context).requestFocus(_phoneFocus),
+                onFieldSubmitted: () =>
+                    FocusScope.of(context).requestFocus(_phoneFocus),
               ),
               SizedBox(height: 20),
 
@@ -713,7 +717,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
             children: [
               // Step title
               ShaderMask(
-                shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+                shaderCallback: (bounds) =>
+                    EatoTheme.primaryGradient.createShader(bounds),
                 child: Text(
                   "Secure Your Account",
                   style: TextStyle(
@@ -756,7 +761,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                       onPressed: _goToPreviousStep,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: EatoTheme.primaryColor,
-                        side: BorderSide(color: EatoTheme.primaryColor, width: 1.5),
+                        side: BorderSide(
+                            color: EatoTheme.primaryColor, width: 1.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -814,7 +820,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
           style: TextStyle(
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
+            color:
+                hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
           ),
         ),
         SizedBox(height: 8),
@@ -891,7 +898,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
           style: TextStyle(
             fontWeight: FontWeight.w500,
             fontSize: 15,
-            color: hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
+            color:
+                hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
           ),
         ),
         SizedBox(height: 8),
@@ -998,7 +1006,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
           });
         },
       ),
-      onFieldSubmitted: () => FocusScope.of(context).requestFocus(_confirmPasswordFocus),
+      onFieldSubmitted: () =>
+          FocusScope.of(context).requestFocus(_confirmPasswordFocus),
     );
   }
 
@@ -1084,8 +1093,8 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
                 strength > 3
                     ? Icons.verified
                     : strength > 1
-                    ? Icons.shield
-                    : Icons.shield_outlined,
+                        ? Icons.shield
+                        : Icons.shield_outlined,
                 color: strengthColor,
                 size: 18,
               ),
@@ -1169,10 +1178,10 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
           ),
           child: isMet
               ? Icon(
-            Icons.check,
-            size: 12,
-            color: Colors.white,
-          )
+                  Icons.check,
+                  size: 12,
+                  color: Colors.white,
+                )
               : null,
         ),
         SizedBox(width: 8),
@@ -1199,13 +1208,15 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
       height: 55,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isLoading ? [] : [
-          BoxShadow(
-            color: EatoTheme.primaryColor.withOpacity(0.3),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
+        boxShadow: isLoading
+            ? []
+            : [
+                BoxShadow(
+                  color: EatoTheme.primaryColor.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
       ),
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
@@ -1224,13 +1235,13 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
           decoration: BoxDecoration(
             gradient: isLoading
                 ? LinearGradient(
-              colors: [
-                Colors.grey.shade400,
-                Colors.grey.shade500,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            )
+                    colors: [
+                      Colors.grey.shade400,
+                      Colors.grey.shade500,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
                 : EatoTheme.primaryGradient,
             borderRadius: BorderRadius.circular(16),
           ),
@@ -1238,41 +1249,41 @@ class _SignUpPageState extends State<SignUpPage> with SingleTickerProviderStateM
             alignment: Alignment.center,
             child: isLoading
                 ? SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                 : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      if (showArrow) ...[
+                        SizedBox(width: 10),
+                        Container(
+                          padding: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-                if (showArrow) ...[
-                  SizedBox(width: 10),
-                  Container(
-                    padding: EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                  ),
-                ],
-              ],
-            ),
           ),
         ),
       ),

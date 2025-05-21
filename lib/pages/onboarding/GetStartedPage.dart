@@ -11,7 +11,8 @@ class GetStartedPage extends StatefulWidget {
   State<GetStartedPage> createState() => _GetStartedPageState();
 }
 
-class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProviderStateMixin {
+class _GetStartedPageState extends State<GetStartedPage>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
   late Animation<Offset> _slideAnimation;
@@ -29,7 +30,8 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
 
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
 
@@ -60,7 +62,10 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
           icon: const Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
           onPressed: () {
             HapticFeedback.lightImpact();
-            Navigator.pop(context);
+            Navigator.push(
+              context,
+              EatoTheme.fadeTransition(page: const FreeMembershipPage()),
+            );
           },
         ),
       ),
@@ -70,7 +75,8 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
           child: SlideTransition(
             position: _slideAnimation,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
+              padding:
+                  EdgeInsets.symmetric(horizontal: screenSize.width * 0.06),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -99,9 +105,7 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                       ),
                     ),
                   ),
-
                   SizedBox(height: screenSize.height * 0.03),
-
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -110,7 +114,8 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           ShaderMask(
-                            shaderCallback: (bounds) => EatoTheme.primaryGradient.createShader(bounds),
+                            shaderCallback: (bounds) =>
+                                EatoTheme.primaryGradient.createShader(bounds),
                             child: Text(
                               "Get started on\nOrdering your Food",
                               style: EatoTheme.headingMedium.copyWith(
@@ -120,9 +125,7 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
                           Text(
                             "Create an account or sign in to browse delicious meals from your favorite restaurants!",
                             style: EatoTheme.bodyMedium.copyWith(
@@ -130,9 +133,7 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                               height: 1.5,
                             ),
                           ),
-
                           const Spacer(),
-
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -142,7 +143,8 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                                   HapticFeedback.lightImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.fadeTransition(page: const RoleSelectionPage()),
+                                    EatoTheme.fadeTransition(
+                                        page: const RoleSelectionPage()),
                                   );
                                 },
                                 child: const Text("Skip"),
@@ -153,14 +155,14 @@ class _GetStartedPageState extends State<GetStartedPage> with SingleTickerProvid
                                   HapticFeedback.mediumImpact();
                                   Navigator.push(
                                     context,
-                                    EatoTheme.slideTransition(page: const RoleSelectionPage()),
+                                    EatoTheme.slideTransition(
+                                        page: const RoleSelectionPage()),
                                   );
                                 },
                                 child: const Text("Continue"),
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 16),
                           Center(child: EatoTheme.buildPageIndicators(4, 2)),
                         ],

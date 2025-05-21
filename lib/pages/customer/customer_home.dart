@@ -1,6 +1,6 @@
+import 'package:eato/pages/customer/meal_category_page.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
-import 'package:eato/pages/customer/meal_pages.dart';
 import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/orders_page.dart';
@@ -95,8 +95,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MealPage(
-          mealType: mealType,
+        builder: (context) => MealCategoryPage(
+          mealTime: mealType,
           showBottomNav: false,
         ),
       ),

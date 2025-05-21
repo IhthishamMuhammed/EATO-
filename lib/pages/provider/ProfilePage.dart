@@ -64,7 +64,62 @@ class _ProfilePageState extends State<ProfilePage> {
     _shopContactController = TextEditingController();
     _shopLocationController = TextEditingController();
 
-    _loadStoreData();
+    // Load user and store data
+    _loadUserAndStoreData();
+  }
+
+  Future<void> _loadUserAndStoreData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Fetch user data
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      await userProvider.fetchUser(widget.currentUser.id);
+
+      // Fetch store data
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+      await storeProvider.fetchUserStore(widget.currentUser);
+
+      // Update controllers with fetched data
+      final user = userProvider.currentUser;
+      final store = storeProvider.userStore;
+
+      if (user != null) {
+        setState(() {
+          _nameController.text = user.name;
+          _emailController.text = user.email;
+          _phoneController.text = user.phoneNumber ?? '';
+          _locationController.text = user.address ?? '';
+        });
+      }
+
+      if (store != null) {
+        setState(() {
+          _shopNameController.text = store.name;
+          _shopContactController.text = store.contact;
+          _shopLocationController.text = store.location ?? '';
+        });
+      }
+    } catch (e) {
+      print('Error loading data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load user data: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -77,22 +132,6 @@ class _ProfilePageState extends State<ProfilePage> {
     _shopContactController.dispose();
     _shopLocationController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadStoreData() async {
-    final storeProvider = Provider.of<StoreProvider>(context, listen: false);
-
-    if (storeProvider.userStore == null) {
-      await storeProvider.fetchUserStore(widget.currentUser);
-    }
-
-    if (storeProvider.userStore != null) {
-      setState(() {
-        _shopNameController.text = storeProvider.userStore!.name;
-        _shopContactController.text = storeProvider.userStore!.contact;
-        _shopLocationController.text = '';
-      });
-    }
   }
 
   void _onTabTapped(int index) {
@@ -247,7 +286,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
-      final currentUser = userProvider.currentUser!;
+      final currentUser = userProvider.currentUser ?? widget.currentUser;
 
       // Upload profile image if changed
       String? profileImageUrl;
@@ -255,16 +294,23 @@ class _ProfilePageState extends State<ProfilePage> {
         profileImageUrl = await _uploadProfileImage();
       }
 
-      // Create updated user object
-      final updatedUser = currentUser.copyWith(
-        name: _nameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-        profileImageUrl: profileImageUrl ?? currentUser.profileImageUrl,
-        // Don't update email here - requires Firebase Auth update
-      );
+      // Create updated user data map
+      final Map<String, dynamic> userData = {
+        'name': _nameController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'address': _locationController.text.trim(),
+      };
 
-      // Update user in database
-      await userProvider.updateUser(updatedUser);
+      // Only update image URL if a new one was uploaded
+      if (profileImageUrl != null) {
+        userData['profileImageUrl'] = profileImageUrl;
+      }
+
+      // Update specific fields in Firestore
+      await userProvider.updateUserFields(currentUser.id, userData);
+
+      // Refresh user data
+      await userProvider.fetchUser(currentUser.id);
 
       setState(() {
         _isEditingProfile = false;
@@ -307,30 +353,41 @@ class _ProfilePageState extends State<ProfilePage> {
         shopImageUrl = await _uploadShopImage();
       }
 
+      // Determine if we're creating a new store or updating existing
       if (currentStore != null) {
-        // Update existing store
-        final updatedStore = currentStore.copyWith(
+        // Create updated store data
+        final Store updatedStore = Store(
+          id: currentStore.id,
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
+          isPickup: currentStore.isPickup,
           imageUrl: shopImageUrl ?? currentStore.imageUrl,
+          foods: currentStore.foods,
+          location: _shopLocationController.text.trim(),
         );
 
+        // Update store in Firebase
         await storeProvider.createOrUpdateStore(
             updatedStore, widget.currentUser.id);
       } else {
-        // Create new store
-        final newStore = Store(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+        // Create new store data
+        final Store newStore = Store(
+          id: widget.currentUser.id, // Use user ID as store ID for consistency
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
-          isPickup: true, // Default to pickup
+          isPickup: true, // Default value
           imageUrl: shopImageUrl ?? '',
           foods: [],
+          location: _shopLocationController.text.trim(),
         );
 
+        // Create store in Firebase
         await storeProvider.createOrUpdateStore(
             newStore, widget.currentUser.id);
       }
+
+      // Refresh store data after update
+      await storeProvider.fetchUserStore(widget.currentUser);
 
       setState(() {
         _isEditingShop = false;
@@ -787,7 +844,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       // Reset controllers to original values
                       _nameController.text = user.name;
                       _phoneController.text = user.phoneNumber ?? '';
-                      _locationController.text = '';
+                      _locationController.text = user.address ?? '';
 
                       // Clear picked image
                       _pickedProfileImage = null;
@@ -1005,6 +1062,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (store != null) {
                         _shopNameController.text = store.name;
                         _shopContactController.text = store.contact;
+                        _shopLocationController.text = store.location ?? '';
                       }
 
                       // Clear picked image
@@ -1046,6 +1104,14 @@ class _ProfilePageState extends State<ProfilePage> {
           value: user.phoneNumber ?? 'Not set',
         ),
         SizedBox(height: 8),
+        if (user.address != null && user.address!.isNotEmpty) ...[
+          _buildInfoTile(
+            icon: Icons.location_on_outlined,
+            title: 'Location',
+            value: user.address!,
+          ),
+          SizedBox(height: 8),
+        ],
         _buildInfoTile(
           icon: Icons.verified_user_outlined,
           title: 'Account Type',
@@ -1077,6 +1143,10 @@ class _ProfilePageState extends State<ProfilePage> {
               onPressed: () {
                 setState(() {
                   _isEditingShop = true;
+                  // Initialize shop controllers with default values
+                  _shopNameController.text = '';
+                  _shopContactController.text = '';
+                  _shopLocationController.text = '';
                 });
               },
               style: EatoTheme.primaryButtonStyle,
@@ -1141,6 +1211,14 @@ class _ProfilePageState extends State<ProfilePage> {
           title: 'Delivery Mode',
           value: store.isPickup ? 'Pickup' : 'Delivery',
         ),
+        if (store.location != null && store.location!.isNotEmpty) ...[
+          SizedBox(height: 8),
+          _buildInfoTile(
+            icon: Icons.location_on_outlined,
+            title: 'Location',
+            value: store.location!,
+          ),
+        ],
       ],
     );
   }
