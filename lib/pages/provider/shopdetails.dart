@@ -432,7 +432,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
 
       // Create the store - using userId as storeId for consistency
       final store = Store(
-        id: userId, // Use userId instead of timestamp for consistency
+        id: '', // Use userId instead of timestamp for consistency
         name: _shopNameController.text,
         contact: _shopContactController.text,
         isPickup: isPickup,
@@ -475,7 +475,28 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
 
   Widget _buildFoodPage(store_provider.StoreProvider storeProvider) {
     final foodProvider = Provider.of<FoodProvider>(context);
-    final storeId = storeProvider.userStore!.id;
+    final storeId = storeProvider.userStore?.id ?? '';
+    if (storeId.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red),
+              SizedBox(height: 16),
+              Text(
+                'Store setup incomplete. Please complete store setup first.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    print('🔍 Fetching foods for storeId: $storeId');
 
     // Fetch foods for this store
     foodProvider.fetchFoods(storeId);
@@ -690,6 +711,17 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
         ),
       ),
     );
+  }
+
+  void _debugStoreInfo() {
+    final storeProvider =
+        Provider.of<store_provider.StoreProvider>(context, listen: false);
+    print('=== STORE DEBUG INFO ===');
+    print('User ID: ${widget.currentUser.id}');
+    print('Store exists: ${storeProvider.userStore != null}');
+    print('Store ID: ${storeProvider.userStore?.id ?? 'null'}');
+    print('Store name: ${storeProvider.userStore?.name ?? 'null'}');
+    print('========================');
   }
 
   Widget _buildBottomNavigationBar() {

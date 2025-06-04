@@ -15,7 +15,7 @@ import 'firebase_options.dart';
 
 // Import user-related classes
 import 'package:eato/pages/onboarding/onboarding1.dart'; // Welcome Page
-import 'package:eato/pages/customer/customer_home.dart'; // Customer Home
+import 'package:eato/pages/customer/homepage/customer_home.dart'; // Customer Home
 import 'package:eato/pages/provider/shopdetails.dart'; // Meal Provider Home
 import 'package:eato/pages/provider/OrderHomePage.dart';
 import 'package:eato/pages/provider/RequestHome.dart';
@@ -23,7 +23,7 @@ import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/pages/customer/account_page.dart'; // Account Page
 
 // Import customer page files to register routing
-import 'package:eato/pages/customer/meal_pages.dart';
+import 'package:eato/pages/customer/homepage/meal_pages.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

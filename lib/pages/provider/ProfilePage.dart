@@ -355,35 +355,55 @@ class _ProfilePageState extends State<ProfilePage> {
 
       // Determine if we're creating a new store or updating existing
       if (currentStore != null) {
-        // Create updated store data
+        // UPDATING EXISTING STORE - Use existing ID
+        print('🔄 [ProfilePage] Updating existing store: ${currentStore.id}');
+
         final Store updatedStore = Store(
-          id: currentStore.id,
+          id: currentStore.id, // ✅ Keep existing auto-generated ID
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
           isPickup: currentStore.isPickup,
           imageUrl: shopImageUrl ?? currentStore.imageUrl,
           foods: currentStore.foods,
-          location: _shopLocationController.text.trim(),
+          location: _shopLocationController.text.trim().isEmpty
+              ? null
+              : _shopLocationController.text.trim(),
+          ownerUid: widget.currentUser.id, // ✅ Ensure ownerUid is set
+          isActive: currentStore.isActive,
+          isAvailable: currentStore.isAvailable,
+          rating: currentStore.rating,
         );
 
         // Update store in Firebase
         await storeProvider.createOrUpdateStore(
             updatedStore, widget.currentUser.id);
+
+        print('✅ [ProfilePage] Store updated successfully');
       } else {
-        // Create new store data
+        // CREATING NEW STORE - Let Firestore auto-generate ID
+        print('🆕 [ProfilePage] Creating new store...');
+
         final Store newStore = Store(
-          id: widget.currentUser.id, // Use user ID as store ID for consistency
+          id: '', // ✅ FIXED: Empty ID - let Firestore generate it
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
           isPickup: true, // Default value
           imageUrl: shopImageUrl ?? '',
           foods: [],
-          location: _shopLocationController.text.trim(),
+          location: _shopLocationController.text.trim().isEmpty
+              ? null
+              : _shopLocationController.text.trim(),
+          ownerUid: widget.currentUser.id, // ✅ Link to user
+          isActive: true,
+          isAvailable: true,
+          rating: null,
         );
 
         // Create store in Firebase
         await storeProvider.createOrUpdateStore(
             newStore, widget.currentUser.id);
+
+        print('✅ [ProfilePage] New store created successfully');
       }
 
       // Refresh store data after update
@@ -400,6 +420,8 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
     } catch (e) {
+      print('❌ [ProfilePage] Error saving shop changes: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update shop details: $e'),

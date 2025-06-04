@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io' as io;
 
 class EditFoodPage extends StatefulWidget {
@@ -62,7 +62,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
   @override
   void initState() {
     super.initState();
-
+    _validateStoreId();
     // Initialize controllers with existing food data
     _nameController = TextEditingController(text: widget.food.name);
     _priceController =
@@ -168,14 +168,31 @@ class _EditFoodPageState extends State<EditFoodPage> {
   Future<void> _updateFood() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // ✅ ADD: Additional validation before updating
+    if (widget.storeId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid store ID. Cannot update food.'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
+      print('🔄 [EditFoodPage] Updating food: ${widget.food.name}');
+      print('📍 [EditFoodPage] Store ID: ${widget.storeId}');
+      print('🆔 [EditFoodPage] Food ID: ${widget.food.id}');
+
       // Only upload new image if changed
       if (_imageChanged) {
+        print('📸 [EditFoodPage] Uploading new image...');
         await _uploadImage();
+        print('✅ [EditFoodPage] Image uploaded: $_uploadedImageUrl');
       }
 
       // Create updated food object
@@ -187,12 +204,19 @@ class _EditFoodPageState extends State<EditFoodPage> {
         price: double.tryParse(_priceController.text) ?? 0,
         time: _selectedMealTime,
         imageUrl: _uploadedImageUrl ?? widget.food.imageUrl,
-        description: _descriptionController.text.trim(), // Save the description
+        description: _descriptionController.text.trim(),
+        isAvailable: widget.food.isAvailable, // ✅ Preserve availability
+        createdAt: widget.food.createdAt, // ✅ Preserve creation time
       );
+
+      print(
+          '💾 [EditFoodPage] Saving to: stores/${widget.storeId}/foods/${widget.food.id}');
 
       // Update food via provider
       await Provider.of<FoodProvider>(context, listen: false)
           .updateFood(widget.storeId, updatedFood);
+
+      print('✅ [EditFoodPage] Food updated successfully');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,6 +230,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
             context, true); // Return true to indicate successful update
       }
     } catch (e) {
+      print('❌ [EditFoodPage] Update failed: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -224,6 +250,66 @@ class _EditFoodPageState extends State<EditFoodPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _validateStoreId() async {
+    try {
+      print('🔍 [EditFoodPage] Validating storeId: ${widget.storeId}');
+      print(
+          '🍽️ [EditFoodPage] Editing food: ${widget.food.name} (${widget.food.id})');
+
+      // Check if storeId is empty
+      if (widget.storeId.isEmpty) {
+        throw Exception('Store ID is empty');
+      }
+
+      // Verify store exists in Firestore
+      final storeDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .get();
+
+      if (!storeDoc.exists) {
+        throw Exception('Store does not exist: ${widget.storeId}');
+      }
+
+      final storeData = storeDoc.data()!;
+      print(
+          '✅ [EditFoodPage] Store verified: ${storeData['name']} (${widget.storeId})');
+
+      // Verify food exists in this store
+      final foodDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('foods')
+          .doc(widget.food.id)
+          .get();
+
+      if (!foodDoc.exists) {
+        throw Exception('Food item does not exist in this store');
+      }
+
+      print('✅ [EditFoodPage] Food verified in store: ${widget.food.name}');
+    } catch (e) {
+      print('❌ [EditFoodPage] Validation failed: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Invalid store or food item. Returning to previous page.'),
+            backgroundColor: EatoTheme.errorColor,
+          ),
+        );
+
+        // Navigate back after showing error
+        Future.delayed(Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.pop(context);
+          }
         });
       }
     }
@@ -676,6 +762,40 @@ class _EditFoodPageState extends State<EditFoodPage> {
     }
   }
 
+  static Future<bool> canEditFood(String storeId, String foodId) async {
+    try {
+      // Verify store exists
+      final storeDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .get();
+
+      if (!storeDoc.exists) {
+        print('❌ Store does not exist: $storeId');
+        return false;
+      }
+
+      // Verify food exists in store
+      final foodDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('foods')
+          .doc(foodId)
+          .get();
+
+      if (!foodDoc.exists) {
+        print('❌ Food does not exist in store: $foodId');
+        return false;
+      }
+
+      print('✅ EditFoodPage validation passed');
+      return true;
+    } catch (e) {
+      print('❌ EditFoodPage validation error: $e');
+      return false;
+    }
+  }
+
   void _showDeleteConfirmationDialog() {
     showDialog(
       context: context,
@@ -712,13 +832,30 @@ class _EditFoodPageState extends State<EditFoodPage> {
   }
 
   Future<void> _deleteFood() async {
+    // ✅ ADD: Validation before deleting
+    if (widget.storeId.isEmpty || widget.food.id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid store or food ID. Cannot delete.'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
+      print('🗑️ [EditFoodPage] Deleting food: ${widget.food.name}');
+      print('📍 [EditFoodPage] From store: ${widget.storeId}');
+      print('🆔 [EditFoodPage] Food ID: ${widget.food.id}');
+
       await Provider.of<FoodProvider>(context, listen: false)
           .deleteFood(widget.storeId, widget.food.id);
+
+      print('✅ [EditFoodPage] Food deleted successfully');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -731,6 +868,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
         Navigator.pop(context, true); // Return true to indicate change
       }
     } catch (e) {
+      print('❌ [EditFoodPage] Delete failed: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

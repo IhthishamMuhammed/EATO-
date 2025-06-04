@@ -303,6 +303,70 @@ class FoodProvider with ChangeNotifier {
         .toList();
   }
 
+  Future<List<Food>> getMealsByCategoryAndTime(
+      String category, String? mealTime) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      print(
+          '🔍 [FoodProvider] Getting meals - Category: $category, Time: $mealTime');
+
+      // Get all stores
+      final storesSnapshot = await _firestore.collection('stores').get();
+      Set<String> uniqueMealNames = {};
+      List<Food> uniqueMeals = [];
+
+      for (var storeDoc in storesSnapshot.docs) {
+        final storeData = storeDoc.data();
+        final isActive = storeData['isActive'] ?? true;
+        final isAvailable = storeData['isAvailable'] ?? true;
+
+        if (!isActive || !isAvailable) {
+          continue;
+        }
+
+        // Build query with category filter
+        var query = _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .where('category', isEqualTo: category)
+            .where('isAvailable', isEqualTo: true);
+
+        // Add meal time filter if specified
+        if (mealTime != null && mealTime.isNotEmpty) {
+          query = query.where('time', isEqualTo: mealTime);
+        }
+
+        final foodsSnapshot = await query.get();
+
+        for (var foodDoc in foodsSnapshot.docs) {
+          Food food = Food.fromFirestore(foodDoc);
+          // Only add if we haven't seen this meal name before
+          if (!uniqueMealNames.contains(food.name)) {
+            uniqueMealNames.add(food.name);
+            uniqueMeals.add(food);
+          }
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+
+      print(
+          '✅ [FoodProvider] Found ${uniqueMeals.length} unique meals for $category${mealTime != null ? ' at $mealTime' : ''}');
+      return uniqueMeals;
+    } catch (e) {
+      _error = e.toString();
+      print(
+          '❌ [FoodProvider] Error getting meals by category and time: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
   // Helper methods for batch operations
   Future<void> deleteManyFoods(String storeId, List<String> foodIds) async {
     if (storeId.isEmpty || foodIds.isEmpty) {
@@ -443,6 +507,63 @@ class FoodProvider with ChangeNotifier {
     }
   }
 
+  // Add this debug method to your FoodProvider.dart
+  Future<void> debugFoodData() async {
+    try {
+      print('=== DEBUGGING FOOD DATA ===');
+
+      // 1. Check if any stores exist
+      final storesSnapshot = await _firestore.collection('stores').get();
+      print('Total stores found: ${storesSnapshot.docs.length}');
+
+      if (storesSnapshot.docs.isEmpty) {
+        print('❌ NO STORES FOUND - Providers need to create stores first');
+        return;
+      }
+
+      // 2. Check each store for foods
+      for (var storeDoc in storesSnapshot.docs) {
+        final storeData = storeDoc.data();
+        print('\n--- Store: ${storeDoc.id} ---');
+        print('Store name: ${storeData['name']}');
+        print('Store active: ${storeData['isActive']}');
+        print('Store available: ${storeData['isAvailable']}');
+
+        // Check foods in this store
+        final foodsSnapshot = await _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .get();
+
+        print('Foods in store: ${foodsSnapshot.docs.length}');
+
+        for (var foodDoc in foodsSnapshot.docs) {
+          final foodData = foodDoc.data();
+          print(
+              '  - Food: ${foodData['name']} | Category: ${foodData['category']} | Available: ${foodData['isAvailable']}');
+        }
+      }
+
+      // 3. Test the getAllCategories method
+      print('\n=== TESTING getAllCategories ===');
+      final categories = await getAllCategories();
+      print('Categories found: $categories');
+
+      // 4. Test getMealsByCategory for each category
+      for (String category in categories) {
+        print('\n=== TESTING getMealsByCategory for: $category ===');
+        final meals = await getMealsByCategory(category);
+        print('Meals in $category: ${meals.length}');
+        for (var meal in meals) {
+          print('  - ${meal.name} (${meal.time})');
+        }
+      }
+    } catch (e) {
+      print('❌ Error in debugFoodData: $e');
+    }
+  }
+
   // Get shops that offer a specific meal
   Future<List<Map<String, dynamic>>> getShopsForMeal(
       String mealTitle, String category) async {
@@ -493,6 +614,255 @@ class FoodProvider with ChangeNotifier {
       notifyListeners();
       return [];
     }
+  }
+
+// Enhanced method to get categories available for a specific meal time
+  Future<List<String>> getCategoriesForMealTime(String mealTime) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      print('🔍 [FoodProvider] Getting categories for meal time: $mealTime');
+
+      final storesSnapshot = await _firestore.collection('stores').get();
+      Set<String> uniqueCategories = {};
+
+      for (var storeDoc in storesSnapshot.docs) {
+        final storeData = storeDoc.data();
+        final isActive = storeData['isActive'] ?? true;
+        final isAvailable = storeData['isAvailable'] ?? true;
+
+        if (!isActive || !isAvailable) {
+          continue;
+        }
+
+        // Query foods for specific meal time
+        final foodsSnapshot = await _firestore
+            .collection('stores')
+            .doc(storeDoc.id)
+            .collection('foods')
+            .where('time', isEqualTo: mealTime)
+            .where('isAvailable', isEqualTo: true)
+            .get();
+
+        for (var foodDoc in foodsSnapshot.docs) {
+          final foodData = foodDoc.data();
+          final category = foodData['category'] as String?;
+          if (category != null && category.isNotEmpty) {
+            uniqueCategories.add(category);
+          }
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+
+      final categoriesList = uniqueCategories.toList();
+      print(
+          '✅ [FoodProvider] Found ${categoriesList.length} categories for $mealTime: $categoriesList');
+      return categoriesList;
+    } catch (e) {
+      _error = e.toString();
+      print('❌ [FoodProvider] Error getting categories for meal time: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
+// Enhanced method to get shops with better sorting options
+  Future<List<Map<String, dynamic>>> getShopsForMealWithDetails(
+      String mealTitle, String category) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      print('🏪 [FoodProvider] Getting shops for: $mealTitle in $category');
+
+      final storesSnapshot = await _firestore.collection('stores').get();
+      List<Map<String, dynamic>> shopItems = [];
+
+      for (var storeDoc in storesSnapshot.docs) {
+        try {
+          Store store = Store.fromFirestore(storeDoc);
+
+          // Skip inactive stores
+          if (!store.isActive || !(store.isAvailable ?? true)) {
+            continue;
+          }
+
+          // Get foods from this store that match criteria
+          final foodsSnapshot = await _firestore
+              .collection('stores')
+              .doc(storeDoc.id)
+              .collection('foods')
+              .where('name', isEqualTo: mealTitle)
+              .where('category', isEqualTo: category)
+              .where('isAvailable', isEqualTo: true)
+              .get();
+
+          for (var foodDoc in foodsSnapshot.docs) {
+            Food food = Food.fromFirestore(foodDoc);
+
+            // Calculate additional details
+            final distance = _calculateMockDistance(store.coordinates);
+            final deliveryTime = _estimateDeliveryTime(distance);
+
+            shopItems.add({
+              'shopId': store.id,
+              'shopName': store.name,
+              'shopImage': store.imageUrl,
+              'shopRating': store.rating ?? 4.0,
+              'shopContact': store.contact,
+              'shopLocation': store.location ?? 'Location not specified',
+              'isPickup': store.isPickup,
+              'foodId': food.id,
+              'foodName': food.name,
+              'foodImage': food.imageUrl,
+              'foodType': food.type,
+              'foodCategory': food.category,
+              'price': food.price,
+              'description': food.description ?? 'No description available',
+              'time': food.time,
+              'distance': distance,
+              'deliveryTime': deliveryTime,
+              'variation': _getVariationName(food.type),
+              'availabilityScore': _calculateAvailabilityScore(store, food),
+            });
+          }
+        } catch (e) {
+          print('⚠️ [FoodProvider] Error processing store ${storeDoc.id}: $e');
+          continue;
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+
+      print(
+          '✅ [FoodProvider] Found ${shopItems.length} shops offering $mealTitle');
+      return shopItems;
+    } catch (e) {
+      _error = e.toString();
+      print('❌ [FoodProvider] Error getting shops for meal: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
+// Helper methods for enhanced shop details
+  double _calculateMockDistance(dynamic coordinates) {
+    // Mock distance calculation - replace with actual geolocation logic
+    if (coordinates == null) return 2.5;
+
+    // Simple mock based on some coordinate math
+    if (coordinates is Map) {
+      final lat = coordinates['latitude'] ?? 6.9271;
+      final lng = coordinates['longitude'] ?? 79.8612;
+      return ((lat.abs() + lng.abs()) % 5.0) + 0.5;
+    }
+
+    return 2.5;
+  }
+
+  int _estimateDeliveryTime(double distance) {
+    // Base time of 20 minutes + 3 minutes per km
+    return (20 + (distance * 3)).round();
+  }
+
+  String _getVariationName(String foodType) {
+    switch (foodType.toLowerCase()) {
+      case 'vegetarian':
+        return 'Veggie';
+      case 'non-vegetarian':
+        return 'Classic';
+      case 'vegan':
+        return 'Plant-Based';
+      case 'dessert':
+        return 'Sweet';
+      default:
+        return 'Traditional';
+    }
+  }
+
+  double _calculateAvailabilityScore(Store store, Food food) {
+    // Calculate a score based on various factors
+    double score = 0.0;
+
+    // Rating contributes 40%
+    score += (store.rating ?? 3.0) * 0.4;
+
+    // Price contributes 30% (lower price = higher score)
+    score += (100 - food.price.clamp(0, 100)) / 100 * 0.3;
+
+    // Pickup vs delivery contributes 20%
+    score += store.isPickup ? 0.2 : 0.15;
+
+    // Random factor for variety 10%
+    score += (food.name.hashCode % 10) / 100.0;
+
+    return score.clamp(0.0, 5.0);
+  }
+
+// Enhanced sorting method with more options
+  void sortShopsBy(List<Map<String, dynamic>> shops, String sortBy) {
+    switch (sortBy.toLowerCase()) {
+      case 'price_low_high':
+        shops.sort(
+            (a, b) => (a['price'] as double).compareTo(b['price'] as double));
+        break;
+
+      case 'price_high_low':
+        shops.sort(
+            (a, b) => (b['price'] as double).compareTo(a['price'] as double));
+        break;
+
+      case 'rating':
+        shops.sort((a, b) =>
+            (b['shopRating'] as double).compareTo(a['shopRating'] as double));
+        break;
+
+      case 'distance':
+        shops.sort((a, b) =>
+            (a['distance'] as double).compareTo(b['distance'] as double));
+        break;
+
+      case 'delivery_time':
+        shops.sort((a, b) =>
+            (a['deliveryTime'] as int).compareTo(b['deliveryTime'] as int));
+        break;
+
+      case 'popularity':
+        shops.sort((a, b) => (b['availabilityScore'] as double)
+            .compareTo(a['availabilityScore'] as double));
+        break;
+
+      case 'alphabetical':
+        shops.sort((a, b) =>
+            (a['shopName'] as String).compareTo(b['shopName'] as String));
+        break;
+
+      case 'best_match':
+      default:
+        // Multi-factor scoring algorithm
+        shops.sort((a, b) {
+          double aScore = (a['shopRating'] as double) * 0.3 +
+              (5.0 - (a['distance'] as double).clamp(0, 5)) * 0.25 +
+              (100 - (a['price'] as double).clamp(0, 100)) / 100 * 0.2 +
+              (a['availabilityScore'] as double) * 0.25;
+
+          double bScore = (b['shopRating'] as double) * 0.3 +
+              (5.0 - (b['distance'] as double).clamp(0, 5)) * 0.25 +
+              (100 - (b['price'] as double).clamp(0, 100)) / 100 * 0.2 +
+              (b['availabilityScore'] as double) * 0.25;
+
+          return bScore.compareTo(aScore);
+        });
+        break;
+    }
+
+    print('🔄 [FoodProvider] Sorted ${shops.length} shops by: $sortBy');
   }
 
   // Get all available categories

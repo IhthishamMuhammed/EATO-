@@ -1,4 +1,4 @@
-import 'package:eato/pages/customer/meal_category_page.dart';
+import 'package:eato/pages/customer/homepage/meal_category_page.dart'; // ✅ FIXED: Correct import path
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';
@@ -90,46 +90,60 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     });
   }
 
-  // Navigate to meal type page
+  // ✅ FIXED: Navigate to meal type page with bottom nav maintained
   void _navigateToMealPage(BuildContext context, String mealType) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MealCategoryPage(
           mealTime: mealType,
-          showBottomNav: false,
+          showBottomNav: true, // ✅ Keep bottom nav on sub-pages
         ),
       ),
-    );
+    ).then((selectedTabIndex) {
+      // ✅ Handle navigation back with tab switching
+      if (selectedTabIndex != null && selectedTabIndex is int) {
+        setState(() {
+          _currentIndex = selectedTabIndex;
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use a switch to determine which page to show based on current index
+    // ✅ FIXED: Better error handling and page switching
     Widget currentPage;
 
-    switch (_currentIndex) {
-      case 0:
-        currentPage = _buildHomePage(context);
-        break;
-      case 1:
-        currentPage = const SubscribedPage(showBottomNav: false);
-        break;
-      case 2:
-        currentPage = const OrdersPage(showBottomNav: false);
-        break;
-      case 3:
-        currentPage = const ActivityPage(showBottomNav: false);
-        break;
-      case 4:
-        currentPage = const AccountPage(showBottomNav: false);
-        break;
-      default:
-        currentPage = _buildHomePage(context);
+    try {
+      switch (_currentIndex) {
+        case 0:
+          currentPage = _buildHomePage(context);
+          break;
+        case 1:
+          currentPage = const SubscribedPage(showBottomNav: false);
+          break;
+        case 2:
+          currentPage = const OrdersPage(showBottomNav: false);
+          break;
+        case 3:
+          currentPage = const ActivityPage(showBottomNav: false);
+          break;
+        case 4:
+          currentPage = const AccountPage(showBottomNav: false);
+          break;
+        default:
+          currentPage = _buildHomePage(context);
+      }
+    } catch (e) {
+      print('Error building page for index $_currentIndex: $e');
+      // Fallback to home page if there's an error
+      currentPage = _buildHomePage(context);
+      // Reset to home tab
+      _currentIndex = 0;
     }
 
     return Scaffold(
-      // Removed the AppBar
       body: currentPage,
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
