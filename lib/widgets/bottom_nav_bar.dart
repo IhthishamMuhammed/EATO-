@@ -1,6 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
-class BottomNavBar extends StatelessWidget {
+// ✅ Cart Service for bottom nav
+class CartService {
+  static const String _cartKey = 'cart_items';
+
+  static Future<int> getCartCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
+
+    int totalCount = 0;
+    for (String item in cartItems) {
+      Map<String, dynamic> decodedItem = json.decode(item);
+      totalCount += decodedItem['quantity'] as int;
+    }
+
+    return totalCount;
+  }
+}
+
+class BottomNavBar extends StatefulWidget {
   final int currentIndex;
   final Function(int) onTap;
 
@@ -9,6 +29,39 @@ class BottomNavBar extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
   }) : super(key: key);
+
+  @override
+  State<BottomNavBar> createState() => _BottomNavBarState();
+}
+
+class _BottomNavBarState extends State<BottomNavBar> {
+  int _cartCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCartCount();
+  }
+
+  @override
+  void didUpdateWidget(BottomNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload cart count when widget updates
+    _loadCartCount();
+  }
+
+  Future<void> _loadCartCount() async {
+    try {
+      final count = await CartService.getCartCount();
+      if (mounted) {
+        setState(() {
+          _cartCount = count;
+        });
+      }
+    } catch (e) {
+      print('Error loading cart count in bottom nav: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,13 +93,13 @@ class BottomNavBar extends StatelessWidget {
               _buildNavItem(
                 icon: Icons.home,
                 label: 'Home',
-                isSelected: currentIndex == 0,
+                isSelected: widget.currentIndex == 0,
                 index: 0,
               ),
               _buildNavItem(
                 icon: Icons.favorite,
                 label: 'Subscribed',
-                isSelected: currentIndex == 1,
+                isSelected: widget.currentIndex == 1,
                 index: 1,
               ),
               // Empty space for the center button
@@ -54,22 +107,22 @@ class BottomNavBar extends StatelessWidget {
               _buildNavItem(
                 icon: Icons.chat_bubble,
                 label: 'Activity',
-                isSelected: currentIndex == 3,
+                isSelected: widget.currentIndex == 3,
                 index: 3,
               ),
               _buildNavItem(
                 icon: Icons.person,
                 label: 'Account',
-                isSelected: currentIndex == 4,
+                isSelected: widget.currentIndex == 4,
                 index: 4,
               ),
             ],
           ),
 
-          // Center floating button
+          // Center floating cart button with real count
           Positioned(
             top: -20,
-            child: _buildOrdersButton(),
+            child: _buildCartButton(),
           ),
 
           // Selection indicator lines
@@ -81,7 +134,7 @@ class BottomNavBar extends StatelessWidget {
 
   Widget _buildSelectionIndicator(BuildContext context) {
     // Skip if center button is selected
-    if (currentIndex == 2) {
+    if (widget.currentIndex == 2) {
       return const SizedBox.shrink();
     }
 
@@ -91,7 +144,7 @@ class BottomNavBar extends StatelessWidget {
 
     // Adjust positions for each tab (manually tuned)
     double leftPosition;
-    switch (currentIndex) {
+    switch (widget.currentIndex) {
       case 0: // Home
         leftPosition = itemWidth * 0.5 - 15;
         break;
@@ -129,7 +182,7 @@ class BottomNavBar extends StatelessWidget {
     required int index,
   }) {
     return InkWell(
-      onTap: () => onTap(index),
+      onTap: () => widget.onTap(index),
       child: Container(
         width: 70,
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -157,15 +210,22 @@ class BottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildOrdersButton() {
+  // ✅ ENHANCED: Cart button with real cart count
+  Widget _buildCartButton() {
     return GestureDetector(
-      onTap: () => onTap(2),
+      onTap: () {
+        widget.onTap(2);
+        // Refresh cart count after navigation
+        Future.delayed(Duration(milliseconds: 500), () {
+          _loadCartCount();
+        });
+      },
       child: Container(
-        width: 65, // Increased size
-        height: 65, // Increased size
+        width: 65,
+        height: 65,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: currentIndex == 2 ? Colors.purpleAccent : Colors.purple,
+          color: widget.currentIndex == 2 ? Colors.purpleAccent : Colors.purple,
           boxShadow: [
             BoxShadow(
               color: Colors.purple.withOpacity(0.3),
@@ -182,36 +242,37 @@ class BottomNavBar extends StatelessWidget {
               const Icon(
                 Icons.shopping_cart,
                 color: Colors.white,
-                size: 30, // Increased icon size
+                size: 30,
               ),
 
-              // Cart item count badge - optional
-              Positioned(
-                top: -5,
-                right: -5,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.purple, width: 1.5),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '2',
-                      style: TextStyle(
-                        color: Colors.purple,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+              // ✅ REAL CART COUNT BADGE
+              if (_cartCount > 0)
+                Positioned(
+                  top: -8,
+                  right: -8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    child: Center(
+                      child: Text(
+                        _cartCount > 99 ? '99+' : '$_cartCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

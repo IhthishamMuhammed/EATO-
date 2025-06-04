@@ -35,6 +35,9 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
     super.initState();
     final storeProvider = Provider.of<StoreProvider>(context, listen: false);
     storeProvider.fetchUserStore(widget.currentUser);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _debugStoreInfo();
+    });
   }
 
   Future<void> _pickImage() async {
@@ -58,10 +61,22 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
         context,
         MaterialPageRoute(
           builder: (context) => AddFoodPage(
-            storeId: Provider.of<StoreProvider>(context, listen: false)
-                    .userStore
-                    ?.id ??
-                '',
+            storeId: () {
+              final storeProvider =
+                  Provider.of<StoreProvider>(context, listen: false);
+              final storeId = storeProvider.userStore?.id ?? '';
+
+              if (storeId.isEmpty) {
+                // Show error if no store ID
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please complete store setup first')),
+                );
+                return '';
+              }
+
+              print('🍽️ Navigating to AddFoodPage with storeId: $storeId');
+              return storeId;
+            }(),
           ),
         ),
       );
@@ -341,7 +356,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
 
                     // Create the store
                     final store = Store(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      id: '',
                       name: _shopNameController.text,
                       contact: _shopContactController.text,
                       isPickup: isPickup,
@@ -392,7 +407,28 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
 
   Widget _buildFoodPage(StoreProvider storeProvider) {
     final foodProvider = Provider.of<FoodProvider>(context);
-    final storeId = storeProvider.userStore!.id;
+    final storeId = storeProvider.userStore?.id ?? '';
+    if (storeId.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red),
+              SizedBox(height: 16),
+              Text(
+                'Store setup incomplete. Please complete store setup first.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    print('🔍 Fetching foods for storeId: $storeId');
 
     // Fetch foods for this store
     foodProvider.fetchFoods(storeId);
@@ -607,6 +643,16 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
         ),
       ),
     );
+  }
+
+  void _debugStoreInfo() {
+    final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+    print('=== STORE DEBUG INFO ===');
+    print('User ID: ${widget.currentUser.id}');
+    print('Store exists: ${storeProvider.userStore != null}');
+    print('Store ID: ${storeProvider.userStore?.id ?? 'null'}');
+    print('Store name: ${storeProvider.userStore?.name ?? 'null'}');
+    print('========================');
   }
 
   Widget _buildBottomNavigationBar() {

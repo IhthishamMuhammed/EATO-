@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
 import 'phoneVerification.dart';
-import 'package:eato/pages/customer/customer_home.dart';
+import 'package:eato/pages/customer/homepage/customer_home.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
 
 class LoginPage extends StatefulWidget {
