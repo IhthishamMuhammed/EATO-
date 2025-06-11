@@ -1,24 +1,7 @@
+// File: lib/widgets/bottom_nav_bar.dart (Updated to work with backend integration)
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-
-// ✅ Cart Service for bottom nav
-class CartService {
-  static const String _cartKey = 'cart_items';
-
-  static Future<int> getCartCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    int totalCount = 0;
-    for (String item in cartItems) {
-      Map<String, dynamic> decodedItem = json.decode(item);
-      totalCount += decodedItem['quantity'] as int;
-    }
-
-    return totalCount;
-  }
-}
+import 'package:eato/services/CartService.dart'; // Import the updated CartService
 
 class BottomNavBar extends StatefulWidget {
   final int currentIndex;
@@ -52,15 +35,33 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   Future<void> _loadCartCount() async {
     try {
-      final count = await CartService.getCartCount();
+      // Use the updated CartService method
+      final cartItems = await CartService.getCartItems();
+      int totalCount = 0;
+
+      for (var item in cartItems) {
+        totalCount += item['quantity'] as int;
+      }
+
       if (mounted) {
         setState(() {
-          _cartCount = count;
+          _cartCount = totalCount;
         });
       }
     } catch (e) {
       print('Error loading cart count in bottom nav: $e');
+      // Set to 0 on error to prevent UI issues
+      if (mounted) {
+        setState(() {
+          _cartCount = 0;
+        });
+      }
     }
+  }
+
+  // Public method to refresh cart count from outside
+  void refreshCartCount() {
+    _loadCartCount();
   }
 
   @override
@@ -105,7 +106,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
               // Empty space for the center button
               const SizedBox(width: 65),
               _buildNavItem(
-                icon: Icons.chat_bubble,
+                icon: Icons.timeline,
                 label: 'Activity',
                 isSelected: widget.currentIndex == 3,
                 index: 3,
@@ -210,7 +211,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
     );
   }
 
-  // ✅ ENHANCED: Cart button with real cart count
   Widget _buildCartButton() {
     return GestureDetector(
       onTap: () {
@@ -245,7 +245,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
                 size: 30,
               ),
 
-              // ✅ REAL CART COUNT BADGE
+              // Real cart count badge
               if (_cartCount > 0)
                 Positioned(
                   top: -8,
@@ -278,5 +278,126 @@ class _BottomNavBarState extends State<BottomNavBar> {
         ),
       ),
     );
+  }
+}
+
+// ===============================================
+// Enhanced Bottom Nav Bar with Cart Refresh
+// ===============================================
+
+/// Enhanced version that can be used to automatically refresh cart count
+/// when cart items change throughout the app
+class EnhancedBottomNavBar extends StatefulWidget {
+  final int currentIndex;
+  final Function(int) onTap;
+
+  const EnhancedBottomNavBar({
+    Key? key,
+    required this.currentIndex,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  State<EnhancedBottomNavBar> createState() => _EnhancedBottomNavBarState();
+}
+
+class _EnhancedBottomNavBarState extends State<EnhancedBottomNavBar>
+    with WidgetsBindingObserver {
+  int _cartCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadCartCount();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Refresh cart count when app resumes
+    if (state == AppLifecycleState.resumed) {
+      _loadCartCount();
+    }
+  }
+
+  @override
+  void didUpdateWidget(EnhancedBottomNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload cart count when widget updates
+    _loadCartCount();
+  }
+
+  Future<void> _loadCartCount() async {
+    try {
+      final cartItems = await CartService.getCartItems();
+      int totalCount = 0;
+
+      for (var item in cartItems) {
+        totalCount += item['quantity'] as int;
+      }
+
+      if (mounted) {
+        setState(() {
+          _cartCount = totalCount;
+        });
+      }
+    } catch (e) {
+      print('Error loading cart count in enhanced bottom nav: $e');
+      if (mounted) {
+        setState(() {
+          _cartCount = 0;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavBar(
+      currentIndex: widget.currentIndex,
+      onTap: widget.onTap,
+    );
+  }
+}
+
+// ===============================================
+// Global Cart State Notifier (Optional)
+// ===============================================
+
+/// A simple notifier that can be used to update cart count globally
+class CartCountNotifier extends ChangeNotifier {
+  int _cartCount = 0;
+
+  int get cartCount => _cartCount;
+
+  Future<void> updateCartCount() async {
+    try {
+      final cartItems = await CartService.getCartItems();
+      int totalCount = 0;
+
+      for (var item in cartItems) {
+        totalCount += item['quantity'] as int;
+      }
+
+      _cartCount = totalCount;
+      notifyListeners();
+    } catch (e) {
+      print('Error updating cart count: $e');
+      _cartCount = 0;
+      notifyListeners();
+    }
+  }
+
+  void clearCount() {
+    _cartCount = 0;
+    notifyListeners();
   }
 }

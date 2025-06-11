@@ -1,202 +1,17 @@
+// File: lib/pages/provider/RequestHome.dart (Updated with backend integration)
+
 import 'package:flutter/material.dart';
 import 'package:eato/Model/coustomUser.dart';
+import 'package:eato/Provider/OrderProvider.dart';
+import 'package:eato/Provider/StoreProvider.dart';
+import 'package:eato/Model/Order.dart';
+import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/provider/OrderHomePage.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
 import 'package:eato/pages/provider/ProfilePage.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-
-// Model classes for requests
-class OrderRequest {
-  final String id;
-  final String customerId;
-  final String customerName;
-  final String foodName;
-  final double price;
-  final int quantity;
-  final String imageUrl;
-  final DateTime requestTime;
-  final String deliveryLocation;
-  final String contactNumber;
-  final bool isCancellationRequest;
-
-  OrderRequest({
-    required this.id,
-    required this.customerId,
-    required this.customerName,
-    required this.foodName,
-    required this.price,
-    required this.quantity,
-    required this.imageUrl,
-    required this.requestTime,
-    required this.deliveryLocation,
-    required this.contactNumber,
-    this.isCancellationRequest = false,
-  });
-}
-
-class RequestProvider with ChangeNotifier {
-  List<OrderRequest> _newRequests = [];
-  List<OrderRequest> _cancellationRequests = [];
-  bool _isLoading = false;
-  String _searchQuery = '';
-
-  bool get isLoading => _isLoading;
-  List<OrderRequest> get newRequests => _filterRequests(_newRequests);
-  List<OrderRequest> get cancellationRequests =>
-      _filterRequests(_cancellationRequests);
-
-  void setSearchQuery(String query) {
-    _searchQuery = query;
-    notifyListeners();
-  }
-
-  List<OrderRequest> _filterRequests(List<OrderRequest> requests) {
-    if (_searchQuery.isEmpty) return requests;
-
-    return requests.where((request) {
-      return request.customerName
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
-          request.foodName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          request.deliveryLocation
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
-          request.id.contains(_searchQuery);
-    }).toList();
-  }
-
-  // Mock data loading
-  Future<void> fetchRequests() async {
-    _isLoading = true;
-    notifyListeners();
-
-    // Simulating API call
-    await Future.delayed(Duration(seconds: 1));
-
-    // Mock data for new orders
-    _newRequests = [
-      OrderRequest(
-        id: '1',
-        customerId: 'cust1',
-        customerName: 'Mihail Ahamed',
-        foodName: 'Rice and curry - Egg',
-        price: 250,
-        quantity: 2,
-        imageUrl: 'https://example.com/food1.jpg',
-        requestTime: DateTime.now().subtract(Duration(minutes: 15)),
-        deliveryLocation: 'Faculty Gate',
-        contactNumber: '077*******',
-      ),
-      OrderRequest(
-        id: '2',
-        customerId: 'cust2',
-        customerName: 'Mohammed M.I.',
-        foodName: 'Rice and curry - Chicken',
-        price: 300,
-        quantity: 1,
-        imageUrl: 'https://example.com/food2.jpg',
-        requestTime: DateTime.now().subtract(Duration(minutes: 10)),
-        deliveryLocation: 'Banagowra Mawatha',
-        contactNumber: '076*******',
-      ),
-    ];
-
-    // Mock data for cancellation requests
-    _cancellationRequests = [
-      OrderRequest(
-        id: '3',
-        customerId: 'cust3',
-        customerName: 'Mihail Ajamied',
-        foodName: 'Rice and curry - Egg',
-        price: 250,
-        quantity: 1,
-        imageUrl: 'https://example.com/food3.jpg',
-        requestTime: DateTime.now().subtract(Duration(minutes: 30)),
-        deliveryLocation: 'Faculty Gate',
-        contactNumber: '077*******',
-        isCancellationRequest: true,
-      ),
-      OrderRequest(
-        id: '4',
-        customerId: 'cust4',
-        customerName: 'Mohammed M.I.',
-        foodName: 'Rice and curry - Chicken',
-        price: 300,
-        quantity: 3,
-        imageUrl: 'https://example.com/food4.jpg',
-        requestTime: DateTime.now().subtract(Duration(minutes: 25)),
-        deliveryLocation: 'Main Canteen',
-        contactNumber: '076*******',
-        isCancellationRequest: true,
-      ),
-    ];
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  // Accept a new order request
-  Future<void> acceptRequest(String requestId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    // Simulating API call
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Remove the request from the list
-    _newRequests.removeWhere((request) => request.id == requestId);
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  // Decline a new order request
-  Future<void> declineRequest(String requestId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    // Simulating API call
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Remove the request from the list
-    _newRequests.removeWhere((request) => request.id == requestId);
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  // Accept a cancellation request
-  Future<void> acceptCancellation(String requestId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    // Simulating API call
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Remove the request from the list
-    _cancellationRequests.removeWhere((request) => request.id == requestId);
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  // Decline a cancellation request
-  Future<void> declineCancellation(String requestId) async {
-    _isLoading = true;
-    notifyListeners();
-
-    // Simulating API call
-    await Future.delayed(Duration(milliseconds: 500));
-
-    // Remove the request from the list
-    _cancellationRequests.removeWhere((request) => request.id == requestId);
-
-    _isLoading = false;
-    notifyListeners();
-  }
-}
 
 class RequestHome extends StatefulWidget {
   final CustomUser currentUser;
@@ -207,26 +22,47 @@ class RequestHome extends StatefulWidget {
   _RequestHomeState createState() => _RequestHomeState();
 }
 
-class _RequestHomeState extends State<RequestHome>
-    with SingleTickerProviderStateMixin {
+class _RequestHomeState extends State<RequestHome> {
   int _currentIndex = 1; // Default to Requests tab
-  final RequestProvider _requestProvider = RequestProvider();
   bool _showSearchBar = false;
   final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _requestProvider.fetchRequests();
-
     _searchController.addListener(() {
-      _requestProvider.setSearchQuery(_searchController.text);
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
     });
+
+    // Initialize the order provider and start listening to requests
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeOrderProvider();
+    });
+  }
+
+  void _initializeOrderProvider() async {
+    final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+    // Make sure we have the store data
+    if (storeProvider.userStore == null) {
+      await storeProvider.fetchUserStore(widget.currentUser);
+    }
+
+    // Start listening to order requests for this store
+    if (storeProvider.userStore != null) {
+      orderProvider.listenToStoreOrderRequests(storeProvider.userStore!.id);
+    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    // Stop listening when leaving the page
+    Provider.of<OrderProvider>(context, listen: false).stopListening();
     super.dispose();
   }
 
@@ -248,7 +84,6 @@ class _RequestHomeState extends State<RequestHome>
         );
         break;
       case 1: // Requests - current page
-        // Already on this page
         break;
       case 2: // Menu
         Navigator.pushReplacement(
@@ -274,315 +109,545 @@ class _RequestHomeState extends State<RequestHome>
     }
   }
 
-  void _viewRequestDetails(OrderRequest request) {
+  List<OrderRequest> _filterRequests(List<OrderRequest> requests) {
+    if (_searchQuery.isEmpty) return requests;
+
+    return requests.where((request) {
+      return request.customerName
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase()) ||
+          request.orderId.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          request.storeName.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  void _viewRequestDetails(OrderRequest request, CustomerOrder? order) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _buildRequestDetails(request),
+      builder: (context) => _buildRequestDetails(request, order),
     );
   }
 
-  Widget _buildRequestDetails(OrderRequest request) {
-    return Container(
-      padding: EdgeInsets.all(24),
-      height: MediaQuery.of(context).size.height * 0.75,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with close button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildRequestDetails(OrderRequest request, CustomerOrder? order) {
+    return Consumer<OrderProvider>(
+      builder: (context, orderProvider, _) {
+        return Container(
+          padding: EdgeInsets.all(24),
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                request.isCancellationRequest
-                    ? 'Cancellation Request'
-                    : 'New Order Request',
-                style: EatoTheme.headingMedium,
+              // Header with close button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'New Order Request',
+                    style: EatoTheme.headingMedium,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: EatoTheme.textPrimaryColor),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: Icon(Icons.close, color: EatoTheme.textPrimaryColor),
-                onPressed: () => Navigator.pop(context),
+              SizedBox(height: 24),
+
+              // Customer info
+              Center(
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: EatoTheme.primaryColor.withOpacity(0.1),
+                      child: Icon(
+                        Icons.person,
+                        size: 40,
+                        color: EatoTheme.primaryColor,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      request.customerName,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Order #${request.orderId.substring(0, 8)}',
+                      style: TextStyle(
+                        color: EatoTheme.textSecondaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+
+              // Request info badge
+              Center(
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: EatoTheme.primaryColor),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.access_time,
+                          size: 16, color: EatoTheme.primaryColor),
+                      SizedBox(width: 8),
+                      Text(
+                        _formatTimeAgo(request.requestTime),
+                        style: TextStyle(
+                          color: EatoTheme.primaryColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 32),
+
+              // Order details (if available)
+              if (order != null) ...[
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Order Details',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+
+                        // Order items
+                        Card(
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Items (${order.items.length})',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: EatoTheme.primaryColor,
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                ...order.items
+                                    .map((item) => Padding(
+                                          padding: EdgeInsets.only(bottom: 8),
+                                          child: Row(
+                                            children: [
+                                              // Food image
+                                              Container(
+                                                width: 40,
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey[200],
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: item.foodImage.isNotEmpty
+                                                    ? ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                        child: Image.network(
+                                                          item.foodImage,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (context, error,
+                                                                  stackTrace) {
+                                                            return Icon(
+                                                              Icons.fastfood,
+                                                              color: Colors
+                                                                  .grey[400],
+                                                              size: 20,
+                                                            );
+                                                          },
+                                                        ),
+                                                      )
+                                                    : Icon(
+                                                        Icons.fastfood,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                              ),
+                                              SizedBox(width: 12),
+
+                                              // Item details
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      item.foodName,
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    if (item.variation != null)
+                                                      Text(
+                                                        item.variation!,
+                                                        style: TextStyle(
+                                                          color: EatoTheme
+                                                              .textSecondaryColor,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // Quantity and price
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    'x${item.quantity}',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: EatoTheme
+                                                          .primaryColor,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Rs. ${item.totalPrice.toStringAsFixed(0)}',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ))
+                                    .toList(),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // Delivery information
+                        Card(
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              children: [
+                                _buildDetailRow(Icons.delivery_dining,
+                                    'Delivery Method', order.deliveryOption),
+                                if (order.deliveryOption == 'Delivery')
+                                  _buildDetailRow(
+                                      Icons.location_on,
+                                      'Delivery Address',
+                                      order.deliveryAddress),
+                                _buildDetailRow(Icons.payment, 'Payment Method',
+                                    order.paymentMethod),
+                                if (order.specialInstructions != null &&
+                                    order.specialInstructions!.isNotEmpty)
+                                  _buildDetailRow(
+                                      Icons.note,
+                                      'Special Instructions',
+                                      order.specialInstructions!),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // Total amount
+                        Card(
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              children: [
+                                _buildPriceRow('Subtotal', order.subtotal),
+                                if (order.deliveryFee > 0)
+                                  _buildPriceRow(
+                                      'Delivery Fee', order.deliveryFee),
+                                _buildPriceRow('Service Fee', order.serviceFee),
+                                Divider(),
+                                _buildPriceRow(
+                                    'Total Amount', order.totalAmount,
+                                    isTotal: true),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                            color: EatoTheme.primaryColor),
+                        SizedBox(height: 16),
+                        Text('Loading order details...'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+
+              // Action buttons
+              Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: orderProvider.isLoading
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                _rejectRequest(request, orderProvider);
+                              },
+                        icon: Icon(Icons.close),
+                        label: Text('Decline'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: EatoTheme.errorColor,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: orderProvider.isLoading
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                _acceptRequest(request, orderProvider);
+                              },
+                        icon: Icon(Icons.check),
+                        label: Text('Accept'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: EatoTheme.successColor,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          SizedBox(height: 24),
+        );
+      },
+    );
+  }
 
-          // Customer info
-          Center(
+  Widget _buildDetailRow(IconData icon, String title, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color: EatoTheme.primaryColor,
+            size: 20,
+          ),
+          SizedBox(width: 12),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: EatoTheme.primaryColor.withOpacity(0.1),
-                  child: Icon(
-                    Icons.person,
-                    size: 40,
-                    color: EatoTheme.primaryColor,
-                  ),
-                ),
-                SizedBox(height: 12),
                 Text(
-                  request.customerName,
+                  title,
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  request.contactNumber,
-                  style: TextStyle(
+                    fontSize: 12,
                     color: EatoTheme.textSecondaryColor,
                   ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(fontSize: 14),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
 
-          // Request type badge
-          Center(
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: request.isCancellationRequest
-                    ? EatoTheme.errorColor.withOpacity(0.1)
-                    : EatoTheme.successColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: request.isCancellationRequest
-                      ? EatoTheme.errorColor
-                      : EatoTheme.successColor,
-                ),
-              ),
-              child: Text(
-                request.isCancellationRequest
-                    ? 'Order Cancellation Request'
-                    : 'New Order Request',
-                style: TextStyle(
-                  color: request.isCancellationRequest
-                      ? EatoTheme.errorColor
-                      : EatoTheme.successColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: 32),
-
-          // Order details
+  Widget _buildPriceRow(String label, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
           Text(
-            'Request Details',
+            label,
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-          SizedBox(height: 16),
+          Text(
+            'Rs. ${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: isTotal ? EatoTheme.primaryColor : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          // Food item
-          Row(
-            children: [
-              // Food image
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
+  void _acceptRequest(OrderRequest request, OrderProvider orderProvider) async {
+    try {
+      await orderProvider.acceptOrderRequest(request.id, request.orderId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order request accepted successfully'),
+            backgroundColor: EatoTheme.successColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to accept request: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _rejectRequest(OrderRequest request, OrderProvider orderProvider) async {
+    // Show reason dialog
+    final reason = await _showRejectReasonDialog();
+    if (reason == null || reason.isEmpty) return;
+
+    try {
+      await orderProvider.rejectOrderRequest(
+          request.id, request.orderId, reason);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order request declined'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to decline request: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<String?> _showRejectReasonDialog() async {
+    final TextEditingController reasonController = TextEditingController();
+
+    return await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Decline Order'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Please provide a reason for declining this order:'),
+            SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'e.g., Out of ingredients, Too busy, etc.',
+                border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: request.imageUrl.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          request.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.fastfood,
-                              color: Colors.grey[400],
-                              size: 30,
-                            );
-                          },
-                        ),
-                      )
-                    : Icon(
-                        Icons.fastfood,
-                        color: Colors.grey[400],
-                        size: 30,
-                      ),
               ),
-              SizedBox(width: 16),
-
-              // Food details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      request.foodName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Quantity: ${request.quantity}',
-                      style: TextStyle(
-                        color: EatoTheme.textSecondaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Price
-              Text(
-                'Rs.${request.price.toStringAsFixed(0)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
           ),
-
-          SizedBox(height: 24),
-
-          // Location
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: EatoTheme.primaryColor,
-                size: 24,
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Delivery Location',
-                      style: TextStyle(
-                        color: EatoTheme.textSecondaryColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      request.deliveryLocation,
-                      style: TextStyle(
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          SizedBox(height: 16),
-
-          // Request time
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.access_time,
-                color: EatoTheme.primaryColor,
-                size: 24,
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Request Time',
-                      style: TextStyle(
-                        color: EatoTheme.textSecondaryColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      DateFormat('MMM d, yyyy • h:mm a')
-                          .format(request.requestTime),
-                      style: TextStyle(
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          Spacer(),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (request.isCancellationRequest) {
-                      _requestProvider.declineCancellation(request.id);
-                    } else {
-                      _requestProvider.declineRequest(request.id);
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Request declined'),
-                        backgroundColor: EatoTheme.errorColor,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: Icon(Icons.close),
-                  label: Text('Decline'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EatoTheme.errorColor,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (request.isCancellationRequest) {
-                      _requestProvider.acceptCancellation(request.id);
-                    } else {
-                      _requestProvider.acceptRequest(request.id);
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Request accepted'),
-                        backgroundColor: EatoTheme.successColor,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: Icon(Icons.check),
-                  label: Text('Accept'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EatoTheme.successColor,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-            ],
+          ElevatedButton(
+            onPressed: () {
+              final reason = reasonController.text.trim();
+              if (reason.isNotEmpty) {
+                Navigator.pop(context, reason);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EatoTheme.errorColor,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Decline'),
           ),
         ],
       ),
@@ -591,236 +656,151 @@ class _RequestHomeState extends State<RequestHome>
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: _requestProvider,
-      child: Scaffold(
-        appBar: AppBar(
-          title: _showSearchBar
-              ? TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: EatoTheme.inputDecoration(
-                    hintText: 'Search requests...',
-                    prefixIcon:
-                        Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.close),
-                      onPressed: () {
-                        setState(() {
-                          _showSearchBar = false;
-                          _searchController.clear();
-                        });
-                        _requestProvider.setSearchQuery('');
-                      },
+    return Consumer2<OrderProvider, StoreProvider>(
+      builder: (context, orderProvider, storeProvider, _) {
+        if (storeProvider.userStore == null) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text('Requests'),
+              backgroundColor: Colors.white,
+              elevation: 0,
+            ),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text('No Store Found',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                  SizedBox(height: 8),
+                  Text('Please set up your store first',
+                      style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final filteredRequests = _filterRequests(orderProvider.orderRequests);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: _showSearchBar
+                ? TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: EatoTheme.inputDecoration(
+                      hintText: 'Search requests...',
+                      prefixIcon: Icon(Icons.search,
+                          color: EatoTheme.textSecondaryColor),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.close),
+                        onPressed: () {
+                          setState(() {
+                            _showSearchBar = false;
+                            _searchController.clear();
+                          });
+                        },
+                      ),
+                    ),
+                    style: EatoTheme.bodyMedium,
+                  )
+                : Text(
+                    'Requests',
+                    style: TextStyle(
+                      color: EatoTheme.textPrimaryColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  style: EatoTheme.bodyMedium,
-                )
-              : Text(
-                  'Requests',
-                  style: TextStyle(
-                    color: EatoTheme.textPrimaryColor,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            centerTitle: _showSearchBar ? false : true,
+            leadingWidth: _showSearchBar ? 0 : null,
+            leading: _showSearchBar
+                ? null
+                : (Navigator.canPop(context)
+                    ? IconButton(
+                        icon: Icon(Icons.arrow_back,
+                            color: EatoTheme.textPrimaryColor),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    : null),
+            actions: [
+              if (!_showSearchBar) ...[
+                IconButton(
+                  icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
+                  onPressed: () {
+                    setState(() {
+                      _showSearchBar = true;
+                    });
+                  },
                 ),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: _showSearchBar ? false : true,
-          leadingWidth: _showSearchBar ? 0 : null,
-          leading: _showSearchBar
-              ? null
-              : (Navigator.canPop(context)
-                  ? IconButton(
-                      icon: Icon(Icons.arrow_back,
-                          color: EatoTheme.textPrimaryColor),
-                      onPressed: () => Navigator.pop(context),
-                    )
-                  : null),
-          actions: [
-            if (!_showSearchBar)
-              IconButton(
-                icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
-                onPressed: () {
-                  setState(() {
-                    _showSearchBar = true;
-                  });
-                },
-              ),
-            if (!_showSearchBar)
-              IconButton(
-                icon: Icon(Icons.refresh, color: EatoTheme.textPrimaryColor),
-                onPressed: () => _requestProvider.fetchRequests(),
-              ),
-          ],
-        ),
-        body: Consumer<RequestProvider>(
-          builder: (context, requestProvider, _) {
-            if (requestProvider.isLoading) {
-              return Center(
-                child: CircularProgressIndicator(color: EatoTheme.primaryColor),
-              );
-            }
-
-            // Check if both request lists are empty
-            final bool isEmpty = requestProvider.newRequests.isEmpty &&
-                requestProvider.cancellationRequests.isEmpty;
-
-            if (isEmpty) {
-              return _buildEmptyRequestsView();
-            }
-
-            return RefreshIndicator(
-              onRefresh: () => requestProvider.fetchRequests(),
-              color: EatoTheme.primaryColor,
-              child: SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // New Orders Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.shopping_bag_outlined,
-                              color: EatoTheme.primaryColor,
-                              size: 20,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'New Order Requests',
-                              style: EatoTheme.headingSmall,
-                            ),
-                            SizedBox(width: 8),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: EatoTheme.primaryColor,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${requestProvider.newRequests.length}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
+                // Badge showing request count
+                if (filteredRequests.isNotEmpty)
+                  Container(
+                    margin: EdgeInsets.only(right: 8),
+                    child: Stack(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.notifications_active,
+                              color: EatoTheme.primaryColor),
+                          onPressed: () {},
                         ),
-                      ),
-                      SizedBox(height: 12),
-
-                      // New Order Requests
-                      requestProvider.newRequests.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 24.0,
-                                horizontal: 16.0,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'No new order requests',
-                                  style: TextStyle(
-                                      color: EatoTheme.textSecondaryColor),
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              physics: NeverScrollableScrollPhysics(),
-                              shrinkWrap: true,
-                              itemCount: requestProvider.newRequests.length,
-                              itemBuilder: (context, index) {
-                                return _buildRequestCard(
-                                  requestProvider.newRequests[index],
-                                  requestProvider,
-                                );
-                              },
-                            ),
-
-                      SizedBox(height: 24),
-
-                      // Cancel Order Requests Section
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.cancel_outlined,
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: EdgeInsets.all(2),
+                            decoration: BoxDecoration(
                               color: EatoTheme.errorColor,
-                              size: 20,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Cancellation Requests',
-                              style: EatoTheme.headingSmall,
+                            constraints: BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
                             ),
-                            SizedBox(width: 8),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: EatoTheme.errorColor,
-                                borderRadius: BorderRadius.circular(12),
+                            child: Text(
+                              '${filteredRequests.length}',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
-                              child: Text(
-                                '${requestProvider.cancellationRequests.length}',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              textAlign: TextAlign.center,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 12),
-
-                      // Cancel Order Requests
-                      requestProvider.cancellationRequests.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 24.0,
-                                horizontal: 16.0,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'No cancellation requests',
-                                  style: TextStyle(
-                                      color: EatoTheme.textSecondaryColor),
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              physics: NeverScrollableScrollPhysics(),
-                              shrinkWrap: true,
-                              itemCount:
-                                  requestProvider.cancellationRequests.length,
-                              itemBuilder: (context, index) {
-                                return _buildRequestCard(
-                                  requestProvider.cancellationRequests[index],
-                                  requestProvider,
-                                );
-                              },
-                            ),
-
-                      SizedBox(height: 24),
-                    ],
+                      ],
+                    ),
                   ),
+              ],
+            ],
+          ),
+          body: orderProvider.isLoading
+              ? Center(
+                  child:
+                      CircularProgressIndicator(color: EatoTheme.primaryColor),
+                )
+              : RefreshIndicator(
+                  onRefresh: () async => _initializeOrderProvider(),
+                  color: EatoTheme.primaryColor,
+                  child: filteredRequests.isEmpty
+                      ? _buildEmptyRequestsView()
+                      : ListView.builder(
+                          padding: EdgeInsets.all(16),
+                          itemCount: filteredRequests.length,
+                          itemBuilder: (context, index) {
+                            final request = filteredRequests[index];
+                            return _buildRequestCard(request, orderProvider);
+                          },
+                        ),
                 ),
-              ),
-            );
-          },
-        ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
-      ),
+          bottomNavigationBar: _buildBottomNavigationBar(),
+        );
+      },
     );
   }
 
@@ -836,7 +816,7 @@ class _RequestHomeState extends State<RequestHome>
           ),
           SizedBox(height: 16),
           Text(
-            'No Requests',
+            'No New Requests',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
@@ -845,7 +825,7 @@ class _RequestHomeState extends State<RequestHome>
           ),
           SizedBox(height: 8),
           Text(
-            'New requests will appear here',
+            'New order requests will appear here',
             style: TextStyle(
               color: EatoTheme.textSecondaryColor,
             ),
@@ -853,7 +833,7 @@ class _RequestHomeState extends State<RequestHome>
           ),
           SizedBox(height: 24),
           OutlinedButton.icon(
-            onPressed: () => _requestProvider.fetchRequests(),
+            onPressed: () => _initializeOrderProvider(),
             icon: Icon(Icons.refresh),
             label: Text('Refresh'),
             style: EatoTheme.outlinedButtonStyle,
@@ -863,163 +843,57 @@ class _RequestHomeState extends State<RequestHome>
     );
   }
 
-  Widget _buildRequestCard(OrderRequest request, RequestProvider provider) {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: request.isCancellationRequest
-                ? EatoTheme.errorColor.withOpacity(0.3)
-                : EatoTheme.successColor.withOpacity(0.3),
-            width: 1.5,
+  Widget _buildRequestCard(OrderRequest request, OrderProvider orderProvider) {
+    return FutureBuilder<CustomerOrder?>(
+      future: orderProvider.getOrderById(request.orderId),
+      builder: (context, snapshot) {
+        final order = snapshot.data;
+
+        return Card(
+          margin: EdgeInsets.only(bottom: 16),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ),
-        child: Column(
-          children: [
-            // Request header
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: request.isCancellationRequest
-                    ? EatoTheme.errorColor.withOpacity(0.05)
-                    : EatoTheme.successColor.withOpacity(0.05),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  topRight: Radius.circular(12),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    request.isCancellationRequest
-                        ? 'Cancellation Request'
-                        : 'New Order Request',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: request.isCancellationRequest
-                          ? EatoTheme.errorColor
-                          : EatoTheme.successColor,
-                    ),
-                  ),
-                  Text(
-                    _formatTimeAgo(request.requestTime),
-                    style: TextStyle(
-                      color: EatoTheme.textSecondaryColor,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: EatoTheme.primaryColor.withOpacity(0.3),
+                width: 1.5,
               ),
             ),
-
-            // Request details
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Food image
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: Colors.grey[200],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: request.imageUrl.isNotEmpty
-                          ? Image.network(
-                              request.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.fastfood,
-                                  color: Colors.grey[400],
-                                  size: 30,
-                                );
-                              },
-                            )
-                          : Icon(
-                              Icons.fastfood,
-                              color: Colors.grey[400],
-                              size: 30,
-                            ),
+            child: Column(
+              children: [
+                // Request header
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.primaryColor.withOpacity(0.05),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
                     ),
                   ),
-                  SizedBox(width: 16),
-
-                  // Order details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Customer name
-                        Text(
-                          request.customerName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-
-                        // Food details
-                        Text(
-                          '${request.foodName} x ${request.quantity}',
-                          style: TextStyle(
-                            color: EatoTheme.textPrimaryColor,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-
-                        // Location
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 16,
-                              color: EatoTheme.textSecondaryColor,
-                            ),
-                            SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                request.deliveryLocation,
-                                style: TextStyle(
-                                  color: EatoTheme.textSecondaryColor,
-                                  fontSize: 13,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Price
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Rs.${request.price.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.new_releases,
+                              color: EatoTheme.primaryColor, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'New Order Request',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: EatoTheme.primaryColor,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 4),
                       Text(
-                        'Total: ${(request.price * request.quantity).toStringAsFixed(0)}',
+                        _formatTimeAgo(request.requestTime),
                         style: TextStyle(
                           color: EatoTheme.textSecondaryColor,
                           fontSize: 12,
@@ -1027,71 +901,212 @@ class _RequestHomeState extends State<RequestHome>
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            // Action buttons
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _viewRequestDetails(request),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: EatoTheme.primaryColor,
-                        side: BorderSide(color: EatoTheme.primaryColor),
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text('View details'),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (request.isCancellationRequest) {
-                          provider.acceptCancellation(request.id);
-                        } else {
-                          provider.acceptRequest(request.id);
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Request accepted'),
-                            backgroundColor: EatoTheme.successColor,
-                            behavior: SnackBarBehavior.floating,
+                // Request details
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      // Customer info
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 25,
+                            backgroundColor:
+                                EatoTheme.primaryColor.withOpacity(0.1),
+                            child: Icon(
+                              Icons.person,
+                              color: EatoTheme.primaryColor,
+                              size: 24,
+                            ),
                           ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: request.isCancellationRequest
-                            ? EatoTheme.errorColor
-                            : EatoTheme.successColor,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  request.customerName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  'Order #${request.orderId.substring(0, 8)}',
+                                  style: TextStyle(
+                                    color: EatoTheme.textSecondaryColor,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange),
+                            ),
+                            child: Text(
+                              'PENDING',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Order summary (if available)
+                      if (order != null) ...[
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${order.items.length} items',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Rs. ${order.totalAmount.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: EatoTheme.primaryColor,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.delivery_dining,
+                                      size: 16,
+                                      color: EatoTheme.textSecondaryColor),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    order.deliveryOption,
+                                    style: TextStyle(
+                                      color: EatoTheme.textSecondaryColor,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Icon(Icons.payment,
+                                      size: 16,
+                                      color: EatoTheme.textSecondaryColor),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    order.paymentMethod,
+                                    style: TextStyle(
+                                      color: EatoTheme.textSecondaryColor,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
+                      ] else ...[
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: EatoTheme.primaryColor,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Loading order details...',
+                                style: TextStyle(
+                                  color: EatoTheme.textSecondaryColor,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      SizedBox(height: 16),
+
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: orderProvider.isLoading
+                                  ? null
+                                  : () {
+                                      _viewRequestDetails(request, order);
+                                    },
+                              icon: Icon(Icons.visibility, size: 16),
+                              label: Text('View Details'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: EatoTheme.primaryColor,
+                                side: BorderSide(color: EatoTheme.primaryColor),
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: orderProvider.isLoading
+                                  ? null
+                                  : () {
+                                      _acceptRequest(request, orderProvider);
+                                    },
+                              icon: Icon(Icons.check, size: 16),
+                              label: Text('Accept'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: EatoTheme.successColor,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        request.isCancellationRequest
-                            ? 'Accept cancel'
-                            : 'Accept',
-                      ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            SizedBox(height: 8),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

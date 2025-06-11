@@ -1,62 +1,13 @@
+// File: lib/pages/customer/OrdersPage.dart (Updated with backend integration)
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
+import 'package:eato/Provider/OrderProvider.dart';
+import 'package:eato/Provider/userProvider.dart';
+import 'package:eato/services/CartService.dart';
+import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-
-// ✅ Same Cart Service (should be in a separate file)
-class CartService {
-  static const String _cartKey = 'cart_items';
-  static const String _orderHistoryKey = 'order_history';
-
-  // Get all cart items
-  static Future<List<Map<String, dynamic>>> getCartItems() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    return cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-
-  // Update cart items
-  static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> encodedItems = items.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-
-  // Clear cart
-  static Future<void> clearCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
-  }
-
-  // Add order to history (for activity page)
-  static Future<void> addOrderToHistory(Map<String, dynamic> order) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList(_orderHistoryKey) ?? [];
-
-    history.insert(0, json.encode(order)); // Add to beginning
-
-    // Keep only last 50 orders
-    if (history.length > 50) {
-      history = history.take(50).toList();
-    }
-
-    await prefs.setStringList(_orderHistoryKey, history);
-  }
-
-  // Get order history (for activity page)
-  static Future<List<Map<String, dynamic>>> getOrderHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList(_orderHistoryKey) ?? [];
-
-    return history
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-}
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -94,7 +45,6 @@ class _OrdersPageState extends State<OrdersPage> {
     _loadCartItems();
   }
 
-  // ✅ Load real cart items from storage
   Future<void> _loadCartItems() async {
     setState(() {
       _isLoading = true;
@@ -122,7 +72,6 @@ class _OrdersPageState extends State<OrdersPage> {
         0.0, (sum, item) => sum + (item['totalPrice'] as double));
   }
 
-  // ✅ Update cart item quantity and save to storage
   Future<void> _updateCartItemQuantity(int index, int change) async {
     setState(() {
       _cartItems[index]['quantity'] += change;
@@ -136,18 +85,15 @@ class _OrdersPageState extends State<OrdersPage> {
       _updateCartTotals();
     });
 
-    // Save to storage
     await CartService.updateCartItems(_cartItems);
   }
 
-  // ✅ Remove item from cart and save to storage
   Future<void> _removeCartItem(int index) async {
     setState(() {
       _cartItems.removeAt(index);
       _updateCartTotals();
     });
 
-    // Save to storage
     await CartService.updateCartItems(_cartItems);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -159,7 +105,6 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  // ✅ Clear entire cart
   Future<void> _clearCart() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -194,7 +139,6 @@ class _OrdersPageState extends State<OrdersPage> {
     }
   }
 
-  // ✅ Schedule order time
   void _selectScheduleTime() async {
     final now = DateTime.now();
     final time = await showTimePicker(
@@ -210,12 +154,25 @@ class _OrdersPageState extends State<OrdersPage> {
     }
   }
 
-  // ✅ Send order requests to restaurants
-  Future<void> _sendOrderRequests() async {
+  // ===================================
+  // NEW BACKEND INTEGRATION
+  // ===================================
+
+  Future<void> _placeOrderWithBackend() async {
     if (_cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Your cart is empty'),
+            backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    // Validate delivery address for delivery orders
+    if (_deliveryOption == 'Delivery' && _deliveryAddress.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Please enter delivery address'),
             backgroundColor: Colors.orange),
       );
       return;
@@ -235,42 +192,45 @@ class _OrdersPageState extends State<OrdersPage> {
           children: [
             CircularProgressIndicator(color: Colors.purple),
             SizedBox(height: 16),
-            Text('Sending order requests to restaurants...'),
+            Text('Placing your orders...'),
           ],
         ),
       ),
     );
 
     try {
-      // Group orders by shop
-      Map<String, List<Map<String, dynamic>>> ordersByShop = {};
-      for (var item in _cartItems) {
-        final shopId = item['shopId'];
-        if (!ordersByShop.containsKey(shopId)) {
-          ordersByShop[shopId] = [];
-        }
-        ordersByShop[shopId]!.add(item);
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+      if (userProvider.currentUser == null) {
+        throw Exception('User not logged in');
       }
 
-      // Simulate sending orders
-      await Future.delayed(Duration(seconds: 2));
+      // Place orders using the backend
+      final orderIds = await CartService.placeOrdersWithBackend(
+        orderProvider,
+        userProvider.currentUser!,
+        _cartItems,
+        deliveryOption: _deliveryOption,
+        deliveryAddress: _deliveryAddress,
+        paymentMethod: _paymentMethod,
+        specialInstructions: _specialInstructions,
+        scheduledTime: _scheduledTime,
+      );
 
       Navigator.pop(context); // Close loading dialog
 
-      // Add to order history for activity page
-      await _addToOrderHistory();
-
-      // Clear cart
-      await CartService.clearCart();
+      // Start listening to customer orders for real-time updates
+      orderProvider.listenToCustomerOrders(userProvider.currentUser!.id);
 
       // Show success dialog
-      _showOrderSuccessDialog(ordersByShop.keys.length);
+      _showOrderSuccessDialog(orderIds.length);
 
       // Refresh cart
       await _loadCartItems();
     } catch (e) {
       Navigator.pop(context);
-      _showOrderFailureDialog();
+      _showOrderFailureDialog(e.toString());
     }
   }
 
@@ -288,13 +248,15 @@ class _OrdersPageState extends State<OrdersPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    'You are about to send order requests to ${_getUniqueShopCount()} restaurants.'),
+                    'You are about to place orders with ${_getUniqueShopCount()} restaurants.'),
                 SizedBox(height: 8),
                 Text('Total Amount: Rs. ${totalAmount.toStringAsFixed(2)}',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 Text('Payment: $_paymentMethod'),
                 Text(
                     '${_deliveryOption == 'Delivery' ? 'Delivery' : 'Pickup'}'),
+                if (_deliveryOption == 'Delivery')
+                  Text('Address: $_deliveryAddress'),
                 if (_scheduledTime != null)
                   Text(
                       'Scheduled: ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}'),
@@ -321,25 +283,30 @@ class _OrdersPageState extends State<OrdersPage> {
     return _cartItems.map((item) => item['shopId']).toSet().length;
   }
 
-  void _showOrderSuccessDialog(int shopCount) {
+  void _showOrderSuccessDialog(int orderCount) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         icon: Icon(Icons.check_circle, color: Colors.green, size: 48),
-        title: Text('Order Requests Sent!'),
+        title: Text('Orders Placed!'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('✅ Sent to $shopCount restaurants'),
+            Text('✅ Placed $orderCount orders successfully'),
             SizedBox(height: 8),
             Text(
-                'You will receive notifications when restaurants respond to your order requests.'),
+                'Your orders have been sent to the restaurants. You will receive notifications about order status.'),
             SizedBox(height: 8),
             Text('Check the Activity tab for order updates.',
                 style: TextStyle(color: Colors.grey[600], fontSize: 12)),
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('View Orders'),
+            style: TextButton.styleFrom(foregroundColor: Colors.purple),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
@@ -350,13 +317,13 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  void _showOrderFailureDialog() {
+  void _showOrderFailureDialog(String error) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         icon: Icon(Icons.error, color: Colors.red, size: 48),
         title: Text('Order Failed'),
-        content: Text('Failed to send order requests. Please try again.'),
+        content: Text('Failed to place orders: $error'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -365,24 +332,6 @@ class _OrdersPageState extends State<OrdersPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _addToOrderHistory() async {
-    final newOrder = {
-      'orderId': 'ORD${DateTime.now().millisecondsSinceEpoch}',
-      'shopNames': _cartItems.map((item) => item['shopName']).toSet().toList(),
-      'items': _cartItems.map((item) => item['foodName']).toList(),
-      'totalAmount': _calculateTotalAmount(),
-      'status': 'Pending',
-      'orderDate': DateTime.now().toIso8601String(),
-      'deliveryOption': _deliveryOption,
-      'paymentMethod': _paymentMethod,
-      'specialInstructions': _specialInstructions,
-      'scheduledTime': _scheduledTime?.toIso8601String(),
-      'itemCount': _totalCartItems,
-    };
-
-    await CartService.addOrderToHistory(newOrder);
   }
 
   double _calculateTotalAmount() {
@@ -466,7 +415,6 @@ class _OrdersPageState extends State<OrdersPage> {
     }
   }
 
-  // ✅ Cart content with full functionality
   Widget _buildCartContent() {
     return Column(
       children: [
@@ -508,8 +456,8 @@ class _OrdersPageState extends State<OrdersPage> {
           ),
         ),
 
-        // Send order button
-        _buildSendOrderButton(),
+        // Place order button (updated)
+        _buildPlaceOrderButton(),
       ],
     );
   }
@@ -543,6 +491,8 @@ class _OrdersPageState extends State<OrdersPage> {
       ),
     );
   }
+
+  // ... (Keep all the existing build methods: _buildCartItem, _buildDeliveryOptions, etc.)
 
   Widget _buildCartItem(Map<String, dynamic> item, int index) {
     return Container(
@@ -730,7 +680,7 @@ class _OrdersPageState extends State<OrdersPage> {
             SizedBox(height: 8),
             TextField(
               decoration: InputDecoration(
-                labelText: 'Delivery Address',
+                labelText: 'Delivery Address *',
                 hintText: 'Enter your delivery address...',
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -876,7 +826,8 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  Widget _buildSendOrderButton() {
+  // UPDATED: Place order button with backend integration
+  Widget _buildPlaceOrderButton() {
     final totalAmount = _calculateTotalAmount();
 
     return Container(
@@ -908,7 +859,7 @@ class _OrdersPageState extends State<OrdersPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _sendOrderRequests,
+              onPressed: _placeOrderWithBackend, // UPDATED METHOD
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple,
                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -916,7 +867,7 @@ class _OrdersPageState extends State<OrdersPage> {
                     borderRadius: BorderRadius.circular(12)),
                 elevation: 2,
               ),
-              child: Text('Send Order Requests',
+              child: Text('Place Orders',
                   style: TextStyle(
                       fontSize: 16,
                       color: Colors.white,
