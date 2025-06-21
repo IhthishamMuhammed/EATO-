@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:location/location.dart' as location;
 import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
@@ -11,11 +12,334 @@ import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io' as io;
 
+// Google Maps imports
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:location/location.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
+import 'package:permission_handler/permission_handler.dart';
+
 import '../../Model/Food&Store.dart';
 import 'OrderHomePage.dart';
 import 'RequestHome.dart';
 import 'ProviderHomePage.dart';
 
+// Location Result Class
+class LocationResult {
+  final String address;
+  final double latitude;
+  final double longitude;
+
+  LocationResult({
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+  });
+}
+
+// Google Maps Location Picker Page
+class LocationPickerPage extends StatefulWidget {
+  final double? initialLatitude;
+  final double? initialLongitude;
+  final String? initialAddress;
+
+  const LocationPickerPage({
+    Key? key,
+    this.initialLatitude,
+    this.initialLongitude,
+    this.initialAddress,
+  }) : super(key: key);
+
+  @override
+  _LocationPickerPageState createState() => _LocationPickerPageState();
+}
+
+class _LocationPickerPageState extends State<LocationPickerPage> {
+  GoogleMapController? _mapController;
+  LatLng? _selectedLocation;
+  String _selectedAddress = '';
+  bool _isLoading = false;
+  final Location _location = Location();
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      _selectedLocation =
+          LatLng(widget.initialLatitude!, widget.initialLongitude!);
+      _selectedAddress = widget.initialAddress ?? '';
+    } else {
+      await _getCurrentLocation();
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Check location permission
+      final permission = await Permission.location.request();
+      if (permission != location.PermissionStatus.granted) {
+        throw Exception('Location permission denied');
+      }
+
+      // Check if location service is enabled
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) {
+          throw Exception('Location service disabled');
+        }
+      }
+
+      // Get current location
+      final locationData = await _location.getLocation();
+
+      if (locationData.latitude != null && locationData.longitude != null) {
+        final latLng = LatLng(locationData.latitude!, locationData.longitude!);
+        setState(() {
+          _selectedLocation = latLng;
+        });
+
+        await _getAddressFromLatLng(latLng);
+
+        if (_mapController != null) {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLng(latLng),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error getting location: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      // Default to Colombo, Sri Lanka if location fails
+      const defaultLocation = LatLng(6.9271, 79.8612);
+      setState(() {
+        _selectedLocation = defaultLocation;
+        _selectedAddress = 'Colombo, Sri Lanka';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _getAddressFromLatLng(LatLng latLng) async {
+    try {
+      List<geocoding.Placemark> placemarks =
+          await geocoding.placemarkFromCoordinates(
+        latLng.latitude,
+        latLng.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final placemark = placemarks.first;
+        setState(() {
+          _selectedAddress = _formatAddress(placemark);
+        });
+      }
+    } catch (e) {
+      print('Error getting address: $e');
+      setState(() {
+        _selectedAddress = 'Selected location';
+      });
+    }
+  }
+
+  String _formatAddress(geocoding.Placemark placemark) {
+    List<String> parts = [];
+
+    if (placemark.street?.isNotEmpty == true) parts.add(placemark.street!);
+    if (placemark.subLocality?.isNotEmpty == true)
+      parts.add(placemark.subLocality!);
+    if (placemark.locality?.isNotEmpty == true) parts.add(placemark.locality!);
+    if (placemark.administrativeArea?.isNotEmpty == true)
+      parts.add(placemark.administrativeArea!);
+
+    return parts.join(', ');
+  }
+
+  void _onMapTapped(LatLng latLng) {
+    setState(() {
+      _selectedLocation = latLng;
+      _isLoading = true;
+    });
+
+    _getAddressFromLatLng(latLng).then((_) {
+      setState(() {
+        _isLoading = false;
+      });
+    });
+  }
+
+  void _confirmLocation() {
+    if (_selectedLocation != null) {
+      final result = LocationResult(
+        address: _selectedAddress,
+        latitude: _selectedLocation!.latitude,
+        longitude: _selectedLocation!.longitude,
+      );
+      Navigator.of(context).pop(result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Select Location'),
+        backgroundColor: Colors.purple,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.my_location),
+            onPressed: _getCurrentLocation,
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // Google Map
+          _selectedLocation == null
+              ? Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                  ),
+                )
+              : GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _selectedLocation!,
+                    zoom: 15.0,
+                  ),
+                  onMapCreated: (GoogleMapController controller) {
+                    _mapController = controller;
+                  },
+                  onTap: _onMapTapped,
+                  markers: _selectedLocation != null
+                      ? {
+                          Marker(
+                            markerId: MarkerId('selected_location'),
+                            position: _selectedLocation!,
+                            infoWindow: InfoWindow(
+                              title: 'Selected Location',
+                              snippet: _selectedAddress,
+                            ),
+                          ),
+                        }
+                      : {},
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                ),
+
+          // Loading overlay
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                ),
+              ),
+            ),
+
+          // Address display and confirm button
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, -5),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Selected Location',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      _selectedAddress.isEmpty
+                          ? 'Tap on map to select location'
+                          : _selectedAddress,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _selectedAddress.isEmpty
+                            ? Colors.grey
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _selectedLocation != null &&
+                              _selectedAddress.isNotEmpty
+                          ? _confirmLocation
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Confirm Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Main ProfilePage Class
 class ProfilePage extends StatefulWidget {
   final CustomUser currentUser;
 
@@ -362,12 +686,15 @@ class _ProfilePageState extends State<ProfilePage> {
           id: currentStore.id, // ✅ Keep existing auto-generated ID
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
-          isPickup: currentStore.isPickup,
+          deliveryMode:
+              currentStore.deliveryMode, // Keep existing delivery mode
           imageUrl: shopImageUrl ?? currentStore.imageUrl,
           foods: currentStore.foods,
           location: _shopLocationController.text.trim().isEmpty
               ? null
               : _shopLocationController.text.trim(),
+          latitude: currentStore.latitude,
+          longitude: currentStore.longitude,
           ownerUid: widget.currentUser.id, // ✅ Ensure ownerUid is set
           isActive: currentStore.isActive,
           isAvailable: currentStore.isAvailable,
@@ -387,7 +714,7 @@ class _ProfilePageState extends State<ProfilePage> {
           id: '', // ✅ FIXED: Empty ID - let Firestore generate it
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
-          isPickup: true, // Default value
+          deliveryMode: DeliveryMode.pickup, // Default value
           imageUrl: shopImageUrl ?? '',
           foods: [],
           location: _shopLocationController.text.trim().isEmpty
@@ -469,6 +796,232 @@ class _ProfilePageState extends State<ProfilePage> {
         });
       }
     }
+  }
+
+  // NEW: Delivery Mode Selector Widget
+  Widget _buildDeliveryModeSelector(Store? store) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Delivery Options',
+          style: EatoTheme.labelLarge,
+        ),
+        SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              // Pickup Only
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (store != null) {
+                      final updatedStore = store.copyWith(
+                        deliveryMode: DeliveryMode.pickup,
+                      );
+                      Provider.of<StoreProvider>(context, listen: false)
+                          .setStore(updatedStore);
+                    }
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: store?.deliveryMode == DeliveryMode.pickup
+                          ? EatoTheme.primaryColor
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(11),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Pickup',
+                        style: TextStyle(
+                          color: store?.deliveryMode == DeliveryMode.pickup
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Delivery Only
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (store != null) {
+                      final updatedStore = store.copyWith(
+                        deliveryMode: DeliveryMode.delivery,
+                      );
+                      Provider.of<StoreProvider>(context, listen: false)
+                          .setStore(updatedStore);
+                    }
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: store?.deliveryMode == DeliveryMode.delivery
+                          ? EatoTheme.primaryColor
+                          : Colors.transparent,
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Delivery',
+                        style: TextStyle(
+                          color: store?.deliveryMode == DeliveryMode.delivery
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Both Options
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (store != null) {
+                      final updatedStore = store.copyWith(
+                        deliveryMode: DeliveryMode.both,
+                      );
+                      Provider.of<StoreProvider>(context, listen: false)
+                          .setStore(updatedStore);
+                    }
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: store?.deliveryMode == DeliveryMode.both
+                          ? EatoTheme.primaryColor
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.horizontal(
+                        right: Radius.circular(11),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Both',
+                        style: TextStyle(
+                          color: store?.deliveryMode == DeliveryMode.both
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // UPDATED: Location Picker Widget with FULL Google Maps Integration
+  Widget _buildLocationPicker(Store? store) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Shop Location',
+          style: EatoTheme.labelLarge,
+        ),
+        SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            try {
+              // ✅ FULL GOOGLE MAPS INTEGRATION - No longer commented out!
+              final result = await Navigator.push<LocationResult>(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LocationPickerPage(
+                    initialLatitude: store?.latitude,
+                    initialLongitude: store?.longitude,
+                    initialAddress: store?.location,
+                  ),
+                ),
+              );
+
+              if (result != null) {
+                // Update the store with new location
+                setState(() {
+                  _shopLocationController.text = result.address;
+                });
+
+                // Update store in provider
+                if (store != null) {
+                  final updatedStore = store.copyWith(
+                    location: result.address,
+                    latitude: result.latitude,
+                    longitude: result.longitude,
+                  );
+                  Provider.of<StoreProvider>(context, listen: false)
+                      .setStore(updatedStore);
+                }
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error selecting location: $e'),
+                  backgroundColor: EatoTheme.errorColor,
+                ),
+              );
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade50,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: EatoTheme.primaryColor,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _shopLocationController.text.isEmpty
+                        ? 'Tap to select location from map'
+                        : _shopLocationController.text,
+                    style: TextStyle(
+                      color: _shopLocationController.text.isEmpty
+                          ? Colors.grey
+                          : Colors.black,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -971,104 +1524,12 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           SizedBox(height: 16),
 
-          // Shop location field
-          TextFormField(
-            controller: _shopLocationController,
-            decoration: EatoTheme.inputDecoration(
-              hintText: 'Enter shop location',
-              labelText: 'Location',
-              prefixIcon: Icon(Icons.location_on_outlined),
-            ),
-          ),
+          // NEW: Location picker with FULL Google Maps
+          _buildLocationPicker(store),
           SizedBox(height: 16),
 
-          // Delivery options
-          Text(
-            'Delivery Options',
-            style: EatoTheme.labelLarge,
-          ),
-          SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (store != null) {
-                        final updatedStore = store.copyWith(
-                          isPickup: true,
-                        );
-                        Provider.of<StoreProvider>(context, listen: false)
-                            .setStore(updatedStore);
-                      }
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: store?.isPickup ?? true
-                            ? EatoTheme.primaryColor
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.horizontal(
-                          left: Radius.circular(11),
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Pickup',
-                          style: TextStyle(
-                            color: store?.isPickup ?? true
-                                ? Colors.white
-                                : Colors.black,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (store != null) {
-                        final updatedStore = store.copyWith(
-                          isPickup: false,
-                        );
-                        Provider.of<StoreProvider>(context, listen: false)
-                            .setStore(updatedStore);
-                      }
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: !(store?.isPickup ?? true)
-                            ? EatoTheme.primaryColor
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.horizontal(
-                          right: Radius.circular(11),
-                        ),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Delivery',
-                          style: TextStyle(
-                            color: !(store?.isPickup ?? true)
-                                ? Colors.white
-                                : Colors.black,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // NEW: Delivery mode selector
+          _buildDeliveryModeSelector(store),
           SizedBox(height: 24),
 
           // Action buttons
@@ -1227,11 +1688,9 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         SizedBox(height: 8),
         _buildInfoTile(
-          icon: store.isPickup
-              ? Icons.local_shipping_outlined
-              : Icons.delivery_dining,
+          icon: _getDeliveryModeIcon(store.deliveryMode),
           title: 'Delivery Mode',
-          value: store.isPickup ? 'Pickup' : 'Delivery',
+          value: store.deliveryMode.displayName,
         ),
         if (store.location != null && store.location!.isNotEmpty) ...[
           SizedBox(height: 8),
@@ -1243,6 +1702,17 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ],
     );
+  }
+
+  IconData _getDeliveryModeIcon(DeliveryMode mode) {
+    switch (mode) {
+      case DeliveryMode.pickup:
+        return Icons.local_shipping_outlined;
+      case DeliveryMode.delivery:
+        return Icons.delivery_dining;
+      case DeliveryMode.both:
+        return Icons.compare_arrows;
+    }
   }
 
   Widget _buildInfoTile({

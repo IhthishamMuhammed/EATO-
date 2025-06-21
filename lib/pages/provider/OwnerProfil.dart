@@ -24,11 +24,13 @@ class StoreDetailsPage extends StatefulWidget {
 class _StoreDetailsPageState extends State<StoreDetailsPage> {
   final TextEditingController _shopNameController = TextEditingController();
   final TextEditingController _shopContactController = TextEditingController();
-  bool isPickup = true;
+  final TextEditingController _shopLocationController = TextEditingController();
+  DeliveryMode _selectedDeliveryMode =
+      DeliveryMode.pickup; // Updated to use DeliveryMode
   XFile? _pickedImage;
   final ImagePicker _imagePicker = ImagePicker();
   bool _isLoading = false;
-  int _currentIndex = 3; // Starting with profile tab active
+  int _currentIndex = 2; // Starting with menu tab active
 
   @override
   void initState() {
@@ -56,31 +58,6 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
     });
 
     if (index == 3) {
-      // Add Food
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AddFoodPage(
-            storeId: () {
-              final storeProvider =
-                  Provider.of<StoreProvider>(context, listen: false);
-              final storeId = storeProvider.userStore?.id ?? '';
-
-              if (storeId.isEmpty) {
-                // Show error if no store ID
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Please complete store setup first')),
-                );
-                return '';
-              }
-
-              print('🍽️ Navigating to AddFoodPage with storeId: $storeId');
-              return storeId;
-            }(),
-          ),
-        ),
-      );
-    } else if (index == 4) {
       // Profile
       Navigator.push(
         context,
@@ -89,15 +66,234 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
         ),
       );
     } else if (index == 2) {
-      // Home (reload StoreDetailsPage)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              StoreDetailsPage(currentUser: widget.currentUser),
-        ),
-      );
+      // Home (reload StoreDetailsPage) - current page
+      // Already here
     }
+  }
+
+  // NEW: Delivery Mode Selector Widget
+  Widget _buildDeliveryModeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Delivery Options",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.grey),
+          ),
+          child: Row(
+            children: [
+              // Pickup Only
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedDeliveryMode = DeliveryMode.pickup;
+                    });
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _selectedDeliveryMode == DeliveryMode.pickup
+                          ? Colors.purple
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(30),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Pickup',
+                        style: TextStyle(
+                          color: _selectedDeliveryMode == DeliveryMode.pickup
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Delivery Only
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedDeliveryMode = DeliveryMode.delivery;
+                    });
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _selectedDeliveryMode == DeliveryMode.delivery
+                          ? Colors.purple
+                          : Colors.transparent,
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Delivery',
+                        style: TextStyle(
+                          color: _selectedDeliveryMode == DeliveryMode.delivery
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Both Options
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedDeliveryMode = DeliveryMode.both;
+                    });
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _selectedDeliveryMode == DeliveryMode.both
+                          ? Colors.purple
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.horizontal(
+                        right: Radius.circular(30),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Both',
+                        style: TextStyle(
+                          color: _selectedDeliveryMode == DeliveryMode.both
+                              ? Colors.white
+                              : Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Location picker placeholder (same as ProfilePage)
+  Widget _buildLocationPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Shop Location",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            // Temporary fallback - show dialog for manual entry
+            _showLocationInputDialog();
+          },
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: Colors.purple,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _shopLocationController.text.isEmpty
+                        ? 'Tap to select location'
+                        : _shopLocationController.text,
+                    style: TextStyle(
+                      color: _shopLocationController.text.isEmpty
+                          ? Colors.grey[600]
+                          : Colors.black,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Temporary location input dialog
+  void _showLocationInputDialog() {
+    final TextEditingController tempController = TextEditingController(
+      text: _shopLocationController.text,
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Enter Shop Location'),
+          content: TextField(
+            controller: tempController,
+            decoration: InputDecoration(
+              hintText: 'Enter your shop address',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 2,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _shopLocationController.text = tempController.text;
+                });
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -205,85 +401,22 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                 ),
               ),
             ),
+            SizedBox(height: 16),
+
+            // NEW: Location Picker
+            _buildLocationPicker(),
             SizedBox(height: 20),
 
-            // Delivery Options
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.grey),
-              ),
-              child: Row(
-                children: [
-                  // Pickup button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          isPickup = true;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isPickup ? Colors.purple : Colors.transparent,
-                          borderRadius: BorderRadius.horizontal(
-                            left: Radius.circular(30),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Pickup',
-                            style: TextStyle(
-                              color: isPickup ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Delivery button
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          isPickup = false;
-                        });
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: !isPickup ? Colors.purple : Colors.transparent,
-                          borderRadius: BorderRadius.horizontal(
-                            right: Radius.circular(30),
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Delivery',
-                            style: TextStyle(
-                              color: !isPickup ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // NEW: Updated Delivery Options (Three options)
+            _buildDeliveryModeSelector(),
             SizedBox(height: 20),
 
-            // Profile Picture
+            // Shop Image
             Center(
               child: Column(
                 children: [
                   Text(
-                    "Profile Picture",
+                    "Shop Image",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                     ),
@@ -354,14 +487,19 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                       imageUrl = await reference.getDownloadURL();
                     }
 
-                    // Create the store
+                    // Create the store with new DeliveryMode structure
                     final store = Store(
                       id: '',
                       name: _shopNameController.text,
                       contact: _shopContactController.text,
-                      isPickup: isPickup,
+                      deliveryMode:
+                          _selectedDeliveryMode, // Updated to use DeliveryMode
                       imageUrl: imageUrl,
                       foods: [],
+                      location: _shopLocationController.text.trim().isEmpty
+                          ? null
+                          : _shopLocationController.text.trim(),
+                      ownerUid: userId,
                     );
 
                     await storeProvider.createOrUpdateStore(store, userId);
@@ -396,7 +534,16 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: Text('Next'),
+                child: _isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text('Next'),
               ),
             ),
           ],

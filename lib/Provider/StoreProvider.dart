@@ -1,4 +1,4 @@
-// SOLUTION: Replace your StoreProvider.dart (document 13) with this corrected version
+// SOLUTION: Replace your StoreProvider.dart with this corrected version
 
 import 'package:eato/Model/coustomUser.dart';
 import 'package:flutter/material.dart';
@@ -65,15 +65,30 @@ class StoreProvider with ChangeNotifier {
               .collection('stores') // ✅ TOP-LEVEL COLLECTION
               .add(data);
 
-          // Create Store object with new ID
+          // FIXED: Create Store object with proper DeliveryMode handling
+          DeliveryMode deliveryMode = DeliveryMode.pickup; // Default
+
+          // Handle backward compatibility for delivery mode
+          if (data['deliveryMode'] != null) {
+            deliveryMode =
+                DeliveryModeExtension.fromString(data['deliveryMode']);
+          } else if (data['isPickup'] != null) {
+            // Convert old boolean to new enum
+            deliveryMode =
+                data['isPickup'] ? DeliveryMode.pickup : DeliveryMode.delivery;
+          }
+
           userStore = Store(
             id: newStoreRef.id, // ✅ ACTUAL FIRESTORE DOCUMENT ID
             name: data['name'] ?? '',
             contact: data['contact'] ?? '',
-            isPickup: data['isPickup'] ?? true,
+            deliveryMode:
+                deliveryMode, // ✅ FIXED: Use deliveryMode instead of isPickup
             imageUrl: data['imageUrl'] ?? '',
             foods: [],
             location: data['location'],
+            latitude: data['latitude']?.toDouble(),
+            longitude: data['longitude']?.toDouble(),
             ownerUid: currentUser.id,
             isActive: true,
             isAvailable: data['isAvailable'] ?? true,
@@ -135,9 +150,13 @@ class StoreProvider with ChangeNotifier {
       final Map<String, dynamic> storeData = {
         'name': store.name,
         'contact': store.contact,
-        'isPickup': store.isPickup,
+        'deliveryMode':
+            store.deliveryMode.value, // ✅ FIXED: Use deliveryMode.value
+        'isPickup': store.isPickup, // Keep for backward compatibility
         'imageUrl': store.imageUrl,
         'location': store.location,
+        'latitude': store.latitude,
+        'longitude': store.longitude,
         'isAvailable': store.isAvailable ?? true,
         'rating': store.rating,
         'ownerUid': userId, // ✅ CRITICAL: Links store to user

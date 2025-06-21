@@ -154,21 +154,64 @@ class Food {
   }
 }
 
+// Add this enum to your Food&Store.dart file
+enum DeliveryMode { pickup, delivery, both }
+
+// Extension for DeliveryMode
+extension DeliveryModeExtension on DeliveryMode {
+  String get displayName {
+    switch (this) {
+      case DeliveryMode.pickup:
+        return 'Pickup Only';
+      case DeliveryMode.delivery:
+        return 'Delivery Only';
+      case DeliveryMode.both:
+        return 'Both Pickup & Delivery';
+    }
+  }
+
+  static DeliveryMode fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'pickup':
+        return DeliveryMode.pickup;
+      case 'delivery':
+        return DeliveryMode.delivery;
+      case 'both':
+        return DeliveryMode.both;
+      default:
+        return DeliveryMode.pickup;
+    }
+  }
+
+  String get value {
+    switch (this) {
+      case DeliveryMode.pickup:
+        return 'pickup';
+      case DeliveryMode.delivery:
+        return 'delivery';
+      case DeliveryMode.both:
+        return 'both';
+    }
+  }
+}
+
+// Updated Store class - replace the existing Store class with this
 class Store {
   final String id;
   final String name;
   final String contact;
-  final bool isPickup;
+  final DeliveryMode deliveryMode; // Changed from bool isPickup
   final String imageUrl;
   final List<Food> foods;
   final String? location;
+  final double? latitude; // Added for Google Maps
+  final double? longitude; // Added for Google Maps
   final GeoPoint? coordinates;
   final String? ownerUid;
   final bool isActive;
   final Map<String, dynamic>? metadata;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  // Added for backward compatibility
   final bool? isAvailable;
   final double? rating;
 
@@ -176,10 +219,12 @@ class Store {
     required this.id,
     required this.name,
     required this.contact,
-    required this.isPickup,
+    required this.deliveryMode,
     this.imageUrl = '',
     required this.foods,
     this.location,
+    this.latitude,
+    this.longitude,
     this.coordinates,
     this.ownerUid,
     this.isActive = true,
@@ -190,47 +235,39 @@ class Store {
     this.rating,
   });
 
+  // Backward compatibility getters
+  bool get isPickup =>
+      deliveryMode == DeliveryMode.pickup || deliveryMode == DeliveryMode.both;
+  bool get isDelivery =>
+      deliveryMode == DeliveryMode.delivery ||
+      deliveryMode == DeliveryMode.both;
+  bool get isBoth => deliveryMode == DeliveryMode.both;
+
   // Create from Firestore document
   factory Store.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    // Handle backward compatibility
+    DeliveryMode mode = DeliveryMode.pickup;
+    if (data['deliveryMode'] != null) {
+      mode = DeliveryModeExtension.fromString(data['deliveryMode']);
+    } else if (data['isPickup'] != null) {
+      // Backward compatibility with old boolean field
+      mode = data['isPickup'] ? DeliveryMode.pickup : DeliveryMode.delivery;
+    }
 
     return Store(
       id: doc.id,
       name: data['name'] ?? '',
       contact: data['contact'] ?? '',
-      isPickup: data['isPickup'] ?? true,
+      deliveryMode: mode,
       imageUrl: data['imageUrl'] ?? '',
       foods: [], // Foods are loaded separately
       location: data['location'],
+      latitude: data['latitude']?.toDouble(),
+      longitude: data['longitude']?.toDouble(),
       coordinates: data['coordinates'],
       ownerUid: data['ownerUid'],
-      isActive: data['isActive'] ?? true,
-      metadata: data['metadata'],
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
-      updatedAt: data['updatedAt'] != null
-          ? (data['updatedAt'] as Timestamp).toDate()
-          : null,
-      isAvailable: data['isAvailable'] ?? true,
-      rating: data['rating']?.toDouble(),
-    );
-  }
-
-  // Create from Firestore document with user ID
-  factory Store.fromFirestore2(DocumentSnapshot doc, String userId) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    return Store(
-      id: userId, // Use user ID as store ID
-      name: data['name'] ?? '',
-      contact: data['contact'] ?? '',
-      isPickup: data['isPickup'] ?? true,
-      imageUrl: data['imageUrl'] ?? '',
-      foods: [], // Foods are loaded separately
-      location: data['location'],
-      coordinates: data['coordinates'],
-      ownerUid: data['ownerUid'] ?? userId,
       isActive: data['isActive'] ?? true,
       metadata: data['metadata'],
       createdAt: data['createdAt'] != null
@@ -249,9 +286,12 @@ class Store {
     return {
       'name': name,
       'contact': contact,
-      'isPickup': isPickup,
+      'deliveryMode': deliveryMode.value,
+      'isPickup': isPickup, // Keep for backward compatibility
       'imageUrl': imageUrl,
       'location': location,
+      'latitude': latitude,
+      'longitude': longitude,
       'coordinates': coordinates,
       'ownerUid': ownerUid,
       'isActive': isActive,
@@ -262,41 +302,17 @@ class Store {
     };
   }
 
-  // Convert to Map (for API calls, etc.)
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'contact': contact,
-      'isPickup': isPickup,
-      'imageUrl': imageUrl,
-      'foods': foods.map((food) => food.toMap()).toList(),
-      'location': location,
-      'coordinates': coordinates != null
-          ? {
-              'latitude': coordinates!.latitude,
-              'longitude': coordinates!.longitude
-            }
-          : null,
-      'ownerUid': ownerUid,
-      'isActive': isActive,
-      'metadata': metadata,
-      'createdAt': createdAt?.millisecondsSinceEpoch,
-      'updatedAt': updatedAt?.millisecondsSinceEpoch,
-      'isAvailable': isAvailable,
-      'rating': rating,
-    };
-  }
-
   // Create a copy with updated fields
   Store copyWith({
     String? id,
     String? name,
     String? contact,
-    bool? isPickup,
+    DeliveryMode? deliveryMode,
     String? imageUrl,
     List<Food>? foods,
     String? location,
+    double? latitude,
+    double? longitude,
     GeoPoint? coordinates,
     String? ownerUid,
     bool? isActive,
@@ -310,10 +326,12 @@ class Store {
       id: id ?? this.id,
       name: name ?? this.name,
       contact: contact ?? this.contact,
-      isPickup: isPickup ?? this.isPickup,
+      deliveryMode: deliveryMode ?? this.deliveryMode,
       imageUrl: imageUrl ?? this.imageUrl,
       foods: foods ?? this.foods,
       location: location ?? this.location,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       coordinates: coordinates ?? this.coordinates,
       ownerUid: ownerUid ?? this.ownerUid,
       isActive: isActive ?? this.isActive,
@@ -325,36 +343,9 @@ class Store {
     );
   }
 
-  // Override equality
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-
-    return other is Store &&
-        other.id == id &&
-        other.name == name &&
-        other.contact == contact &&
-        other.isPickup == isPickup &&
-        other.imageUrl == imageUrl &&
-        other.isActive == isActive;
-  }
-
-  @override
-  int get hashCode {
-    return id.hashCode ^
-        name.hashCode ^
-        contact.hashCode ^
-        isPickup.hashCode ^
-        imageUrl.hashCode ^
-        isActive.hashCode;
-  }
-
-  double? get latitude => null;
-
-  // Convert to string for debugging
   @override
   String toString() {
-    return 'Store(id: $id, name: $name, contact: $contact, isPickup: $isPickup, foodCount: ${foods.length}, isActive: $isActive)';
+    return 'Store(id: $id, name: $name, contact: $contact, deliveryMode: ${deliveryMode.displayName}, foodCount: ${foods.length}, isActive: $isActive)';
   }
 }
 
