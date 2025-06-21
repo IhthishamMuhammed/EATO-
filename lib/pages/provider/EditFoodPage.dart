@@ -26,15 +26,13 @@ class EditFoodPage extends StatefulWidget {
 
 class _EditFoodPageState extends State<EditFoodPage> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _priceController;
   late TextEditingController _descriptionController;
 
   late String _selectedMealTime;
-  late String _selectedFoodCategory;
-  late String _selectedFoodType;
-  final ImagePicker _picker = ImagePicker();
+  String? _selectedMainCategory;
+  String? _selectedFoodType;
 
+  final ImagePicker _picker = ImagePicker();
   XFile? _pickedImage;
   Uint8List? _webImageData;
   String? _uploadedImageUrl;
@@ -42,60 +40,159 @@ class _EditFoodPageState extends State<EditFoodPage> {
   bool _isLoading = false;
   bool _hasChanges = false;
 
-  final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
-  final List<String> _foodCategories = [
-    'Rice and Curry',
-    'String Hoppers',
-    'Roti',
-    'Egg Roti',
-    'Short Eats',
-    'Hoppers',
-    'Other'
-  ];
-  final List<String> _foodTypes = [
-    'Vegetarian',
-    'Non-Vegetarian',
-    'Vegan',
-    'Dessert'
-  ];
+  // Portion pricing
+  final Map<String, TextEditingController> _portionControllers = {
+    'Full': TextEditingController(),
+    'Half': TextEditingController(),
+    'Mini': TextEditingController(),
+  };
+  final Map<String, bool> _selectedPortions = {
+    'Full': false,
+    'Half': false,
+    'Mini': false,
+  };
+
+  // Same hierarchical structure as AddFoodPage
+  final Map<String, Map<String, List<String>>> _foodHierarchy = {
+    'Breakfast': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Hoppers': ['Plain', 'Egg', 'With Curry'],
+      'String Hoppers': [
+        'Plain',
+        'With Dhal Curry',
+        'With Chicken Curry',
+        'With Coconut Sambol'
+      ],
+      'Parata': ['Plain', 'Egg', 'With Curry'],
+      'Egg Rotti': ['Plain', 'Egg', 'With Curry'],
+      'Roti': ['Plain'],
+      'Sandwiches': ['Regular'],
+      'Short Eats': [
+        'Veg Roll',
+        'Egg Roll',
+        'Chicken Roll',
+        'Fish Bun',
+        'Sausage Bun'
+      ],
+      'Milk Rice (Kiribath)': ['Plain'],
+      'Bread and Omelette': ['Regular'],
+      'Toast and Jam': ['Regular'],
+      'Porridge (Kenda)': ['Regular'],
+      'Chapati': ['Plain', 'With Egg', 'With Curry']
+    },
+    'Lunch': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Omelette',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Biriyani': ['Chicken', 'Mutton', 'Egg'],
+      'Fried Rice': ['Chicken', 'Seafood', 'Egg', 'Veg'],
+      'Nasi Goreng': ['Chicken', 'Egg', 'Veg'],
+      'String Hoppers': ['Plain', 'With Curry'],
+      'Vegetable Rice': ['Regular']
+    },
+    'Dinner': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Omelette',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Kottu': ['Veg', 'Egg', 'Chicken'],
+      'Dosa': ['Plain', 'With Masala'],
+      'Pittu': [
+        'With Coconut Sambol',
+        'With Dhal',
+        'With Chicken Curry',
+        'With Fish'
+      ],
+      'Macaroni': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Roti Meals': ['Various']
+    }
+  };
 
   @override
   void initState() {
     super.initState();
     _validateStoreId();
+
     // Initialize controllers with existing food data
-    _nameController = TextEditingController(text: widget.food.name);
-    _priceController =
-        TextEditingController(text: widget.food.price.toString());
-    // Fixed: Initialize the description controller properly
     _descriptionController =
         TextEditingController(text: widget.food.description ?? '');
 
-    // Initialize drop-down values
+    // Initialize selections
     _selectedMealTime = widget.food.time;
-    _selectedFoodType = widget.food.type;
 
-    // Set food category if available, otherwise use first option
-    _selectedFoodCategory = _foodCategories.contains(widget.food.category)
-        ? widget.food.category
-        : _foodCategories.first;
+    // Parse existing category and type from food name
+    _parseExistingFoodData();
+
+    // Initialize portion pricing
+    _initializePortionPricing();
 
     // Pre-fetch image if available
     if (widget.food.imageUrl.isNotEmpty) {
       _uploadedImageUrl = widget.food.imageUrl;
     }
 
-    // Add listeners to detect changes
-    _nameController.addListener(_onFormChanged);
-    _priceController.addListener(_onFormChanged);
+    // Add listener to detect changes
     _descriptionController.addListener(_onFormChanged);
+  }
+
+  void _parseExistingFoodData() {
+    // Parse food name like "Rice and Curry - Chicken"
+    final nameParts = widget.food.name.split(' - ');
+
+    if (nameParts.length == 2) {
+      _selectedMainCategory = nameParts[0];
+      _selectedFoodType = nameParts[1];
+    } else {
+      // Fallback to using category and type fields
+      _selectedMainCategory =
+          widget.food.category.isNotEmpty ? widget.food.category : null;
+      _selectedFoodType = widget.food.type.isNotEmpty ? widget.food.type : null;
+    }
+  }
+
+  void _initializePortionPricing() {
+    // Initialize from existing portion prices if available
+    if (widget.food.portionPrices.isNotEmpty) {
+      widget.food.portionPrices.forEach((portion, price) {
+        if (_portionControllers.containsKey(portion)) {
+          _selectedPortions[portion] = true;
+          _portionControllers[portion]!.text = price.toStringAsFixed(2);
+        }
+      });
+    } else {
+      // If no portion prices exist (old food), default to Full portion with existing price
+      _selectedPortions['Full'] = true;
+      _portionControllers['Full']!.text = widget.food.price.toStringAsFixed(2);
+    }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
     _descriptionController.dispose();
+    _portionControllers.values.forEach((controller) => controller.dispose());
     super.dispose();
   }
 
@@ -103,6 +200,54 @@ class _EditFoodPageState extends State<EditFoodPage> {
     setState(() {
       _hasChanges = true;
     });
+  }
+
+  List<String> _getMainCategories() {
+    return _foodHierarchy[_selectedMealTime]?.keys.toList() ?? [];
+  }
+
+  List<String> _getFoodTypes() {
+    if (_selectedMainCategory == null) return [];
+    return _foodHierarchy[_selectedMealTime]?[_selectedMainCategory!] ?? [];
+  }
+
+  void _onMainCategoryChanged(String? value) {
+    setState(() {
+      _selectedMainCategory = value;
+      _selectedFoodType = null;
+      _hasChanges = true;
+    });
+  }
+
+  String _generateFoodName() {
+    if (_selectedMainCategory == null || _selectedFoodType == null) {
+      return widget.food.name; // Return original name if incomplete
+    }
+    return '$_selectedMainCategory - $_selectedFoodType';
+  }
+
+  Map<String, double> _getSelectedPortionPrices() {
+    Map<String, double> prices = {};
+    _selectedPortions.forEach((portion, isSelected) {
+      if (isSelected) {
+        final price = double.tryParse(_portionControllers[portion]!.text);
+        if (price != null && price > 0) {
+          prices[portion] = price;
+        }
+      }
+    });
+    return prices;
+  }
+
+  double _getMainPrice() {
+    final portions = _getSelectedPortionPrices();
+    if (portions.isEmpty) return widget.food.price;
+
+    // Return Full portion price if available, otherwise the first available price
+    if (portions.containsKey('Full')) {
+      return portions['Full']!;
+    }
+    return portions.values.first;
   }
 
   Future<void> _pickImage() async {
@@ -168,12 +313,23 @@ class _EditFoodPageState extends State<EditFoodPage> {
   Future<void> _updateFood() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // ✅ ADD: Additional validation before updating
     if (widget.storeId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Invalid store ID. Cannot update food.'),
           backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    final selectedPortions = _getSelectedPortionPrices();
+    if (selectedPortions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select at least one portion size with price'),
+          backgroundColor: EatoTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -198,15 +354,16 @@ class _EditFoodPageState extends State<EditFoodPage> {
       // Create updated food object
       final updatedFood = Food(
         id: widget.food.id,
-        name: _nameController.text.trim(),
-        type: _selectedFoodType,
-        category: _selectedFoodCategory,
-        price: double.tryParse(_priceController.text) ?? 0,
+        name: _generateFoodName(),
+        type: _selectedFoodType ?? widget.food.type,
+        category: _selectedMainCategory ?? widget.food.category,
+        price: _getMainPrice(),
+        portionPrices: selectedPortions, // NEW: Update portion prices
         time: _selectedMealTime,
         imageUrl: _uploadedImageUrl ?? widget.food.imageUrl,
         description: _descriptionController.text.trim(),
-        isAvailable: widget.food.isAvailable, // ✅ Preserve availability
-        createdAt: widget.food.createdAt, // ✅ Preserve creation time
+        isAvailable: widget.food.isAvailable,
+        createdAt: widget.food.createdAt,
       );
 
       print(
@@ -226,8 +383,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(
-            context, true); // Return true to indicate successful update
+        Navigator.pop(context, true);
       }
     } catch (e) {
       print('❌ [EditFoodPage] Update failed: $e');
@@ -261,12 +417,10 @@ class _EditFoodPageState extends State<EditFoodPage> {
       print(
           '🍽️ [EditFoodPage] Editing food: ${widget.food.name} (${widget.food.id})');
 
-      // Check if storeId is empty
       if (widget.storeId.isEmpty) {
         throw Exception('Store ID is empty');
       }
 
-      // Verify store exists in Firestore
       final storeDoc = await FirebaseFirestore.instance
           .collection('stores')
           .doc(widget.storeId)
@@ -280,7 +434,6 @@ class _EditFoodPageState extends State<EditFoodPage> {
       print(
           '✅ [EditFoodPage] Store verified: ${storeData['name']} (${widget.storeId})');
 
-      // Verify food exists in this store
       final foodDoc = await FirebaseFirestore.instance
           .collection('stores')
           .doc(widget.storeId)
@@ -305,7 +458,6 @@ class _EditFoodPageState extends State<EditFoodPage> {
           ),
         );
 
-        // Navigate back after showing error
         Future.delayed(Duration(seconds: 2), () {
           if (mounted) {
             Navigator.pop(context);
@@ -347,15 +499,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 360;
-
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            'Edit Food',
+            'Edit Food - $_selectedMealTime',
             style: TextStyle(
               color: EatoTheme.textPrimaryColor,
               fontSize: 18,
@@ -381,275 +530,300 @@ class _EditFoodPageState extends State<EditFoodPage> {
         ),
         body: Stack(
           children: [
-            Column(
-              children: [
-                // Meal time tabs
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 3,
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: _mealTimes.map((mealTime) {
-                      bool isActive = mealTime == _selectedMealTime;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedMealTime = mealTime;
-                            _hasChanges = true;
-                          });
-                        },
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Text(
-                                mealTime,
-                                style: TextStyle(
-                                  color: isActive
-                                      ? EatoTheme.primaryColor
-                                      : Colors.grey,
-                                  fontWeight: isActive
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                onChanged: () {
+                  setState(() {
+                    _hasChanges = true;
+                  });
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Food image
+                    Center(
+                      child: Column(
+                        children: [
+                          Text('Food Image', style: EatoTheme.labelLarge),
+                          SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: 150,
+                              height: 150,
+                              decoration: BoxDecoration(
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color:
+                                      EatoTheme.primaryColor.withOpacity(0.5),
+                                  width: 1,
                                 ),
                               ),
+                              child: _getImageWidget(),
                             ),
-                            Container(
-                              height: 2,
-                              width: screenSize.width / _mealTimes.length - 24,
-                              color: isActive
-                                  ? EatoTheme.primaryColor
-                                  : Colors.transparent,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Tap to change image',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 24),
 
-                // Form fields
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      onChanged: () {
-                        setState(() {
-                          _hasChanges = true;
-                        });
-                      },
+                    // Main Category
+                    Text('Food Category *', style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value:
+                          _getMainCategories().contains(_selectedMainCategory)
+                              ? _selectedMainCategory
+                              : null,
+                      decoration: EatoTheme.inputDecoration(
+                        hintText: 'Select main category',
+                      ),
+                      items: _getMainCategories().map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: _onMainCategoryChanged,
+                      validator: (val) => val == null || val.isEmpty
+                          ? 'Please select main category'
+                          : null,
+                    ),
+                    SizedBox(height: 16),
+
+                    // Food Type
+                    if (_getFoodTypes().isNotEmpty) ...[
+                      Text('Food Type *', style: EatoTheme.labelLarge),
+                      SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _getFoodTypes().contains(_selectedFoodType)
+                            ? _selectedFoodType
+                            : null,
+                        decoration: EatoTheme.inputDecoration(
+                          hintText: 'Select food type',
+                        ),
+                        items: _getFoodTypes().map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(type),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedFoodType = val;
+                              _hasChanges = true;
+                            });
+                          }
+                        },
+                        validator: (val) {
+                          if (_getFoodTypes().isNotEmpty &&
+                              (val == null || val.isEmpty)) {
+                            return 'Please select food type';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+                    ],
+
+                    // Auto-generated Food Name Display
+                    if (_selectedMainCategory != null &&
+                        _selectedFoodType != null) ...[
+                      Text('Food Name (Auto-generated)',
+                          style: EatoTheme.labelLarge),
+                      SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: EatoTheme.primaryColor.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: EatoTheme.primaryColor.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          _generateFoodName(),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: EatoTheme.primaryColor,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+
+                    // Portion Sizes and Pricing
+                    Text('Available Portion Sizes & Pricing *',
+                        style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Food image
-                          Center(
-                            child: Column(
+                        children: _portionControllers.keys.map((portion) {
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _selectedPortions[portion]!
+                                  ? EatoTheme.primaryColor.withOpacity(0.05)
+                                  : Colors.grey.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _selectedPortions[portion]!
+                                    ? EatoTheme.primaryColor.withOpacity(0.3)
+                                    : Colors.grey.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  'Food Image',
-                                  style: EatoTheme.labelLarge,
+                                // Checkbox
+                                Checkbox(
+                                  value: _selectedPortions[portion],
+                                  onChanged: (bool? value) {
+                                    setState(() {
+                                      _selectedPortions[portion] =
+                                          value ?? false;
+                                      if (!_selectedPortions[portion]!) {
+                                        _portionControllers[portion]!.clear();
+                                      }
+                                      _hasChanges = true;
+                                    });
+                                  },
+                                  activeColor: EatoTheme.primaryColor,
                                 ),
-                                SizedBox(height: 12),
-                                GestureDetector(
-                                  onTap: _pickImage,
-                                  child: Container(
-                                    width: 150,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: EatoTheme.primaryColor
-                                            .withOpacity(0.5),
-                                        width: 1,
-                                      ),
+
+                                // Portion name
+                                SizedBox(
+                                  width: 60,
+                                  child: Text(
+                                    portion,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      color: _selectedPortions[portion]!
+                                          ? EatoTheme.primaryColor
+                                          : Colors.grey,
                                     ),
-                                    child: _getImageWidget(),
                                   ),
                                 ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Tap to change image',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
+
+                                SizedBox(width: 12),
+
+                                // Price input
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _portionControllers[portion],
+                                    enabled: _selectedPortions[portion],
+                                    keyboardType:
+                                        TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter price (Rs.)',
+                                      prefixText: 'Rs. ',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      filled: true,
+                                      fillColor: _selectedPortions[portion]!
+                                          ? Colors.white
+                                          : Colors.grey.withOpacity(0.1),
+                                    ),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _hasChanges = true;
+                                      });
+                                    },
+                                    validator: (value) {
+                                      if (_selectedPortions[portion]!) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return 'Enter price for $portion';
+                                        }
+                                        if (double.tryParse(value) == null) {
+                                          return 'Invalid price';
+                                        }
+                                        if (double.parse(value) <= 0) {
+                                          return 'Price must be > 0';
+                                        }
+                                      }
+                                      return null;
+                                    },
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          SizedBox(height: 24),
-
-                          // REORDERED FIELDS to match AddFoodPage
-                          // 1. Food category
-                          Text('Food Category *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value:
-                                _foodCategories.contains(_selectedFoodCategory)
-                                    ? _selectedFoodCategory
-                                    : _foodCategories.first,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Select food category',
-                            ),
-                            items: _foodCategories.map((option) {
-                              return DropdownMenuItem(
-                                value: option,
-                                child: Text(option),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedFoodCategory = val;
-                                  _hasChanges = true;
-                                });
-                              }
-                            },
-                            validator: (val) => val == null || val.isEmpty
-                                ? 'Please select food category'
-                                : null,
-                          ),
-                          SizedBox(height: 16),
-
-                          // 2. Food type
-                          Text('Food Type *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: _foodTypes.contains(_selectedFoodType)
-                                ? _selectedFoodType
-                                : _foodTypes.first,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Select food type',
-                            ),
-                            items: _foodTypes.map((option) {
-                              return DropdownMenuItem(
-                                value: option,
-                                child: Text(option),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedFoodType = val;
-                                  _hasChanges = true;
-                                });
-                              }
-                            },
-                            validator: (val) => val == null || val.isEmpty
-                                ? 'Please select food type'
-                                : null,
-                          ),
-                          SizedBox(height: 16),
-
-                          // 3. Food name
-                          Text('Food Name *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food name',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter food name';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16),
-
-                          // 4. Food price
-                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _priceController,
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter price in rupees',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter price';
-                              }
-
-                              if (double.tryParse(value) == null) {
-                                return 'Please enter a valid number';
-                              }
-
-                              if (double.parse(value) <= 0) {
-                                return 'Price must be greater than zero';
-                              }
-
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16),
-
-                          // 5. Description
-                          Text('Description (Optional)',
-                              style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _descriptionController,
-                            maxLines: 3,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food description',
-                            ),
-                          ),
-
-                          SizedBox(height: 32),
-
-                          // Update button
-                          Center(
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _updateFood,
-                                style: EatoTheme.primaryButtonStyle,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 12.0),
-                                  child: _isLoading
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Text(
-                                          'Update Food',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          SizedBox(height: 40),
-                        ],
+                          );
+                        }).toList(),
                       ),
                     ),
-                  ),
+                    SizedBox(height: 16),
+
+                    // Description
+                    Text('Description (Optional)', style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    TextFormField(
+                      controller: _descriptionController,
+                      maxLines: 3,
+                      decoration: EatoTheme.inputDecoration(
+                        hintText: 'Enter food description',
+                      ),
+                    ),
+                    SizedBox(height: 32),
+
+                    // Update button
+                    Center(
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _updateFood,
+                          style: EatoTheme.primaryButtonStyle,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: _isLoading
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    'Update Food',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 40),
+                  ],
                 ),
-              ],
+              ),
             ),
 
             // Full-screen loading overlay
@@ -669,10 +843,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
                         CircularProgressIndicator(
                             color: EatoTheme.primaryColor),
                         SizedBox(height: 16),
-                        Text(
-                          'Updating food item...',
-                          style: EatoTheme.bodyMedium,
-                        ),
+                        Text('Updating food item...',
+                            style: EatoTheme.bodyMedium),
                       ],
                     ),
                   ),
@@ -762,40 +934,6 @@ class _EditFoodPageState extends State<EditFoodPage> {
     }
   }
 
-  static Future<bool> canEditFood(String storeId, String foodId) async {
-    try {
-      // Verify store exists
-      final storeDoc = await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .get();
-
-      if (!storeDoc.exists) {
-        print('❌ Store does not exist: $storeId');
-        return false;
-      }
-
-      // Verify food exists in store
-      final foodDoc = await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .collection('foods')
-          .doc(foodId)
-          .get();
-
-      if (!foodDoc.exists) {
-        print('❌ Food does not exist in store: $foodId');
-        return false;
-      }
-
-      print('✅ EditFoodPage validation passed');
-      return true;
-    } catch (e) {
-      print('❌ EditFoodPage validation error: $e');
-      return false;
-    }
-  }
-
   void _showDeleteConfirmationDialog() {
     showDialog(
       context: context,
@@ -816,7 +954,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context); // Close dialog
+                Navigator.pop(context);
                 _deleteFood();
               },
               style: ElevatedButton.styleFrom(
@@ -832,7 +970,6 @@ class _EditFoodPageState extends State<EditFoodPage> {
   }
 
   Future<void> _deleteFood() async {
-    // ✅ ADD: Validation before deleting
     if (widget.storeId.isEmpty || widget.food.id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -865,7 +1002,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate change
+        Navigator.pop(context, true);
       }
     } catch (e) {
       print('❌ [EditFoodPage] Delete failed: $e');

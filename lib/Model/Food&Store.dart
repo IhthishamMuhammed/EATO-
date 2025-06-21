@@ -6,6 +6,7 @@ class Food {
   final String type;
   final String category;
   final double price;
+  final Map<String, double> portionPrices;
   final String time;
   final String imageUrl;
   final bool isAvailable;
@@ -20,6 +21,7 @@ class Food {
     required this.type,
     this.category = '',
     required this.price,
+    this.portionPrices = const {},
     required this.time,
     this.imageUrl = '',
     this.isAvailable = true,
@@ -28,10 +30,42 @@ class Food {
     this.updatedAt,
     this.description, // Added for backward compatibility
   });
+  List<String> get availablePortions => portionPrices.keys.toList();
+
+  double? getPriceForPortion(String portion) => portionPrices[portion];
+
+  double get lowestPrice {
+    if (portionPrices.isEmpty) return price;
+    return portionPrices.values.reduce((a, b) => a < b ? a : b);
+  }
+
+  double get highestPrice {
+    if (portionPrices.isEmpty) return price;
+    return portionPrices.values.reduce((a, b) => a > b ? a : b);
+  }
+
+  bool get hasMultiplePortions => portionPrices.length > 1;
+
+  String get priceDisplayText {
+    if (portionPrices.isEmpty) {
+      return 'Rs. ${price.toStringAsFixed(2)}';
+    } else if (portionPrices.length == 1) {
+      return 'Rs. ${portionPrices.values.first.toStringAsFixed(2)}';
+    } else {
+      return 'From Rs. ${lowestPrice.toStringAsFixed(2)}';
+    }
+  }
 
   // Create from Firestore document
   factory Food.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    Map<String, double> portions = {};
+    if (data['portionPrices'] != null) {
+      final portionData = data['portionPrices'] as Map<String, dynamic>;
+      portions = portionData
+          .map((key, value) => MapEntry(key, (value as num).toDouble()));
+    }
 
     return Food(
       id: doc.id,
@@ -39,6 +73,7 @@ class Food {
       type: data['type'] ?? '',
       category: data['category'] ?? '',
       price: (data['price'] ?? 0).toDouble(),
+      portionPrices: portions,
       time: data['time'] ?? '',
       imageUrl: data['imageUrl'] ?? '',
       isAvailable: data['isAvailable'] ?? true,
@@ -60,6 +95,7 @@ class Food {
       'type': type,
       'category': category,
       'price': price,
+      'portionPrices': portionPrices,
       'time': time,
       'imageUrl': imageUrl,
       'isAvailable': isAvailable,
@@ -77,6 +113,7 @@ class Food {
       'type': type,
       'category': category,
       'price': price,
+      'portionPrices': portionPrices,
       'time': time,
       'imageUrl': imageUrl,
       'isAvailable': isAvailable,
@@ -94,6 +131,7 @@ class Food {
     String? type,
     String? category,
     double? price,
+    Map<String, double>? portionPrices,
     String? time,
     String? imageUrl,
     bool? isAvailable,
@@ -108,6 +146,7 @@ class Food {
       type: type ?? this.type,
       category: category ?? this.category,
       price: price ?? this.price,
+      portionPrices: portionPrices ?? this.portionPrices,
       time: time ?? this.time,
       imageUrl: imageUrl ?? this.imageUrl,
       isAvailable: isAvailable ?? this.isAvailable,
@@ -150,7 +189,7 @@ class Food {
   // Convert to string for debugging
   @override
   String toString() {
-    return 'Food(id: $id, name: $name, type: $type, category: $category, price: $price, time: $time, isAvailable: $isAvailable)';
+    return 'Food(id: $id, name: $name, type: $type, category: $category, price: $price, portions: $portionPrices, time: $time, isAvailable: $isAvailable)';
   }
 }
 

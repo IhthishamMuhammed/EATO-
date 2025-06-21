@@ -153,6 +153,15 @@ class FoodProvider with ChangeNotifier {
         throw Exception("Food name and valid price are required");
       }
 
+      // Validate portion prices
+      if (food.portionPrices.isNotEmpty) {
+        for (var entry in food.portionPrices.entries) {
+          if (entry.value <= 0) {
+            throw Exception("All portion prices must be greater than zero");
+          }
+        }
+      }
+
       // Create food document
       final foodRef = _firestore
           .collection('stores')
@@ -165,6 +174,7 @@ class FoodProvider with ChangeNotifier {
         'type': food.type,
         'category': food.category,
         'price': food.price,
+        'portionPrices': food.portionPrices, // NEW: Store portion prices
         'time': food.time,
         'imageUrl': food.imageUrl,
         'isAvailable': food.isAvailable,
@@ -206,6 +216,15 @@ class FoodProvider with ChangeNotifier {
         throw Exception("Food name and valid price are required");
       }
 
+      // Validate portion prices
+      if (updatedFood.portionPrices.isNotEmpty) {
+        for (var entry in updatedFood.portionPrices.entries) {
+          if (entry.value <= 0) {
+            throw Exception("All portion prices must be greater than zero");
+          }
+        }
+      }
+
       // Update food document
       await _firestore
           .collection('stores')
@@ -217,6 +236,8 @@ class FoodProvider with ChangeNotifier {
         'type': updatedFood.type,
         'category': updatedFood.category,
         'price': updatedFood.price,
+        'portionPrices':
+            updatedFood.portionPrices, // NEW: Update portion prices
         'time': updatedFood.time,
         'imageUrl': updatedFood.imageUrl,
         'isAvailable': updatedFood.isAvailable,
@@ -436,11 +457,21 @@ class FoodProvider with ChangeNotifier {
         if (index != -1) {
           // Update only fields in the data
           Food oldFood = _foods[index];
+
+          // Handle portionPrices update
+          Map<String, double> updatedPortionPrices =
+              Map.from(oldFood.portionPrices);
+          if (data['portionPrices'] != null) {
+            updatedPortionPrices =
+                Map<String, double>.from(data['portionPrices']);
+          }
+
           Food updatedFood = oldFood.copyWith(
             name: data['name'],
             type: data['type'],
             category: data['category'],
             price: data['price']?.toDouble(),
+            portionPrices: updatedPortionPrices, // NEW: Update portion prices
             time: data['time'],
             imageUrl: data['imageUrl'],
             description: data['description'],
@@ -721,7 +752,9 @@ class FoodProvider with ChangeNotifier {
               'foodImage': food.imageUrl,
               'foodType': food.type,
               'foodCategory': food.category,
-              'price': food.price,
+              'price': food.price, // Keep for backward compatibility
+              'portionPrices':
+                  food.portionPrices, // NEW: Include portion prices
               'description': food.description ?? 'No description available',
               'time': food.time,
               'distance': distance,
