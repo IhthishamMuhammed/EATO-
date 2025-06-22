@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -8,13 +8,17 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/Model/Food&Store.dart';
-
-import 'dart:io' as io; // Required for mobile/desktop File
+import 'dart:io' as io;
 
 class AddFoodPage extends StatefulWidget {
   final String storeId;
+  final String? preSelectedMealTime;
 
-  const AddFoodPage({Key? key, required this.storeId}) : super(key: key);
+  const AddFoodPage({
+    Key? key,
+    required this.storeId,
+    this.preSelectedMealTime,
+  }) : super(key: key);
 
   @override
   _AddFoodPageState createState() => _AddFoodPageState();
@@ -22,41 +26,114 @@ class AddFoodPage extends StatefulWidget {
 
 class _AddFoodPageState extends State<AddFoodPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  String _selectedMealTime = 'Breakfast';
-  String _selectedFoodCategory = 'Rice and Curry';
-  String _selectedFoodType = 'Non-Vegetarian';
-  final ImagePicker _picker = ImagePicker();
+  late String _selectedMealTime;
+  String? _selectedMainCategory;
+  String? _selectedFoodType;
 
+  final ImagePicker _picker = ImagePicker();
   XFile? _pickedImage;
   Uint8List? _webImageData;
   String? _uploadedImageUrl;
   bool _isLoading = false;
 
-  final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
-  final List<String> _foodCategories = [
-    'Rice and Curry',
-    'String Hoppers',
-    'Roti',
-    'Egg Roti',
-    'Short Eats',
-    'Hoppers',
-    'Other'
-  ];
-  final List<String> _foodTypes = [
-    'Vegetarian',
-    'Non-Vegetarian',
-    'Vegan',
-    'Dessert'
-  ];
+  // Portion pricing
+  final Map<String, TextEditingController> _portionControllers = {
+    'Full': TextEditingController(),
+    'Half': TextEditingController(),
+    'Mini': TextEditingController(),
+  };
+  final Map<String, bool> _selectedPortions = {
+    'Full': false,
+    'Half': false,
+    'Mini': false,
+  };
+
+  // Simplified hierarchical food categorization - no sub-categories
+  final Map<String, Map<String, List<String>>> _foodHierarchy = {
+    'Breakfast': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Hoppers': ['Plain', 'Egg', 'With Curry'],
+      'String Hoppers': [
+        'Plain',
+        'With Dhal Curry',
+        'With Chicken Curry',
+        'With Coconut Sambol'
+      ],
+      'Parata': ['Plain', 'Egg', 'With Curry'],
+      'Egg Rotti': ['Plain', 'Egg', 'With Curry'],
+      'Roti': ['Plain'],
+      'Sandwiches': ['Regular'],
+      'Short Eats': [
+        'Veg Roll',
+        'Egg Roll',
+        'Chicken Roll',
+        'Fish Bun',
+        'Sausage Bun'
+      ],
+      'Milk Rice (Kiribath)': ['Plain'],
+      'Bread and Omelette': ['Regular'],
+      'Toast and Jam': ['Regular'],
+      'Porridge (Kenda)': ['Regular'],
+      'Chapati': ['Plain', 'With Egg', 'With Curry']
+    },
+    'Lunch': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Omelette',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Biriyani': ['Chicken', 'Mutton', 'Egg'],
+      'Fried Rice': ['Chicken', 'Seafood', 'Egg', 'Veg'],
+      'Nasi Goreng': ['Chicken', 'Egg', 'Veg'],
+      'String Hoppers': ['Plain', 'With Curry'],
+      'Vegetable Rice': ['Regular']
+    },
+    'Dinner': {
+      'Rice and Curry': [
+        'Vegetarian',
+        'Egg',
+        'Omelette',
+        'Fish',
+        'Chicken',
+        'Sausage',
+        'Beef',
+        'Mutton'
+      ],
+      'Kottu': ['Veg', 'Egg', 'Chicken'],
+      'Dosa': ['Plain', 'With Masala'],
+      'Pittu': [
+        'With Coconut Sambol',
+        'With Dhal',
+        'With Chicken Curry',
+        'With Fish'
+      ],
+      'Macaroni': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+      'Roti Meals': ['Various']
+    }
+  };
 
   @override
   void initState() {
     super.initState();
-    // Validate storeId on init
+    _selectedMealTime = widget.preSelectedMealTime ?? 'Breakfast';
+
     if (widget.storeId.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -66,7 +143,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        // Navigate back after showing error
         Navigator.pop(context);
       });
     }
@@ -74,10 +150,56 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
     _descriptionController.dispose();
+    _portionControllers.values.forEach((controller) => controller.dispose());
     super.dispose();
+  }
+
+  List<String> _getMainCategories() {
+    return _foodHierarchy[_selectedMealTime]?.keys.toList() ?? [];
+  }
+
+  List<String> _getFoodTypes() {
+    if (_selectedMainCategory == null) return [];
+    return _foodHierarchy[_selectedMealTime]?[_selectedMainCategory!] ?? [];
+  }
+
+  void _onMainCategoryChanged(String? value) {
+    setState(() {
+      _selectedMainCategory = value;
+      _selectedFoodType = null;
+    });
+  }
+
+  String _generateFoodName() {
+    if (_selectedMainCategory == null || _selectedFoodType == null) {
+      return '';
+    }
+    return '$_selectedMainCategory - $_selectedFoodType';
+  }
+
+  Map<String, double> _getSelectedPortionPrices() {
+    Map<String, double> prices = {};
+    _selectedPortions.forEach((portion, isSelected) {
+      if (isSelected) {
+        final price = double.tryParse(_portionControllers[portion]!.text);
+        if (price != null && price > 0) {
+          prices[portion] = price;
+        }
+      }
+    });
+    return prices;
+  }
+
+  double _getMainPrice() {
+    final portions = _getSelectedPortionPrices();
+    if (portions.isEmpty) return 0;
+
+    // Return Full portion price if available, otherwise the first available price
+    if (portions.containsKey('Full')) {
+      return portions['Full']!;
+    }
+    return portions.values.first;
   }
 
   Future<void> _pickImage() async {
@@ -127,10 +249,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
           FirebaseStorage.instance.ref().child('food_images/$fileName');
 
       if (kIsWeb) {
-        // Upload data for web
         await storageRef.putData(_webImageData!);
       } else {
-        // Upload file for mobile/desktop
         await storageRef.putFile(io.File(_pickedImage!.path));
       }
 
@@ -141,11 +261,10 @@ class _AddFoodPageState extends State<AddFoodPage> {
   }
 
   Future<void> _saveFood() async {
-    // Check if storeId is valid
     if (widget.storeId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(' Please set up your store first.'),
+          content: Text('Please set up your store first.'),
           backgroundColor: EatoTheme.errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -153,16 +272,26 @@ class _AddFoodPageState extends State<AddFoodPage> {
       return;
     }
 
-    // Validate form
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // Check if image is selected
     if (_pickedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Please select a food image'),
+          backgroundColor: EatoTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final selectedPortions = _getSelectedPortionPrices();
+    if (selectedPortions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select at least one portion size with price'),
           backgroundColor: EatoTheme.warningColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -175,25 +304,23 @@ class _AddFoodPageState extends State<AddFoodPage> {
     });
 
     try {
-      // Upload image
       await _uploadImage();
 
-      // Generate a unique id for the food
       final foodId = 'food_${DateTime.now().millisecondsSinceEpoch}';
+      final foodName = _generateFoodName();
 
-      // Create food object
       final food = Food(
         id: foodId,
-        name: _nameController.text.trim(),
-        type: _selectedFoodType,
-        category: _selectedFoodCategory,
-        price: double.tryParse(_priceController.text) ?? 0,
+        name: foodName,
+        type: _selectedFoodType ?? '',
+        category: _selectedMainCategory ?? '',
+        price: _getMainPrice(),
+        portionPrices: selectedPortions, // NEW: Store portion prices
         time: _selectedMealTime,
         imageUrl: _uploadedImageUrl ?? '',
         description: _descriptionController.text.trim(),
       );
 
-      // Add food to database
       await Provider.of<FoodProvider>(context, listen: false)
           .addFood(widget.storeId, food);
 
@@ -205,8 +332,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-
-        // Navigate back after success
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -230,281 +355,286 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-
     return Scaffold(
       appBar: EatoTheme.appBar(
         context: context,
-        title: 'Add New Food',
+        title: 'Add New Food - $_selectedMealTime',
       ),
       body: SafeArea(
         child: Stack(
           children: [
-            // Meal time tabs
-            Column(
-              children: [
-                // Meal time selector
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 3,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: _mealTimes.map((mealTime) {
-                      bool isActive = mealTime == _selectedMealTime;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedMealTime = mealTime;
-                          });
-                        },
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Text(
-                                mealTime,
-                                style: TextStyle(
-                                  color: isActive
-                                      ? EatoTheme.primaryColor
-                                      : Colors.grey, // Fixed color visibility
-                                  fontWeight: isActive
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              height: 2,
-                              width: screenSize.width / _mealTimes.length - 24,
-                              color: isActive
-                                  ? EatoTheme.primaryColor
-                                  : Colors.transparent,
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-
-                // Form section
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Food Image Selection
+                    Center(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Food Image Selection
-                          Center(
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Food Image',
-                                  style: EatoTheme.labelLarge,
-                                ),
-                                SizedBox(height: 12),
-                                GestureDetector(
-                                  onTap: _pickImage,
-                                  child: Container(
-                                    width: 150,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: const Color.fromARGB(
-                                                255, 255, 255, 255)
-                                            .withOpacity(0.5),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: _getImageWidget(),
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Tap to select image',
-                                  style: EatoTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(height: 24),
-
-                          // REORDERED FIELDS as requested:
-                          // 1. Food category
-                          Text('Food Category *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Select food category',
-                            ),
-                            value: _selectedFoodCategory,
-                            items: _foodCategories.map((category) {
-                              return DropdownMenuItem(
-                                value: category,
-                                child: Text(category),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedFoodCategory = value;
-                                });
-                              }
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please select a category';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // 2. Food type
-                          Text('Food Type *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Select food type',
-                            ),
-                            value: _selectedFoodType,
-                            items: _foodTypes.map((type) {
-                              return DropdownMenuItem(
-                                value: type,
-                                child: Text(type),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedFoodType = value;
-                                });
-                              }
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please select a food type';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // 3. Food name
-                          Text('Food Name *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food name',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter food name';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // 4. Food price
-                          Text('Price (Rs) *', style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _priceController,
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter price in rupees',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter price';
-                              }
-
-                              if (double.tryParse(value) == null) {
-                                return 'Please enter a valid number';
-                              }
-
-                              if (double.parse(value) <= 0) {
-                                return 'Price must be greater than zero';
-                              }
-
-                              return null;
-                            },
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // 5. Description
-                          Text('Description (Optional)',
-                              style: EatoTheme.labelLarge),
-                          SizedBox(height: 8),
-                          TextFormField(
-                            controller: _descriptionController,
-                            maxLines: 3,
-                            decoration: EatoTheme.inputDecoration(
-                              hintText: 'Enter food description',
-                            ),
-                          ),
-
-                          SizedBox(height: 32),
-
-                          // Submit button
-                          Center(
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _saveFood,
-                                style: EatoTheme.primaryButtonStyle,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 12.0),
-                                  child: _isLoading
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Text(
-                                          'Save Food',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                          Text('Food Image', style: EatoTheme.labelLarge),
+                          SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: 150,
+                              height: 150,
+                              decoration: BoxDecoration(
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color:
+                                      EatoTheme.primaryColor.withOpacity(0.5),
+                                  width: 1,
                                 ),
                               ),
+                              child: _getImageWidget(),
                             ),
                           ),
-
-                          SizedBox(height: 40),
+                          SizedBox(height: 8),
+                          Text('Tap to select image',
+                              style: EatoTheme.bodySmall),
                         ],
                       ),
                     ),
-                  ),
+                    SizedBox(height: 24),
+
+                    // Main Category
+                    Text('Food Category *', style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      decoration: EatoTheme.inputDecoration(
+                        hintText: 'Select main category',
+                      ),
+                      value: _selectedMainCategory,
+                      items: _getMainCategories().map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: _onMainCategoryChanged,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a main category';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // Food Type
+                    if (_getFoodTypes().isNotEmpty) ...[
+                      Text('Food Type *', style: EatoTheme.labelLarge),
+                      SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        decoration: EatoTheme.inputDecoration(
+                          hintText: 'Select food type',
+                        ),
+                        value: _selectedFoodType,
+                        items: _getFoodTypes().map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(type),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedFoodType = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (_getFoodTypes().isNotEmpty &&
+                              (value == null || value.isEmpty)) {
+                            return 'Please select a food type';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+                    ],
+
+                    // Auto-generated Food Name Display
+                    if (_selectedMainCategory != null &&
+                        _selectedFoodType != null) ...[
+                      Text('Food Name (Auto-generated)',
+                          style: EatoTheme.labelLarge),
+                      SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: EatoTheme.primaryColor.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: EatoTheme.primaryColor.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          _generateFoodName(),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: EatoTheme.primaryColor,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                    ],
+
+                    // Portion Sizes and Pricing
+                    Text('Available Portion Sizes & Pricing *',
+                        style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: _portionControllers.keys.map((portion) {
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _selectedPortions[portion]!
+                                  ? EatoTheme.primaryColor.withOpacity(0.05)
+                                  : Colors.grey.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _selectedPortions[portion]!
+                                    ? EatoTheme.primaryColor.withOpacity(0.3)
+                                    : Colors.grey.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                // Checkbox
+                                Checkbox(
+                                  value: _selectedPortions[portion],
+                                  onChanged: (bool? value) {
+                                    setState(() {
+                                      _selectedPortions[portion] =
+                                          value ?? false;
+                                      if (!_selectedPortions[portion]!) {
+                                        _portionControllers[portion]!.clear();
+                                      }
+                                    });
+                                  },
+                                  activeColor: EatoTheme.primaryColor,
+                                ),
+
+                                // Portion name
+                                SizedBox(
+                                  width: 60,
+                                  child: Text(
+                                    portion,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      color: _selectedPortions[portion]!
+                                          ? EatoTheme.primaryColor
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ),
+
+                                SizedBox(width: 12),
+
+                                // Price input
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _portionControllers[portion],
+                                    enabled: _selectedPortions[portion],
+                                    keyboardType:
+                                        TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter price (Rs.)',
+                                      prefixText: 'Rs. ',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      filled: true,
+                                      fillColor: _selectedPortions[portion]!
+                                          ? Colors.white
+                                          : Colors.grey.withOpacity(0.1),
+                                    ),
+                                    validator: (value) {
+                                      if (_selectedPortions[portion]!) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return 'Enter price for $portion';
+                                        }
+                                        if (double.tryParse(value) == null) {
+                                          return 'Invalid price';
+                                        }
+                                        if (double.parse(value) <= 0) {
+                                          return 'Price must be > 0';
+                                        }
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+
+                    // Description
+                    Text('Description (Optional)', style: EatoTheme.labelLarge),
+                    SizedBox(height: 8),
+                    TextFormField(
+                      controller: _descriptionController,
+                      maxLines: 3,
+                      decoration: EatoTheme.inputDecoration(
+                        hintText: 'Enter food description',
+                      ),
+                    ),
+                    SizedBox(height: 32),
+
+                    // Submit button
+                    Center(
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _saveFood,
+                          style: EatoTheme.primaryButtonStyle,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0),
+                            child: _isLoading
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    'Save Food',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 40),
+                  ],
                 ),
-              ],
+              ),
             ),
 
             // Loading overlay
@@ -524,10 +654,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
                         CircularProgressIndicator(
                             color: EatoTheme.primaryColor),
                         SizedBox(height: 16),
-                        Text(
-                          'Saving food item...',
-                          style: EatoTheme.bodyMedium,
-                        ),
+                        Text('Saving food item...',
+                            style: EatoTheme.bodyMedium),
                       ],
                     ),
                   ),
@@ -541,7 +669,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   Widget _getImageWidget() {
     if (_pickedImage != null) {
-      // Show selected image
       if (kIsWeb) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
@@ -564,7 +691,6 @@ class _AddFoodPageState extends State<AddFoodPage> {
         );
       }
     } else {
-      // Show placeholder
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

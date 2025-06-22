@@ -8,8 +8,51 @@ class CartService {
   static const String _orderHistoryKey = 'order_history';
 
   // ===============================
-  // CART METHODS (Existing)
+  // UPDATED CART METHODS WITH PORTION SUPPORT
   // ===============================
+
+  /// Add item to cart with portion support
+  static Future<void> addToCart(Map<String, dynamic> item) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
+
+    bool itemExists = false;
+    List<Map<String, dynamic>> decodedItems = cartItems
+        .map((item) => Map<String, dynamic>.from(json.decode(item)))
+        .toList();
+
+    // Check if same item with same portion exists
+    for (int i = 0; i < decodedItems.length; i++) {
+      if (decodedItems[i]['shopId'] == item['shopId'] &&
+          decodedItems[i]['foodId'] == item['foodId'] &&
+          decodedItems[i]['portion'] == item['portion']) {
+        // NEW: Check portion match
+        decodedItems[i]['quantity'] += 1;
+        decodedItems[i]['totalPrice'] =
+            decodedItems[i]['quantity'] * decodedItems[i]['price'];
+        itemExists = true;
+        break;
+      }
+    }
+
+    if (!itemExists) {
+      item['quantity'] = 1;
+      item['totalPrice'] = item['price'];
+      item['addedAt'] = DateTime.now().toIso8601String();
+      item['specialInstructions'] = '';
+
+      // Ensure portion field exists (for backward compatibility)
+      if (!item.containsKey('portion')) {
+        item['portion'] = 'Full'; // Default portion
+      }
+
+      decodedItems.add(item);
+    }
+
+    List<String> encodedItems =
+        decodedItems.map((item) => json.encode(item)).toList();
+    await prefs.setStringList(_cartKey, encodedItems);
+  }
 
   static Future<List<Map<String, dynamic>>> getCartItems() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,11 +74,24 @@ class CartService {
     await prefs.remove(_cartKey);
   }
 
+  static Future<int> getCartCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
+
+    int totalCount = 0;
+    for (String item in cartItems) {
+      Map<String, dynamic> decodedItem = json.decode(item);
+      totalCount += decodedItem['quantity'] as int;
+    }
+
+    return totalCount;
+  }
+
   // ===============================
-  // NEW BACKEND INTEGRATION
+  // UPDATED BACKEND INTEGRATION WITH PORTION SUPPORT
   // ===============================
 
-  /// Place orders using the new backend system
+  /// Place orders using the new backend system with portion information
   static Future<List<String>> placeOrdersWithBackend(
     OrderProvider orderProvider,
     CustomUser customer,
@@ -47,10 +103,29 @@ class CartService {
     DateTime? scheduledTime,
   }) async {
     try {
+      // Process cart items to include portion information in order items
+      List<Map<String, dynamic>> processedCartItems = cartItems.map((item) {
+        // Ensure portion information is included
+        Map<String, dynamic> processedItem = Map.from(item);
+
+        // Add portion to food name if not already included
+        String foodName = processedItem['foodName'] ?? '';
+        String portion = processedItem['portion'] ?? 'Full';
+
+        if (!foodName.contains('($portion)')) {
+          // Remove any existing portion suffix first
+          foodName = foodName.replaceAll(RegExp(r'\s*\([^)]*\)\s*$'), '');
+          // Add the correct portion
+          processedItem['foodName'] = '$foodName ($portion)';
+        }
+
+        return processedItem;
+      }).toList();
+
       // Use the OrderProvider to place orders
       final orderIds = await orderProvider.placeOrdersFromCart(
         customer,
-        cartItems,
+        processedCartItems,
         deliveryOption: deliveryOption,
         deliveryAddress: deliveryAddress,
         paymentMethod: paymentMethod,
@@ -62,11 +137,12 @@ class CartService {
       await clearCart();
 
       // Add to local order history for offline viewing
-      await _addOrdersToLocalHistory(orderIds, cartItems, customer, {
+      await _addOrdersToLocalHistory(orderIds, processedCartItems, customer, {
         'deliveryOption': deliveryOption,
         'paymentMethod': paymentMethod,
         'specialInstructions': specialInstructions,
-        'totalAmount': _calculateTotalAmount(cartItems, deliveryOption),
+        'totalAmount':
+            _calculateTotalAmount(processedCartItems, deliveryOption),
       });
 
       return orderIds;
@@ -85,7 +161,7 @@ class CartService {
     return subtotal + deliveryFee + serviceFee;
   }
 
-  /// Add orders to local history
+  /// Add orders to local history with portion information
   static Future<void> _addOrdersToLocalHistory(
     List<String> orderIds,
     List<Map<String, dynamic>> cartItems,
@@ -108,12 +184,24 @@ class CartService {
       // Create local order record for each store
       for (var entry in itemsByStore.entries) {
         final storeItems = entry.value;
+
+        // Create detailed item list with portion information
+        List<String> itemDescriptions = storeItems.map((item) {
+          String foodName = item['foodName'] ?? '';
+          int quantity = item['quantity'] ?? 1;
+          String portion = item['portion'] ?? 'Full';
+
+          return '$foodName x$quantity';
+        }).toList();
+
         final localOrder = {
           'orderId': orderId,
           'customerId': customer.id,
           'customerName': customer.name,
           'shopNames': [storeItems.first['shopName']],
-          'items': storeItems.map((item) => item['foodName']).toList(),
+          'items':
+              itemDescriptions, // Include portion information in descriptions
+          'detailedItems': storeItems, // Store complete item information
           'totalAmount':
               _calculateTotalAmount(storeItems, orderDetails['deliveryOption']),
           'status': 'Pending',
@@ -131,7 +219,7 @@ class CartService {
   }
 
   // ===============================
-  // LOCAL ORDER HISTORY (Existing)
+  // LOCAL ORDER HISTORY (Updated with portion support)
   // ===============================
 
   static Future<void> addOrderToHistory(Map<String, dynamic> order) async {
@@ -154,5 +242,41 @@ class CartService {
     return history
         .map((item) => Map<String, dynamic>.from(json.decode(item)))
         .toList();
+  }
+
+  // ===============================
+  // HELPER METHODS FOR PORTION HANDLING
+  // ===============================
+
+  /// Extract portion from food name
+  static String extractPortionFromName(String foodName) {
+    final regex = RegExp(r'\((\w+)\)$');
+    final match = regex.firstMatch(foodName);
+    return match?.group(1) ?? 'Full';
+  }
+
+  /// Remove portion from food name
+  static String removePortionName(String foodName) {
+    return foodName.replaceAll(RegExp(r'\s*\([^)]*\)\s*$'), '');
+  }
+
+  /// Check if two cart items are the same (including portion)
+  static bool isSameCartItem(
+      Map<String, dynamic> item1, Map<String, dynamic> item2) {
+    return item1['shopId'] == item2['shopId'] &&
+        item1['foodId'] == item2['foodId'] &&
+        item1['portion'] == item2['portion'];
+  }
+
+  /// Get display name for cart item with portion
+  static String getDisplayName(Map<String, dynamic> item) {
+    String foodName = item['foodName'] ?? '';
+    String portion = item['portion'] ?? 'Full';
+
+    // Remove existing portion suffix if any
+    foodName = removePortionName(foodName);
+
+    // Add portion suffix
+    return '$foodName ($portion)';
   }
 }

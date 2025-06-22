@@ -22,9 +22,12 @@ class CartService {
         .map((item) => Map<String, dynamic>.from(json.decode(item)))
         .toList();
 
+    // Check if same item with same portion exists
     for (int i = 0; i < decodedItems.length; i++) {
       if (decodedItems[i]['shopId'] == item['shopId'] &&
-          decodedItems[i]['foodId'] == item['foodId']) {
+          decodedItems[i]['foodId'] == item['foodId'] &&
+          decodedItems[i]['portion'] == item['portion']) {
+        // Check portion match
         decodedItems[i]['quantity'] += 1;
         decodedItems[i]['totalPrice'] =
             decodedItems[i]['quantity'] * decodedItems[i]['price'];
@@ -38,6 +41,12 @@ class CartService {
       item['totalPrice'] = item['price'];
       item['addedAt'] = DateTime.now().toIso8601String();
       item['specialInstructions'] = '';
+
+      // Ensure portion field exists
+      if (!item.containsKey('portion')) {
+        item['portion'] = 'Full';
+      }
+
       decodedItems.add(item);
     }
 
@@ -80,7 +89,7 @@ class CartService {
   }
 }
 
-// ✅ Subscription Service
+// ✅ Subscription Service (same as before)
 class SubscriptionService {
   static const String _subscriptionsKey = 'subscribed_shops';
 
@@ -167,7 +176,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
   List<Map<String, dynamic>> _shopItems = [];
   final FirebaseStorageService _storageService = FirebaseStorageService();
   String _selectedFilter = "Best Match";
-  Map<String, bool> _subscriptionStatus = {}; // Track subscription status
+  Map<String, bool> _subscriptionStatus = {};
 
   final List<String> _filterOptions = [
     "Best Match",
@@ -209,7 +218,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     }
   }
 
-  // ✅ Load subscription status for all shops
   Future<void> _loadSubscriptionStatus() async {
     Map<String, bool> status = {};
     for (var shop in _shopItems) {
@@ -224,12 +232,18 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
   void _sortShopItems(List<Map<String, dynamic>> items, String filter) {
     switch (filter) {
       case "Price: Low to High":
-        items.sort(
-            (a, b) => (a['price'] as double).compareTo(b['price'] as double));
+        items.sort((a, b) {
+          double aPrice = _getLowestPrice(a);
+          double bPrice = _getLowestPrice(b);
+          return aPrice.compareTo(bPrice);
+        });
         break;
       case "Price: High to Low":
-        items.sort(
-            (a, b) => (b['price'] as double).compareTo(a['price'] as double));
+        items.sort((a, b) {
+          double aPrice = _getHighestPrice(a);
+          double bPrice = _getHighestPrice(b);
+          return bPrice.compareTo(aPrice);
+        });
         break;
       case "Rating":
         items.sort((a, b) =>
@@ -247,20 +261,177 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
         items.sort((a, b) {
           double aScore = (a['shopRating'] as double) * 0.4 +
               (5.0 - (a['distance'] as double).clamp(0, 5)) * 0.3 +
-              (100 - (a['price'] as double).clamp(0, 100)) / 100 * 0.3;
+              (100 - _getLowestPrice(a).clamp(0, 100)) / 100 * 0.3;
           double bScore = (b['shopRating'] as double) * 0.4 +
               (5.0 - (b['distance'] as double).clamp(0, 5)) * 0.3 +
-              (100 - (b['price'] as double).clamp(0, 100)) / 100 * 0.3;
+              (100 - _getLowestPrice(b).clamp(0, 100)) / 100 * 0.3;
           return bScore.compareTo(aScore);
         });
     }
     setState(() {});
   }
 
-  // ✅ Add to cart with proper navigation
-  Future<void> _addToCart(Map<String, dynamic> shop) async {
+  // ✅ NEW: Helper method to get lowest price from portion prices
+  double _getLowestPrice(Map<String, dynamic> shop) {
+    final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
+    if (portionPrices.isEmpty) {
+      return shop['price'] as double;
+    }
+    return portionPrices.values.reduce((a, b) => a < b ? a : b);
+  }
+
+  // ✅ NEW: Helper method to get highest price from portion prices
+  double _getHighestPrice(Map<String, dynamic> shop) {
+    final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
+    if (portionPrices.isEmpty) {
+      return shop['price'] as double;
+    }
+    return portionPrices.values.reduce((a, b) => a > b ? a : b);
+  }
+
+  // ✅ NEW: Build portion selection widget
+  Widget _buildPortionSelection(Map<String, dynamic> shop) {
+    // Extract portion prices from shop data
+    final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
+
+    // If no portion prices, fall back to single price
+    if (portionPrices.isEmpty) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Rs. ${shop['price'].toStringAsFixed(2)}',
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purple)),
+          ElevatedButton.icon(
+            onPressed: () => _addToCartWithPortion(shop, 'Full', shop['price']),
+            icon: Icon(Icons.add_shopping_cart, size: 14, color: Colors.white),
+            label: Text('Add to Cart',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Show portion selection dropdown
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Price range display
+        Text(
+          _getPriceRangeText(portionPrices),
+          style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.purple),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Portion selection dropdown
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              hint: Text('Select portion', style: TextStyle(fontSize: 12)),
+              isExpanded: true,
+              icon: Icon(Icons.keyboard_arrow_down, size: 16),
+              items: portionPrices.entries.map((entry) {
+                final portion = entry.key;
+                final price = entry.value;
+                return DropdownMenuItem<String>(
+                  value: portion,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(portion, style: TextStyle(fontSize: 12)),
+                      Text('Rs. ${price.toStringAsFixed(2)}',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (selectedPortion) {
+                if (selectedPortion != null) {
+                  final price = portionPrices[selectedPortion]!;
+                  _addToCartWithPortion(shop, selectedPortion, price);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ NEW: Helper method to get price range text
+  String _getPriceRangeText(Map<String, double> portionPrices) {
+    if (portionPrices.isEmpty) return '';
+
+    final prices = portionPrices.values.toList()..sort();
+    final minPrice = prices.first;
+    final maxPrice = prices.last;
+
+    if (minPrice == maxPrice) {
+      return 'Rs. ${minPrice.toStringAsFixed(2)}';
+    } else {
+      return 'From Rs. ${minPrice.toStringAsFixed(2)}';
+    }
+  }
+
+  // ✅ NEW: Helper method for food type colors
+  Color _getFoodTypeColor(String? foodType) {
+    if (foodType == null) return Colors.purple;
+
+    switch (foodType.toLowerCase()) {
+      case 'vegetarian':
+        return Colors.green;
+      case 'non-vegetarian':
+        return Colors.red;
+      case 'vegan':
+        return Colors.teal;
+      case 'dessert':
+        return Colors.orange;
+      default:
+        return Colors.purple;
+    }
+  }
+
+  // ✅ UPDATED: Add to cart method with portion support
+  Future<void> _addToCartWithPortion(
+      Map<String, dynamic> shop, String portion, double price) async {
     try {
-      await CartService.addToCart(shop);
+      final cartItem = {
+        'shopId': shop['shopId'],
+        'shopName': shop['shopName'],
+        'shopImage': shop['shopImage'],
+        'foodId': shop['foodId'],
+        'foodName': '${shop['foodName']} ($portion)', // Include portion in name
+        'foodImage': shop['foodImage'],
+        'foodType': shop['foodType'],
+        'foodCategory': shop['foodCategory'],
+        'portion': portion, // Store portion information
+        'price': price, // Use portion-specific price
+        'description': shop['description'],
+        'time': shop['time'],
+        'variation': shop['variation'],
+      };
+
+      await CartService.addToCart(cartItem);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -270,7 +441,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                 Icon(Icons.check_circle, color: Colors.white, size: 20),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text('${shop['foodName']} added to cart'),
+                  child: Text('${shop['foodName']} ($portion) added to cart'),
                 ),
               ],
             ),
@@ -365,7 +536,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ✅ Header with back button and title
+                        // Header with back button and title
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
@@ -425,7 +596,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                   Icon(Icons.info_outline,
                                       size: 14, color: Colors.purple.shade600),
                                   SizedBox(width: 4),
-                                  Text('Tap to add items or subscribe to shops',
+                                  Text('Select portion size to add to cart',
                                       style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.purple.shade600)),
@@ -525,7 +696,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                     ),
                   ),
 
-                  // ✅ Bottom nav with cart functionality
+                  // Bottom nav with cart functionality
                   if (widget.showBottomNav)
                     BottomNavBar(
                       currentIndex: 0,
@@ -546,7 +717,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     return '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // ✅ Enhanced shop card with subscribe button
+  // ✅ UPDATED: Enhanced shop card with portion selection
   Widget _buildShopCard(Map<String, dynamic> shop) {
     final shopId = shop['shopId'];
     final isSubscribed = _subscriptionStatus[shopId] ?? false;
@@ -614,7 +785,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
-                          // ✅ Subscribe/Unsubscribe button
+                          // Subscribe button
                           InkWell(
                             onTap: () => _toggleSubscription(shop),
                             child: Container(
@@ -694,7 +865,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
             ),
           ),
 
-          // Food details section
+          // Food details section with portion selection
           Row(
             children: [
               ClipRRect(
@@ -704,25 +875,25 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                     ? CachedNetworkImage(
                         imageUrl: shop['foodImage'],
                         width: 120,
-                        height: 100,
+                        height: 120,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           width: 120,
-                          height: 100,
+                          height: 120,
                           color: Colors.grey[300],
                           child: const CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.purple),
                         ),
                         errorWidget: (context, url, error) => Container(
                           width: 120,
-                          height: 100,
+                          height: 120,
                           color: Colors.grey[300],
                           child: const Icon(Icons.fastfood),
                         ),
                       )
                     : Container(
                         width: 120,
-                        height: 100,
+                        height: 120,
                         color: Colors.grey[300],
                         child: const Icon(Icons.image_not_supported),
                       ),
@@ -733,48 +904,54 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${shop['variation']} ${shop['foodName']}',
+                      // Food name
+                      Text(shop['foodName'] ?? 'Food',
                           style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500),
+                              fontSize: 16, fontWeight: FontWeight.bold),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(shop['description'] ?? '',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey.shade600),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Rs. ${shop['price'].toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.purple)),
 
-                          // ✅ Add to cart button
-                          ElevatedButton.icon(
-                            onPressed: () => _addToCart(shop),
-                            icon: Icon(Icons.add_shopping_cart,
-                                size: 14, color: Colors.white),
-                            label: Text('Add to Cart',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.purple,
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              elevation: 2,
-                            ),
+                      const SizedBox(height: 4),
+
+                      // Food type badge
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getFoodTypeColor(shop['foodType'])
+                              .withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _getFoodTypeColor(shop['foodType'])
+                                .withOpacity(0.3),
+                            width: 1,
                           ),
-                        ],
+                        ),
+                        child: Text(
+                          shop['foodType'] ?? 'Regular',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: _getFoodTypeColor(shop['foodType']),
+                          ),
+                        ),
                       ),
+
+                      const SizedBox(height: 8),
+
+                      // Description
+                      if (shop['description'] != null &&
+                          shop['description'].isNotEmpty)
+                        Text(shop['description'],
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade600),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+
+                      const SizedBox(height: 12),
+
+                      // Portion selection and pricing
+                      _buildPortionSelection(shop),
                     ],
                   ),
                 ),

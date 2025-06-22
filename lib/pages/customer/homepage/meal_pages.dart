@@ -419,6 +419,7 @@ class _MealPageState extends State<MealPage> {
   }
 
   // Build meal item card
+
   Widget _buildMealItemCard(Food meal) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -439,7 +440,7 @@ class _MealPageState extends State<MealPage> {
         borderRadius: BorderRadius.circular(12),
         child: Row(
           children: [
-            // Food image
+            // Food image (unchanged)
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
@@ -497,15 +498,17 @@ class _MealPageState extends State<MealPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // ✅ FIXED: Move price between name and type
+
+                    // UPDATED: New price display logic with portion support
                     Text(
-                      'From Rs. ${meal.price.toStringAsFixed(2)}',
+                      _getPriceDisplayText(meal),
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Colors.purple,
                       ),
                     ),
+
                     const SizedBox(height: 4),
                     Text(
                       meal.description ?? 'No description available',
@@ -544,9 +547,28 @@ class _MealPageState extends State<MealPage> {
                           ),
                         ),
 
-                        // View shops button
+                        // UPDATED: Show portion info if available
                         Row(
                           children: [
+                            if (meal.hasMultiplePortions) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${meal.availablePortions.length} sizes',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                            ],
                             Text(
                               'View Shops',
                               style: TextStyle(
@@ -572,6 +594,34 @@ class _MealPageState extends State<MealPage> {
         ),
       ),
     );
+  }
+
+  String _getPriceDisplayText(Food meal) {
+    // Use the helper method from Food model
+    return meal.priceDisplayText;
+
+    // Alternative implementation if you prefer custom logic:
+    /*
+  if (meal.portionPrices.isEmpty) {
+    // Fallback to single price for backward compatibility
+    return 'Rs. ${meal.price.toStringAsFixed(2)}';
+  } else if (meal.portionPrices.length == 1) {
+    // Single portion available
+    final price = meal.portionPrices.values.first;
+    return 'Rs. ${price.toStringAsFixed(2)}';
+  } else {
+    // Multiple portions - show range
+    final prices = meal.portionPrices.values.toList()..sort();
+    final minPrice = prices.first;
+    final maxPrice = prices.last;
+    
+    if (minPrice == maxPrice) {
+      return 'Rs. ${minPrice.toStringAsFixed(2)}';
+    } else {
+      return 'From Rs. ${minPrice.toStringAsFixed(2)}';
+    }
+  }
+  */
   }
 
   // Get color based on food type
