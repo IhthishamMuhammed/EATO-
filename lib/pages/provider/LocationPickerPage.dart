@@ -1,44 +1,52 @@
+// File: lib/pages/LocationPickerPage.dart (Enhanced with current location & search)
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:location/location.dart' as location;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-class LocationResult {
-  final String address;
-  final double latitude;
-  final double longitude;
+class LocationData {
+  final GeoPoint geoPoint;
+  final String formattedAddress;
+  final String? streetName;
+  final String? city;
+  final String? postalCode;
 
-  LocationResult({
-    required this.address,
-    required this.latitude,
-    required this.longitude,
+  LocationData({
+    required this.geoPoint,
+    required this.formattedAddress,
+    this.streetName,
+    this.city,
+    this.postalCode,
   });
 }
 
 class LocationPickerPage extends StatefulWidget {
-  final double? initialLatitude;
-  final double? initialLongitude;
+  final GeoPoint? initialLocation;
   final String? initialAddress;
 
   const LocationPickerPage({
     Key? key,
-    this.initialLatitude,
-    this.initialLongitude,
+    this.initialLocation,
     this.initialAddress,
   }) : super(key: key);
 
   @override
-  _LocationPickerPageState createState() => _LocationPickerPageState();
+  State<LocationPickerPage> createState() => _LocationPickerPageState();
 }
 
 class _LocationPickerPageState extends State<LocationPickerPage> {
   GoogleMapController? _mapController;
   LatLng? _selectedLocation;
   String _selectedAddress = '';
+  Set<Marker> _markers = {};
   bool _isLoading = false;
-  final Location _location = Location();
+  bool _isGettingCurrentLocation = false;
+
+  // Default center on Colombo, Sri Lanka
+  final LatLng _defaultCenter = const LatLng(6.9271, 79.8612);
 
   @override
   void initState() {
@@ -46,131 +54,187 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     _initializeLocation();
   }
 
-  Future<void> _initializeLocation() async {
-    if (widget.initialLatitude != null && widget.initialLongitude != null) {
-      _selectedLocation =
-          LatLng(widget.initialLatitude!, widget.initialLongitude!);
-      _selectedAddress = widget.initialAddress ?? '';
-    } else {
-      await _getCurrentLocation();
-    }
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Check location permission
-      final permission = await Permission.location.request();
-      if (permission != location.PermissionStatus.granted) {
-        throw Exception('Location permission denied');
-      }
-
-      // Check if location service is enabled
-      bool serviceEnabled = await _location.serviceEnabled();
-      if (!serviceEnabled) {
-        serviceEnabled = await _location.requestService();
-        if (!serviceEnabled) {
-          throw Exception('Location service disabled');
-        }
-      }
-
-      // Get current location
-      final locationData = await _location.getLocation();
-
-      if (locationData.latitude != null && locationData.longitude != null) {
-        final latLng = LatLng(locationData.latitude!, locationData.longitude!);
-        setState(() {
-          _selectedLocation = latLng;
-        });
-
-        await _getAddressFromLatLng(latLng);
-
-        if (_mapController != null) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLng(latLng),
-          );
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error getting location: $e'),
-          backgroundColor: Colors.red,
-        ),
+  void _initializeLocation() {
+    // Initialize from props if provided
+    if (widget.initialLocation != null) {
+      _selectedLocation = LatLng(
+        widget.initialLocation!.latitude,
+        widget.initialLocation!.longitude,
       );
-
-      // Default to Colombo, Sri Lanka if location fails
-      const defaultLocation = LatLng(6.9271, 79.8612);
-      setState(() {
-        _selectedLocation = defaultLocation;
-        _selectedAddress = 'Colombo, Sri Lanka';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      _selectedAddress = widget.initialAddress ?? '';
+      _updateMarker(_selectedLocation!);
     }
   }
 
-  Future<void> _getAddressFromLatLng(LatLng latLng) async {
+  void _updateMarker(LatLng location) {
+    setState(() {
+      _selectedLocation = location;
+      _markers = {
+        Marker(
+          markerId: const MarkerId('selected_location'),
+          position: location,
+          infoWindow: InfoWindow(
+            title: 'Selected Location',
+            snippet: _selectedAddress.isNotEmpty
+                ? _selectedAddress
+                : 'Tap to select',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        ),
+      };
+    });
+  }
+
+  Future<void> _handleMapTap(LatLng location) async {
+    _updateMarker(location);
+    await _getAddressFromLocation(location);
+  }
+
+  Future<void> _getAddressFromLocation(LatLng location) async {
+    setState(() => _isLoading = true);
+
     try {
-      List<geocoding.Placemark> placemarks =
-          await geocoding.placemarkFromCoordinates(
-        latLng.latitude,
-        latLng.longitude,
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude,
+        location.longitude,
       );
 
       if (placemarks.isNotEmpty) {
         final placemark = placemarks.first;
+        final address = _formatAddress(placemark);
+
         setState(() {
-          _selectedAddress = _formatAddress(placemark);
+          _selectedAddress = address;
+          _markers = {
+            Marker(
+              markerId: const MarkerId('selected_location'),
+              position: location,
+              infoWindow: InfoWindow(
+                title: 'Selected Location',
+                snippet: address,
+              ),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed),
+            ),
+          };
         });
       }
     } catch (e) {
       print('Error getting address: $e');
-      setState(() {
-        _selectedAddress = 'Selected location';
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not get address for this location'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  String _formatAddress(geocoding.Placemark placemark) {
-    List<String> parts = [];
+  String _formatAddress(Placemark placemark) {
+    List<String> addressParts = [];
 
-    if (placemark.street?.isNotEmpty == true) parts.add(placemark.street!);
-    if (placemark.subLocality?.isNotEmpty == true)
-      parts.add(placemark.subLocality!);
-    if (placemark.locality?.isNotEmpty == true) parts.add(placemark.locality!);
-    if (placemark.administrativeArea?.isNotEmpty == true)
-      parts.add(placemark.administrativeArea!);
+    if (placemark.street != null && placemark.street!.isNotEmpty) {
+      addressParts.add(placemark.street!);
+    }
+    if (placemark.locality != null && placemark.locality!.isNotEmpty) {
+      addressParts.add(placemark.locality!);
+    }
+    if (placemark.administrativeArea != null &&
+        placemark.administrativeArea!.isNotEmpty) {
+      addressParts.add(placemark.administrativeArea!);
+    }
+    if (placemark.postalCode != null && placemark.postalCode!.isNotEmpty) {
+      addressParts.add(placemark.postalCode!);
+    }
 
-    return parts.join(', ');
+    return addressParts.join(', ');
   }
 
-  void _onMapTapped(LatLng latLng) {
-    setState(() {
-      _selectedLocation = latLng;
-      _isLoading = true;
-    });
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isGettingCurrentLocation = true);
 
-    _getAddressFromLatLng(latLng).then((_) {
-      setState(() {
-        _isLoading = false;
-      });
-    });
+    try {
+      // Check and request location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permissions are denied');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions are permanently denied');
+      }
+
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled');
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 10),
+      );
+
+      final currentLocation = LatLng(position.latitude, position.longitude);
+
+      // Move camera to current location
+      if (_mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(currentLocation, 16),
+        );
+      }
+
+      // Update marker and get address
+      _updateMarker(currentLocation);
+      await _getAddressFromLocation(currentLocation);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Current location selected'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Error getting current location: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not get current location: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      setState(() => _isGettingCurrentLocation = false);
+    }
   }
 
   void _confirmLocation() {
     if (_selectedLocation != null) {
-      final result = LocationResult(
-        address: _selectedAddress,
-        latitude: _selectedLocation!.latitude,
-        longitude: _selectedLocation!.longitude,
+      final geoPoint =
+          GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude);
+
+      final locationData = LocationData(
+        geoPoint: geoPoint,
+        formattedAddress: _selectedAddress.isNotEmpty
+            ? _selectedAddress
+            : 'Selected location',
       );
-      Navigator.of(context).pop(result);
+
+      Navigator.pop(context, locationData);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a location'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
@@ -178,141 +242,203 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Select Location'),
+        title: const Text('Pick Your Location'),
         backgroundColor: Colors.purple,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
-          IconButton(
-            icon: Icon(Icons.my_location),
-            onPressed: _getCurrentLocation,
+          TextButton(
+            onPressed: _selectedLocation != null ? _confirmLocation : null,
+            child: Text(
+              'Confirm',
+              style: TextStyle(
+                color:
+                    _selectedLocation != null ? Colors.white : Colors.white54,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
       body: Stack(
         children: [
-          // Google Map
-          _selectedLocation == null
-              ? Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                  ),
-                )
-              : GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _selectedLocation!,
-                    zoom: 15.0,
-                  ),
-                  onMapCreated: (GoogleMapController controller) {
-                    _mapController = controller;
-                  },
-                  onTap: _onMapTapped,
-                  markers: _selectedLocation != null
-                      ? {
-                          Marker(
-                            markerId: MarkerId('selected_location'),
-                            position: _selectedLocation!,
-                            infoWindow: InfoWindow(
-                              title: 'Selected Location',
-                              snippet: _selectedAddress,
-                            ),
-                          ),
-                        }
-                      : {},
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                ),
-
-          // Loading overlay
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                ),
-              ),
+          // Map
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: _selectedLocation ?? _defaultCenter,
+              zoom: _selectedLocation != null ? 16 : 12,
             ),
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+            onTap: _handleMapTap,
+            markers: _markers,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false, // We'll use custom button
+            zoomControlsEnabled: true,
+            mapType: MapType.normal,
+            compassEnabled: true,
+            mapToolbarEnabled: false,
+          ),
 
-          // Address display and confirm button
+          // Helper text at top
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            top: 16,
+            left: 16,
+            right: 16,
             child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: Offset(0, -5),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
-              padding: EdgeInsets.all(20),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Selected Location',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(
-                      _selectedAddress.isEmpty
-                          ? 'Tap on map to select location'
-                          : _selectedAddress,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _selectedAddress.isEmpty
-                            ? Colors.grey
-                            : Colors.black,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _selectedLocation != null &&
-                              _selectedAddress.isNotEmpty
-                          ? _confirmLocation
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, color: Colors.purple, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tap on the map to select your location',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ),
-                      child: Text(
-                        'Confirm Location',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
+                  if (_selectedAddress.isNotEmpty) ...[
+                    SizedBox(height: 8),
+                    Divider(height: 1),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.place, color: Colors.green, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _selectedAddress,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
+
+          // Bottom buttons
+          Positioned(
+            bottom: 16,
+            left: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Current location button
+                Container(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _isGettingCurrentLocation ? null : _getCurrentLocation,
+                    icon: _isGettingCurrentLocation
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.purple),
+                            ),
+                          )
+                        : Icon(Icons.my_location, size: 20),
+                    label: Text(_isGettingCurrentLocation
+                        ? 'Getting location...'
+                        : 'Use Current Location'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.purple,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.purple),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 12),
+
+                // Search location button (placeholder for future enhancement)
+                Container(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Search functionality coming soon! For now, you can tap on the map or use current location.'),
+                          backgroundColor: Colors.blue,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.search, size: 20),
+                    label: const Text('Search for a location'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      foregroundColor: Colors.grey[600],
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Loading overlay
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+                child: Center(
+                  child: Container(
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.purple),
+                        SizedBox(height: 12),
+                        Text('Getting address...'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

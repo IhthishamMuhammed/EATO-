@@ -1,3 +1,5 @@
+// File: lib/pages/customer/ShopCategoryPage.dart (Complete Fixed Version)
+
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -6,154 +8,9 @@ import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-
-// ✅ Cart Service (same as before)
-class CartService {
-  static const String _cartKey = 'cart_items';
-
-  static Future<void> addToCart(Map<String, dynamic> item) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    bool itemExists = false;
-    List<Map<String, dynamic>> decodedItems = cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    // Check if same item with same portion exists
-    for (int i = 0; i < decodedItems.length; i++) {
-      if (decodedItems[i]['shopId'] == item['shopId'] &&
-          decodedItems[i]['foodId'] == item['foodId'] &&
-          decodedItems[i]['portion'] == item['portion']) {
-        // Check portion match
-        decodedItems[i]['quantity'] += 1;
-        decodedItems[i]['totalPrice'] =
-            decodedItems[i]['quantity'] * decodedItems[i]['price'];
-        itemExists = true;
-        break;
-      }
-    }
-
-    if (!itemExists) {
-      item['quantity'] = 1;
-      item['totalPrice'] = item['price'];
-      item['addedAt'] = DateTime.now().toIso8601String();
-      item['specialInstructions'] = '';
-
-      // Ensure portion field exists
-      if (!item.containsKey('portion')) {
-        item['portion'] = 'Full';
-      }
-
-      decodedItems.add(item);
-    }
-
-    List<String> encodedItems =
-        decodedItems.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-
-  static Future<int> getCartCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    int totalCount = 0;
-    for (String item in cartItems) {
-      Map<String, dynamic> decodedItem = json.decode(item);
-      totalCount += decodedItem['quantity'] as int;
-    }
-
-    return totalCount;
-  }
-
-  static Future<List<Map<String, dynamic>>> getCartItems() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    return cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-
-  static Future<void> clearCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
-  }
-
-  static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> encodedItems = items.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-}
-
-// ✅ Subscription Service (same as before)
-class SubscriptionService {
-  static const String _subscriptionsKey = 'subscribed_shops';
-
-  static Future<void> subscribeToShop(Map<String, dynamic> shop) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    bool alreadySubscribed = false;
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    for (var subscription in decodedSubscriptions) {
-      if (subscription['shopId'] == shop['shopId']) {
-        alreadySubscribed = true;
-        break;
-      }
-    }
-
-    if (!alreadySubscribed) {
-      shop['subscribedAt'] = DateTime.now().toIso8601String();
-      decodedSubscriptions.add(shop);
-
-      List<String> encodedSubscriptions =
-          decodedSubscriptions.map((item) => json.encode(item)).toList();
-      await prefs.setStringList(_subscriptionsKey, encodedSubscriptions);
-    }
-  }
-
-  static Future<void> unsubscribeFromShop(String shopId) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    decodedSubscriptions.removeWhere((shop) => shop['shopId'] == shopId);
-
-    List<String> encodedSubscriptions =
-        decodedSubscriptions.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_subscriptionsKey, encodedSubscriptions);
-  }
-
-  static Future<bool> isSubscribed(String shopId) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    return decodedSubscriptions.any((shop) => shop['shopId'] == shopId);
-  }
-
-  static Future<List<Map<String, dynamic>>> getSubscribedShops() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    return subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-}
+import 'package:eato/services/firebase_subscription_service.dart';
+// ✅ IMPORTANT: Import the main CartService (NOT the local one)
+import 'package:eato/services/CartService.dart';
 
 class ShopCategoryPage extends StatefulWidget {
   final String mealTitle;
@@ -219,14 +76,33 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
   }
 
   Future<void> _loadSubscriptionStatus() async {
-    Map<String, bool> status = {};
-    for (var shop in _shopItems) {
-      final shopId = shop['shopId'];
-      status[shopId] = await SubscriptionService.isSubscribed(shopId);
+    if (!FirebaseSubscriptionService.isUserAuthenticated()) {
+      print(
+          'ℹ️ [ShopCategoryPage] User not authenticated, skipping subscription status');
+      return;
     }
-    setState(() {
-      _subscriptionStatus = status;
-    });
+
+    try {
+      Map<String, bool> status = {};
+      for (var shop in _shopItems) {
+        final shopId = shop['shopId'];
+        if (shopId != null) {
+          status[shopId] =
+              await FirebaseSubscriptionService.isSubscribed(shopId);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _subscriptionStatus = status;
+        });
+      }
+
+      print(
+          '✅ [ShopCategoryPage] Loaded subscription status for ${status.length} shops');
+    } catch (e) {
+      print('❌ [ShopCategoryPage] Error loading subscription status: $e');
+    }
   }
 
   void _sortShopItems(List<Map<String, dynamic>> items, String filter) {
@@ -271,7 +147,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     setState(() {});
   }
 
-  // ✅ NEW: Helper method to get lowest price from portion prices
+  // ✅ Helper method to get lowest price from portion prices
   double _getLowestPrice(Map<String, dynamic> shop) {
     final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
     if (portionPrices.isEmpty) {
@@ -280,7 +156,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     return portionPrices.values.reduce((a, b) => a < b ? a : b);
   }
 
-  // ✅ NEW: Helper method to get highest price from portion prices
+  // ✅ Helper method to get highest price from portion prices
   double _getHighestPrice(Map<String, dynamic> shop) {
     final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
     if (portionPrices.isEmpty) {
@@ -289,7 +165,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     return portionPrices.values.reduce((a, b) => a > b ? a : b);
   }
 
-  // ✅ NEW: Build portion selection widget
+  // ✅ Build portion selection widget
   Widget _buildPortionSelection(Map<String, dynamic> shop) {
     // Extract portion prices from shop data
     final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
@@ -378,7 +254,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     );
   }
 
-  // ✅ NEW: Helper method to get price range text
+  // ✅ Helper method to get price range text
   String _getPriceRangeText(Map<String, double> portionPrices) {
     if (portionPrices.isEmpty) return '';
 
@@ -393,7 +269,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     }
   }
 
-  // ✅ NEW: Helper method for food type colors
+  // ✅ Helper method for food type colors
   Color _getFoodTypeColor(String? foodType) {
     if (foodType == null) return Colors.purple;
 
@@ -411,27 +287,27 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     }
   }
 
-  // ✅ UPDATED: Add to cart method with portion support
+  // ✅ FIXED: Add to cart method with standardized CartService
   Future<void> _addToCartWithPortion(
       Map<String, dynamic> shop, String portion, double price) async {
     try {
-      final cartItem = {
-        'shopId': shop['shopId'],
-        'shopName': shop['shopName'],
-        'shopImage': shop['shopImage'],
-        'foodId': shop['foodId'],
-        'foodName': '${shop['foodName']} ($portion)', // Include portion in name
-        'foodImage': shop['foodImage'],
-        'foodType': shop['foodType'],
-        'foodCategory': shop['foodCategory'],
-        'portion': portion, // Store portion information
-        'price': price, // Use portion-specific price
-        'description': shop['description'],
-        'time': shop['time'],
-        'variation': shop['variation'],
-      };
+      print(
+          '🛒 [ShopCategoryPage] Adding to cart: ${shop['foodName']} ($portion) - Rs. $price');
 
-      await CartService.addToCart(cartItem);
+      // Use the standardized CartService.addToCart method
+      await CartService.addToCart(
+        foodId: shop['foodId'] ?? '',
+        foodName: '${shop['foodName']} ($portion)',
+        foodImage: shop['foodImage'] ?? '',
+        price: price,
+        quantity: 1,
+        shopId: shop['shopId'] ?? '',
+        shopName: shop['shopName'] ?? '',
+        variation: portion, // Store portion as variation
+        specialInstructions: '',
+      );
+
+      print('✅ [ShopCategoryPage] Successfully added to cart');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -452,73 +328,143 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
         );
       }
     } catch (e) {
-      print('Error adding to cart: $e');
+      print('❌ [ShopCategoryPage] Error adding to cart: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add item to cart'),
+            content: Text('Failed to add item to cart: $e'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
         );
       }
     }
   }
 
+  void _showAuthRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.login, color: Colors.purple),
+            SizedBox(width: 8),
+            Text('Login Required'),
+          ],
+        ),
+        content: Text(
+          'Please log in to subscribe to restaurants and get updates about their menu and offers.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/login');
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: Text('Login', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ✅ Subscribe/Unsubscribe to shop
   Future<void> _toggleSubscription(Map<String, dynamic> shop) async {
+    if (!FirebaseSubscriptionService.isUserAuthenticated()) {
+      _showAuthRequiredDialog();
+      return;
+    }
+
     final shopId = shop['shopId'];
+    if (shopId == null) {
+      print('❌ [ShopCategoryPage] Shop ID is null');
+      return;
+    }
+
     final isCurrentlySubscribed = _subscriptionStatus[shopId] ?? false;
 
     try {
       if (isCurrentlySubscribed) {
-        await SubscriptionService.unsubscribeFromShop(shopId);
-        setState(() {
-          _subscriptionStatus[shopId] = false;
-        });
+        await FirebaseSubscriptionService.unsubscribeFromShop(shopId);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.unsubscribe, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Unsubscribed from ${shop['shopName']}'),
-              ],
+        if (mounted) {
+          setState(() {
+            _subscriptionStatus[shopId] = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.unsubscribe, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Unsubscribed from ${shop['shopName']}'),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
             ),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+          );
+        }
       } else {
-        await SubscriptionService.subscribeToShop(shop);
-        setState(() {
-          _subscriptionStatus[shopId] = true;
-        });
+        // Prepare shop data for Firebase
+        final shopData = {
+          'shopName': shop['shopName'] ?? 'Unknown Shop',
+          'shopImage': shop['shopImage'] ?? '',
+          'shopRating': (shop['shopRating'] ?? 0.0).toDouble(),
+          'shopContact': shop['shopContact'] ?? '',
+          'shopLocation': shop['shopLocation'] ?? 'Location not specified',
+          'isPickup': shop['isPickup'] ?? true,
+          'distance': (shop['distance'] ?? 0.0).toDouble(),
+          'deliveryTime': shop['deliveryTime'] ?? 30,
+        };
 
+        await FirebaseSubscriptionService.subscribeToShop(shopId, shopData);
+
+        if (mounted) {
+          setState(() {
+            _subscriptionStatus[shopId] = true;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.favorite, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('Subscribed to ${shop['shopName']}'),
+                ],
+              ),
+              backgroundColor: Colors.purple,
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ [ShopCategoryPage] Error toggling subscription: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.favorite, color: Colors.white, size: 20),
+                Icon(Icons.error, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text('Subscribed to ${shop['shopName']}'),
+                Expanded(child: Text('Failed to update subscription: $e')),
               ],
             ),
-            backgroundColor: Colors.purple,
-            duration: Duration(seconds: 2),
+            backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } catch (e) {
-      print('Error toggling subscription: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update subscription'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -717,7 +663,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     return '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // ✅ UPDATED: Enhanced shop card with portion selection
+  // ✅ Enhanced shop card with portion selection
   Widget _buildShopCard(Map<String, dynamic> shop) {
     final shopId = shop['shopId'];
     final isSubscribed = _subscriptionStatus[shopId] ?? false;
@@ -963,3 +909,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     );
   }
 }
+
+// ✅ IMPORTANT: Remove the local CartService class completely from this file!
+// The local CartService class that was here has been removed.
+// Now this file uses the main CartService from 'package:eato/services/CartService.dart'

@@ -1,97 +1,394 @@
+// File: lib/services/CartService.dart (Enhanced with location support)
+
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Model/coustomUser.dart';
-import 'dart:convert';
+import 'package:eato/Model/Order.dart';
 
 class CartService {
   static const String _cartKey = 'cart_items';
-  static const String _orderHistoryKey = 'order_history';
 
-  // ===============================
-  // UPDATED CART METHODS WITH PORTION SUPPORT
-  // ===============================
+  // ===================================
+  // EXISTING CART METHODS
+  // ===================================
 
-  /// Add item to cart with portion support
-  static Future<void> addToCart(Map<String, dynamic> item) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    bool itemExists = false;
-    List<Map<String, dynamic>> decodedItems = cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    // Check if same item with same portion exists
-    for (int i = 0; i < decodedItems.length; i++) {
-      if (decodedItems[i]['shopId'] == item['shopId'] &&
-          decodedItems[i]['foodId'] == item['foodId'] &&
-          decodedItems[i]['portion'] == item['portion']) {
-        // NEW: Check portion match
-        decodedItems[i]['quantity'] += 1;
-        decodedItems[i]['totalPrice'] =
-            decodedItems[i]['quantity'] * decodedItems[i]['price'];
-        itemExists = true;
-        break;
-      }
-    }
-
-    if (!itemExists) {
-      item['quantity'] = 1;
-      item['totalPrice'] = item['price'];
-      item['addedAt'] = DateTime.now().toIso8601String();
-      item['specialInstructions'] = '';
-
-      // Ensure portion field exists (for backward compatibility)
-      if (!item.containsKey('portion')) {
-        item['portion'] = 'Full'; // Default portion
-      }
-
-      decodedItems.add(item);
-    }
-
-    List<String> encodedItems =
-        decodedItems.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-
+  /// Get cart items from local storage
   static Future<List<Map<String, dynamic>>> getCartItems() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = prefs.getString(_cartKey);
 
-    return cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
+      if (cartJson != null) {
+        final List<dynamic> cartList = json.decode(cartJson);
+        return cartList.cast<Map<String, dynamic>>();
+      }
 
-  static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> encodedItems = items.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-
-  static Future<void> clearCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
-  }
-
-  static Future<int> getCartCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    int totalCount = 0;
-    for (String item in cartItems) {
-      Map<String, dynamic> decodedItem = json.decode(item);
-      totalCount += decodedItem['quantity'] as int;
+      return [];
+    } catch (e) {
+      print('Error getting cart items: $e');
+      return [];
     }
-
-    return totalCount;
   }
 
-  // ===============================
-  // UPDATED BACKEND INTEGRATION WITH PORTION SUPPORT
-  // ===============================
+  /// Save cart items to local storage
+  static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cartJson = json.encode(items);
+      await prefs.setString(_cartKey, cartJson);
+    } catch (e) {
+      print('Error updating cart items: $e');
+    }
+  }
 
-  /// Place orders using the new backend system with portion information
+  /// Add item to cart
+  static Future<void> addToCart({
+    required String foodId,
+    required String foodName,
+    required String foodImage,
+    required double price,
+    required int quantity,
+    required String shopId,
+    required String shopName,
+    String? variation,
+    String? specialInstructions,
+  }) async {
+    try {
+      final cartItems = await getCartItems();
+
+      // Check if item already exists
+      final existingIndex = cartItems.indexWhere((item) =>
+          item['foodId'] == foodId &&
+          item['shopId'] == shopId &&
+          item['variation'] == variation);
+
+      if (existingIndex != -1) {
+        // Update existing item
+        cartItems[existingIndex]['quantity'] += quantity;
+        cartItems[existingIndex]['totalPrice'] =
+            cartItems[existingIndex]['quantity'] * price;
+      } else {
+        // Add new item
+        cartItems.add({
+          'foodId': foodId,
+          'foodName': foodName,
+          'foodImage': foodImage,
+          'price': price,
+          'quantity': quantity,
+          'totalPrice': price * quantity,
+          'shopId': shopId,
+          'shopName': shopName,
+          'variation': variation,
+          'specialInstructions': specialInstructions,
+        });
+      }
+
+      await updateCartItems(cartItems);
+    } catch (e) {
+      print('Error adding to cart: $e');
+      throw Exception('Failed to add item to cart');
+    }
+  }
+
+  /// Remove item from cart
+  static Future<void> removeFromCart(String foodId, String shopId,
+      {String? variation}) async {
+    try {
+      final cartItems = await getCartItems();
+
+      cartItems.removeWhere((item) =>
+          item['foodId'] == foodId &&
+          item['shopId'] == shopId &&
+          item['variation'] == variation);
+
+      await updateCartItems(cartItems);
+    } catch (e) {
+      print('Error removing from cart: $e');
+    }
+  }
+
+  /// Clear entire cart
+  static Future<void> clearCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cartKey);
+    } catch (e) {
+      print('Error clearing cart: $e');
+    }
+  }
+
+  /// Get cart item count
+  /// Get cart item count (EXPLICIT FIX)
+  static Future<int> getCartItemCount() async {
+    try {
+      final cartItems = await getCartItems();
+      int totalCount = 0; // Explicit int variable
+
+      for (var item in cartItems) {
+        final quantity = item['quantity'];
+        if (quantity != null) {
+          totalCount +=
+              (quantity as num).toInt(); // Cast to num first, then toInt()
+        }
+      }
+
+      return totalCount;
+    } catch (e) {
+      print('Error getting cart count: $e');
+      return 0;
+    }
+  }
+
+  /// Get cart total value (EXPLICIT FIX)
+  static Future<double> getCartTotal() async {
+    try {
+      final cartItems = await getCartItems();
+      double totalValue = 0.0; // Explicit double variable
+
+      for (var item in cartItems) {
+        final totalPrice = item['totalPrice'];
+        if (totalPrice != null) {
+          totalValue += (totalPrice as num)
+              .toDouble(); // Cast to num first, then toDouble()
+        }
+      }
+
+      return totalValue;
+    } catch (e) {
+      print('Error getting cart total: $e');
+      return 0.0;
+    }
+  }
+
+  static Future<void> emergencyClearCart() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear both possible cart storage formats
+      await prefs.remove('cart_items'); // String format
+      await prefs.remove(_cartKey); // Current format
+
+      // Also try to clear any List<String> format that might exist
+      List<String> keys = prefs.getKeys().toList();
+      for (String key in keys) {
+        if (key.contains('cart')) {
+          await prefs.remove(key);
+          print('🗑️ Removed cart key: $key');
+        }
+      }
+
+      print('🚨 Emergency cart clear completed - All cart data removed');
+    } catch (e) {
+      print('❌ Error during emergency clear: $e');
+    }
+  }
+
+  /// Debug method to see all cart-related storage
+  static Future<void> debugCartStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final allKeys = prefs.getKeys();
+
+      print('=== CART STORAGE DEBUG ===');
+      for (String key in allKeys) {
+        if (key.contains('cart')) {
+          final value = prefs.get(key);
+          print('Key: $key');
+          print('Type: ${value.runtimeType}');
+          print(
+              'Value: ${value.toString().length > 100 ? value.toString().substring(0, 100) + '...' : value}');
+          print('---');
+        }
+      }
+      print('=== END DEBUG ===');
+    } catch (e) {
+      print('❌ Debug error: $e');
+    }
+  }
+
+  /// Fix corrupted cart data by converting old format to new format
+  static Future<void> fixCorruptedCartData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check if there's old List<String> format data
+      final oldCartData = prefs.getStringList('cart_items');
+      if (oldCartData != null && oldCartData.isNotEmpty) {
+        print('🔄 Found old cart format, converting...');
+
+        List<Map<String, dynamic>> convertedItems = [];
+
+        for (String itemJson in oldCartData) {
+          try {
+            final Map<String, dynamic> item = json.decode(itemJson);
+            convertedItems.add(item);
+          } catch (e) {
+            print('⚠️ Skipping corrupted item: $e');
+          }
+        }
+
+        // Save in new format
+        if (convertedItems.isNotEmpty) {
+          await updateCartItems(convertedItems);
+          print('✅ Converted ${convertedItems.length} items to new format');
+        }
+
+        // Remove old format
+        await prefs.remove('cart_items');
+        print('🗑️ Removed old cart format');
+      }
+    } catch (e) {
+      print('❌ Error fixing cart data: $e');
+    }
+  }
+  // ===================================
+  // ENHANCED ORDER PLACEMENT WITH LOCATION
+  // ===================================
+
+  /// Place orders with enhanced location support
+  static Future<List<String>> placeOrdersWithBackendLocation(
+    OrderProvider orderProvider,
+    CustomUser customer,
+    List<Map<String, dynamic>> cartItems, {
+    required String deliveryOption,
+    required String deliveryAddress,
+    GeoPoint? deliveryLocation,
+    String? locationDisplayText,
+    required String paymentMethod,
+    String? specialInstructions,
+    DateTime? scheduledTime,
+  }) async {
+    try {
+      print(
+          '🚀 [CartService] Starting enhanced order placement with location...');
+
+      // Group cart items by store
+      Map<String, List<Map<String, dynamic>>> itemsByStore = {};
+      for (var item in cartItems) {
+        final storeId = item['shopId'] as String;
+        if (!itemsByStore.containsKey(storeId)) {
+          itemsByStore[storeId] = [];
+        }
+        itemsByStore[storeId]!.add(item);
+      }
+
+      List<String> orderIds = [];
+
+      // Create one order per store
+      for (var entry in itemsByStore.entries) {
+        final storeId = entry.key;
+        final storeItems = entry.value;
+
+        // Calculate totals for this store
+        double subtotal = storeItems.fold(
+            0.0, (sum, item) => sum + (item['totalPrice'] as double));
+        double deliveryFee = deliveryOption == 'Delivery' ? 100.0 : 0.0;
+        double serviceFee = subtotal * 0.05;
+        double totalAmount = subtotal + deliveryFee + serviceFee;
+
+        // Convert cart items to order items
+        List<OrderItem> orderItems = storeItems
+            .map((item) => OrderItem(
+                  foodId: item['foodId'] ?? '',
+                  foodName: item['foodName'] ?? '',
+                  foodImage: item['foodImage'] ?? '',
+                  price: (item['price'] as num).toDouble(),
+                  quantity: item['quantity'] as int,
+                  totalPrice: (item['totalPrice'] as num).toDouble(),
+                  specialInstructions: item['specialInstructions'],
+                  variation: item['variation'],
+                ))
+            .toList();
+
+        // Create location object if location data is provided
+        OrderLocation? orderLocation;
+        if (deliveryLocation != null) {
+          orderLocation = OrderLocation(
+            geoPoint: deliveryLocation,
+            formattedAddress: locationDisplayText ?? deliveryAddress,
+          );
+        }
+
+        // Create enhanced order with location
+        final order = CustomerOrder(
+          id: '', // Will be set by Firestore
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phoneNumber ?? '',
+          storeId: storeId,
+          storeName: storeItems.first['shopName'] ?? '',
+          items: orderItems,
+          subtotal: subtotal,
+          deliveryFee: deliveryFee,
+          serviceFee: serviceFee,
+          totalAmount: totalAmount,
+          status: OrderStatus.pending,
+          deliveryOption: deliveryOption,
+          deliveryAddress: locationDisplayText ?? deliveryAddress,
+          deliveryLocation: orderLocation, // ENHANCED: Location object
+          paymentMethod: paymentMethod,
+          specialInstructions: specialInstructions,
+          scheduledTime: scheduledTime,
+          orderTime: DateTime.now(),
+        );
+
+        // Save to Firestore
+        final docRef = await FirebaseFirestore.instance
+            .collection('orders')
+            .add(order.toMap());
+        orderIds.add(docRef.id);
+
+        // Create order request for the store
+        await _createOrderRequest(docRef.id, order);
+
+        print('✅ [CartService] Order created for store $storeId: ${docRef.id}');
+      }
+
+      // Clear cart after successful order placement
+      await clearCart();
+
+      print(
+          '🎉 [CartService] Successfully created ${orderIds.length} orders with location data');
+      return orderIds;
+    } catch (e) {
+      print('❌ [CartService] Error placing orders with location: $e');
+      throw Exception('Failed to place orders: $e');
+    }
+  }
+
+  /// Create order request for store owner (same as before)
+  static Future<void> _createOrderRequest(
+      String orderId, CustomerOrder order) async {
+    try {
+      final request = OrderRequest(
+        id: '',
+        orderId: orderId,
+        customerId: order.customerId,
+        customerName: order.customerName,
+        storeId: order.storeId,
+        storeName: order.storeName,
+        status: OrderRequestStatus.pending,
+        requestTime: DateTime.now(),
+      );
+
+      await FirebaseFirestore.instance
+          .collection('order_requests')
+          .add(request.toMap());
+
+      print('📋 [CartService] Order request created for order $orderId');
+    } catch (e) {
+      print('❌ [CartService] Error creating order request: $e');
+      throw Exception('Failed to create order request');
+    }
+  }
+
+  // ===================================
+  // LEGACY METHOD (for backward compatibility)
+  // ===================================
+
+  /// Legacy method for placing orders (kept for backward compatibility)
   static Future<List<String>> placeOrdersWithBackend(
     OrderProvider orderProvider,
     CustomUser customer,
@@ -102,77 +399,55 @@ class CartService {
     String? specialInstructions,
     DateTime? scheduledTime,
   }) async {
+    // Call the enhanced method without location data
+    return placeOrdersWithBackendLocation(
+      orderProvider,
+      customer,
+      cartItems,
+      deliveryOption: deliveryOption,
+      deliveryAddress: deliveryAddress,
+      deliveryLocation: null, // No location data in legacy method
+      locationDisplayText: null,
+      paymentMethod: paymentMethod,
+      specialInstructions: specialInstructions,
+      scheduledTime: scheduledTime,
+    );
+  }
+
+  // ===================================
+  // UTILITY METHODS
+  // ===================================
+
+  /// Check if cart contains items from specific store
+  static Future<bool> hasItemsFromStore(String storeId) async {
     try {
-      // Process cart items to include portion information in order items
-      List<Map<String, dynamic>> processedCartItems = cartItems.map((item) {
-        // Ensure portion information is included
-        Map<String, dynamic> processedItem = Map.from(item);
-
-        // Add portion to food name if not already included
-        String foodName = processedItem['foodName'] ?? '';
-        String portion = processedItem['portion'] ?? 'Full';
-
-        if (!foodName.contains('($portion)')) {
-          // Remove any existing portion suffix first
-          foodName = foodName.replaceAll(RegExp(r'\s*\([^)]*\)\s*$'), '');
-          // Add the correct portion
-          processedItem['foodName'] = '$foodName ($portion)';
-        }
-
-        return processedItem;
-      }).toList();
-
-      // Use the OrderProvider to place orders
-      final orderIds = await orderProvider.placeOrdersFromCart(
-        customer,
-        processedCartItems,
-        deliveryOption: deliveryOption,
-        deliveryAddress: deliveryAddress,
-        paymentMethod: paymentMethod,
-        specialInstructions: specialInstructions,
-        scheduledTime: scheduledTime,
-      );
-
-      // Clear the cart after successful order placement
-      await clearCart();
-
-      // Add to local order history for offline viewing
-      await _addOrdersToLocalHistory(orderIds, processedCartItems, customer, {
-        'deliveryOption': deliveryOption,
-        'paymentMethod': paymentMethod,
-        'specialInstructions': specialInstructions,
-        'totalAmount':
-            _calculateTotalAmount(processedCartItems, deliveryOption),
-      });
-
-      return orderIds;
+      final cartItems = await getCartItems();
+      return cartItems.any((item) => item['shopId'] == storeId);
     } catch (e) {
-      throw Exception('Failed to place orders: $e');
+      print('Error checking store items: $e');
+      return false;
     }
   }
 
-  /// Calculate total amount from cart items
-  static double _calculateTotalAmount(
-      List<Map<String, dynamic>> cartItems, String deliveryOption) {
-    double subtotal = cartItems.fold(
-        0.0, (sum, item) => sum + (item['totalPrice'] as double));
-    double deliveryFee = deliveryOption == 'Delivery' ? 100.0 : 0.0;
-    double serviceFee = subtotal * 0.05;
-    return subtotal + deliveryFee + serviceFee;
+  /// Get unique store count in cart
+  static Future<int> getUniqueStoreCount() async {
+    try {
+      final cartItems = await getCartItems();
+      final storeIds = cartItems.map((item) => item['shopId']).toSet();
+      return storeIds.length;
+    } catch (e) {
+      print('Error getting store count: $e');
+      return 0;
+    }
   }
 
-  /// Add orders to local history with portion information
-  static Future<void> _addOrdersToLocalHistory(
-    List<String> orderIds,
-    List<Map<String, dynamic>> cartItems,
-    CustomUser customer,
-    Map<String, dynamic> orderDetails,
-  ) async {
-    for (int i = 0; i < orderIds.length; i++) {
-      final orderId = orderIds[i];
-
-      // Group items by store to match the order structure
+  /// Get cart items grouped by store
+  static Future<Map<String, List<Map<String, dynamic>>>>
+      getCartItemsByStore() async {
+    try {
+      final cartItems = await getCartItems();
       Map<String, List<Map<String, dynamic>>> itemsByStore = {};
+
       for (var item in cartItems) {
         final storeId = item['shopId'] as String;
         if (!itemsByStore.containsKey(storeId)) {
@@ -181,102 +456,109 @@ class CartService {
         itemsByStore[storeId]!.add(item);
       }
 
-      // Create local order record for each store
-      for (var entry in itemsByStore.entries) {
-        final storeItems = entry.value;
+      return itemsByStore;
+    } catch (e) {
+      print('Error grouping cart items: $e');
+      return {};
+    }
+  }
 
-        // Create detailed item list with portion information
-        List<String> itemDescriptions = storeItems.map((item) {
-          String foodName = item['foodName'] ?? '';
-          int quantity = item['quantity'] ?? 1;
-          String portion = item['portion'] ?? 'Full';
+  /// Validate cart before checkout
+  static Future<Map<String, dynamic>> validateCart() async {
+    try {
+      final cartItems = await getCartItems();
 
-          return '$foodName x$quantity';
-        }).toList();
-
-        final localOrder = {
-          'orderId': orderId,
-          'customerId': customer.id,
-          'customerName': customer.name,
-          'shopNames': [storeItems.first['shopName']],
-          'items':
-              itemDescriptions, // Include portion information in descriptions
-          'detailedItems': storeItems, // Store complete item information
-          'totalAmount':
-              _calculateTotalAmount(storeItems, orderDetails['deliveryOption']),
-          'status': 'Pending',
-          'orderDate': DateTime.now().toIso8601String(),
-          'deliveryOption': orderDetails['deliveryOption'],
-          'paymentMethod': orderDetails['paymentMethod'],
-          'specialInstructions': orderDetails['specialInstructions'],
-          'itemCount': storeItems.fold(
-              0, (sum, item) => sum + (item['quantity'] as int)),
+      if (cartItems.isEmpty) {
+        return {
+          'isValid': false,
+          'message': 'Cart is empty',
         };
-
-        await addOrderToHistory(localOrder);
       }
+
+      // Check for any invalid items
+      bool hasInvalidItems = cartItems.any((item) =>
+          item['foodId'] == null ||
+          item['foodName'] == null ||
+          item['price'] == null ||
+          item['quantity'] == null ||
+          item['shopId'] == null);
+
+      if (hasInvalidItems) {
+        return {
+          'isValid': false,
+          'message': 'Cart contains invalid items',
+        };
+      }
+
+      return {
+        'isValid': true,
+        'itemCount':
+            cartItems.fold(0, (sum, item) => sum + (item['quantity'] as int)),
+        'totalValue': cartItems.fold(
+            0.0, (sum, item) => sum + (item['totalPrice'] as double)),
+        'storeCount': cartItems.map((item) => item['shopId']).toSet().length,
+      };
+    } catch (e) {
+      print('Error validating cart: $e');
+      return {
+        'isValid': false,
+        'message': 'Error validating cart: $e',
+      };
     }
   }
 
-  // ===============================
-  // LOCAL ORDER HISTORY (Updated with portion support)
-  // ===============================
+  /// Update item quantity in cart
+  static Future<void> updateItemQuantity(
+    String foodId,
+    String shopId,
+    int newQuantity, {
+    String? variation,
+  }) async {
+    try {
+      final cartItems = await getCartItems();
 
-  static Future<void> addOrderToHistory(Map<String, dynamic> order) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList(_orderHistoryKey) ?? [];
+      final itemIndex = cartItems.indexWhere((item) =>
+          item['foodId'] == foodId &&
+          item['shopId'] == shopId &&
+          item['variation'] == variation);
 
-    history.insert(0, json.encode(order));
+      if (itemIndex != -1) {
+        if (newQuantity <= 0) {
+          cartItems.removeAt(itemIndex);
+        } else {
+          cartItems[itemIndex]['quantity'] = newQuantity;
+          cartItems[itemIndex]['totalPrice'] =
+              cartItems[itemIndex]['price'] * newQuantity;
+        }
 
-    if (history.length > 50) {
-      history = history.take(50).toList();
+        await updateCartItems(cartItems);
+      }
+    } catch (e) {
+      print('Error updating item quantity: $e');
     }
-
-    await prefs.setStringList(_orderHistoryKey, history);
   }
 
-  static Future<List<Map<String, dynamic>>> getOrderHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> history = prefs.getStringList(_orderHistoryKey) ?? [];
+  /// Get item quantity in cart
+  static Future<int> getItemQuantity(
+    String foodId,
+    String shopId, {
+    String? variation,
+  }) async {
+    try {
+      final cartItems = await getCartItems();
 
-    return history
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
+      final item = cartItems.firstWhere(
+        (item) =>
+            item['foodId'] == foodId &&
+            item['shopId'] == shopId &&
+            item['variation'] == variation,
+        orElse: () => {},
+      );
 
-  // ===============================
-  // HELPER METHODS FOR PORTION HANDLING
-  // ===============================
-
-  /// Extract portion from food name
-  static String extractPortionFromName(String foodName) {
-    final regex = RegExp(r'\((\w+)\)$');
-    final match = regex.firstMatch(foodName);
-    return match?.group(1) ?? 'Full';
-  }
-
-  /// Remove portion from food name
-  static String removePortionName(String foodName) {
-    return foodName.replaceAll(RegExp(r'\s*\([^)]*\)\s*$'), '');
-  }
-
-  /// Check if two cart items are the same (including portion)
-  static bool isSameCartItem(
-      Map<String, dynamic> item1, Map<String, dynamic> item2) {
-    return item1['shopId'] == item2['shopId'] &&
-        item1['foodId'] == item2['foodId'] &&
-        item1['portion'] == item2['portion'];
-  }
-
-  /// Get display name for cart item with portion
-  static String getDisplayName(Map<String, dynamic> item) {
-    String foodName = item['foodName'] ?? '';
-    String portion = item['portion'] ?? 'Full';
-
-    // Remove existing portion suffix if any
-    foodName = removePortionName(foodName);
-
-    // Add portion suffix
-    return '$foodName ($portion)';
+      return item['quantity'] ?? 0;
+    } catch (e) {
+      print('Error getting item quantity: $e');
+      return 0;
+    }
   }
 }

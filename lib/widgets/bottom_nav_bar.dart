@@ -99,7 +99,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
               ),
               _buildNavItem(
                 icon: Icons.favorite,
-                label: 'Subscribed',
+                label: 'shops',
                 isSelected: widget.currentIndex == 1,
                 index: 1,
               ),
