@@ -10,6 +10,7 @@ import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:eato/utils/image_compressor.dart';
 
 class StoreDetailsPage extends StatefulWidget {
   final CustomUser currentUser;
@@ -26,9 +27,10 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
   final TextEditingController _shopContactController = TextEditingController();
   bool isPickup = true;
   XFile? _pickedImage;
+  File? _compressedImage;
   final ImagePicker _imagePicker = ImagePicker();
   bool _isLoading = false;
-  int _currentIndex = 3; // Starting with profile tab active
+  int _currentIndex = 2; // Starting with home tab active
 
   @override
   void initState() {
@@ -37,13 +39,38 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
     storeProvider.fetchUserStore(widget.currentUser);
   }
 
+  @override
+  void dispose() {
+    _shopNameController.dispose();
+    _shopContactController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
-    final pickedImage =
-        await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      setState(() {
-        _pickedImage = pickedImage;
-      });
+    try {
+      // Use Smart Compression - automatically tries different levels until it works
+      final pickedFile = await ImageCompressor.pickSmartCompressedImage(
+        source: ImageSource.gallery,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _pickedImage = pickedFile;
+          _compressedImage = File(pickedFile.path); // Use directly
+        });
+
+
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting image: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -52,34 +79,23 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
       _currentIndex = index;
     });
 
-    if (index == 3) {
+    if (index == 2) {
       // Add Food
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => AddFoodPage(
-            storeId: Provider.of<StoreProvider>(context, listen: false)
-                    .userStore
-                    ?.id ??
-                '',
+            storeId: storeProvider.userStore?.id ?? '',
           ),
         ),
       );
-    } else if (index == 4) {
+    } else if (index == 3) {
       // Profile
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ProfilePage(currentUser: widget.currentUser),
-        ),
-      );
-    } else if (index == 2) {
-      // Home (reload StoreDetailsPage)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              StoreDetailsPage(currentUser: widget.currentUser),
         ),
       );
     }
@@ -89,7 +105,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
   Widget build(BuildContext context) {
     final storeProvider = Provider.of<StoreProvider>(context);
     final userProvider = Provider.of<UserProvider>(context);
-    final currentUser = userProvider.currentUser;
+    final currentUser = userProvider.currentUser ?? widget.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -117,7 +133,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
               ),
             )
           : storeProvider.userStore == null
-              ? _buildShopDetailsForm(storeProvider, currentUser!.id)
+              ? _buildShopDetailsForm(storeProvider, currentUser.id)
               : _buildFoodPage(storeProvider),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
@@ -283,7 +299,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         color: Colors.purple.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: _pickedImage == null
+                      child: _compressedImage == null
                           ? Center(
                               child: Icon(
                                 Icons.add,
@@ -293,7 +309,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                             )
                           : ClipOval(
                               child: Image.file(
-                                File(_pickedImage!.path),
+                                _compressedImage!,
                                 width: 150,
                                 height: 150,
                                 fit: BoxFit.cover,
@@ -301,6 +317,34 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                             ),
                     ),
                   ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Tap to select image',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  // Show compressed file size
+                  if (_compressedImage != null)
+                    FutureBuilder<int>(
+                      future: _compressedImage!.length(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              'Compressed size: ${ImageCompressor.getFileSize(snapshot.data!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green[600],
+                              ),
+                            ),
+                          );
+                        }
+                        return SizedBox.shrink();
+                      },
+                    ),
                 ],
               ),
             ),
@@ -310,69 +354,9 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
             // Next Button
             Center(
               child: ElevatedButton(
-                onPressed: () async {
-                  if (_shopNameController.text.isEmpty ||
-                      _shopContactController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text('Please fill all required fields')),
-                    );
-                    return;
-                  }
-
-                  setState(() {
-                    _isLoading = true;
-                  });
-
-                  try {
-                    // Upload image to Firebase Storage if selected
-                    String imageUrl = '';
-                    if (_pickedImage != null) {
-                      final fileName =
-                          DateTime.now().millisecondsSinceEpoch.toString();
-                      final reference = FirebaseStorage.instance
-                          .ref()
-                          .child('store_images')
-                          .child('$fileName.jpg');
-
-                      await reference.putFile(File(_pickedImage!.path));
-                      imageUrl = await reference.getDownloadURL();
-                    }
-
-                    // Create the store
-                    final store = Store(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: _shopNameController.text,
-                      contact: _shopContactController.text,
-                      isPickup: isPickup,
-                      imageUrl: imageUrl,
-                      foods: [],
-                    );
-
-                    await storeProvider.createOrUpdateStore(store, userId);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Shop created successfully')),
-                    );
-
-                    // Refresh page to show the food page
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            StoreDetailsPage(currentUser: widget.currentUser),
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error creating shop: $e')),
-                    );
-                  } finally {
-                    setState(() {
-                      _isLoading = false;
-                    });
-                  }
-                },
+                onPressed: _isLoading
+                    ? null
+                    : () => _saveShopDetails(storeProvider, userId),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,
                   foregroundColor: Colors.white,
@@ -381,13 +365,90 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: Text('Next'),
+                child: _isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text('Next'),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _saveShopDetails(StoreProvider storeProvider, String userId) async {
+    if (_shopNameController.text.isEmpty ||
+        _shopContactController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please fill all required fields')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Upload image to Firebase Storage if selected
+      String imageUrl = '';
+      if (_compressedImage != null) {
+        final fileName = 'shop_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+        final reference = FirebaseStorage.instance
+            .ref()
+            .child('store_images')
+            .child('$fileName.jpg');
+
+        await reference.putFile(_compressedImage!);
+        imageUrl = await reference.getDownloadURL();
+      }
+
+      // Create the store
+      final store = Store(
+        id: userId, // Use userId for consistency
+        name: _shopNameController.text,
+        contact: _shopContactController.text,
+        isPickup: isPickup,
+        imageUrl: imageUrl,
+        foods: [],
+      );
+
+      await storeProvider.createOrUpdateStore(store, userId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Shop created successfully')),
+        );
+
+        // Refresh page to show the food page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StoreDetailsPage(
+                currentUser: widget.currentUser),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating shop: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Widget _buildFoodPage(StoreProvider storeProvider) {
@@ -532,7 +593,16 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                                 right: 40,
                                 child: GestureDetector(
                                   onTap: () {
-                                    // Handle edit functionality
+                                    // Handle edit functionality - you can navigate to EditFoodPage here
+                                    // Navigator.push(
+                                    //   context,
+                                    //   MaterialPageRoute(
+                                    //     builder: (context) => EditFoodPage(
+                                    //       storeId: storeId,
+                                    //       food: food,
+                                    //     ),
+                                    //   ),
+                                    // );
                                   },
                                   child: Container(
                                     padding: EdgeInsets.all(4),

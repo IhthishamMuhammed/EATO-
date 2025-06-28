@@ -10,6 +10,8 @@ import 'package:eato/Provider/StoreProvider.dart' as store_provider;
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+// Import the image compressor utility
+import 'package:eato/utils/image_compressor.dart'; // Add this import
 
 class StoreDetailsPage extends StatefulWidget {
   final CustomUser currentUser;
@@ -27,6 +29,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
   final TextEditingController _shopLocationController = TextEditingController();
   bool isPickup = true;
   XFile? _pickedImage;
+  File? _compressedImage;
   final ImagePicker _imagePicker = ImagePicker();
   bool _isLoading = false;
   int _currentIndex = 3; // Starting with profile tab active
@@ -71,12 +74,28 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
   }
 
   Future<void> _pickImage() async {
-    final pickedImage =
-        await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      setState(() {
-        _pickedImage = pickedImage;
-      });
+    try {
+      // Use Smart Compression - automatically tries different levels until it works
+      final pickedFile = await ImageCompressor.pickSmartCompressedImage(
+        source: ImageSource.gallery,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _pickedImage = pickedFile;
+          _compressedImage = File(pickedFile.path); // Use directly
+        });
+
+
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting image: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -227,7 +246,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
             ),
             SizedBox(height: 16),
 
-            // Shop Location Field (new)
+            // Shop Location Field
             Text(
               "Shop Location (Optional)",
               style: TextStyle(
@@ -323,7 +342,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
             ),
             SizedBox(height: 20),
 
-            // Profile Picture
+            // Shop Image
             Center(
               child: Column(
                 children: [
@@ -343,7 +362,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                         color: Colors.purple.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: _pickedImage == null
+                      child: _compressedImage == null
                           ? Center(
                               child: Icon(
                                 Icons.add,
@@ -353,7 +372,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                             )
                           : ClipOval(
                               child: Image.file(
-                                File(_pickedImage!.path),
+                                _compressedImage!,
                                 width: 150,
                                 height: 150,
                                 fit: BoxFit.cover,
@@ -361,6 +380,34 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
                             ),
                     ),
                   ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Tap to select image',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  // Show compressed file size
+                  if (_compressedImage != null)
+                    FutureBuilder<int>(
+                      future: _compressedImage!.length(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              'Compressed size: ${ImageCompressor.getFileSize(snapshot.data!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green[600],
+                              ),
+                            ),
+                          );
+                        }
+                        return SizedBox.shrink();
+                      },
+                    ),
                 ],
               ),
             ),
@@ -417,7 +464,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
     try {
       // Upload image to Firebase Storage if selected
       String imageUrl = '';
-      if (_pickedImage != null) {
+      if (_compressedImage != null) {
         final fileName =
             'shop_${userId}_${DateTime.now().millisecondsSinceEpoch}';
         final reference = FirebaseStorage.instance
@@ -425,7 +472,7 @@ class _StoreDetailsPageState extends State<StoreDetailsPage> {
             .child('store_images')
             .child('$fileName.jpg');
 
-        await reference.putFile(File(_pickedImage!.path));
+        await reference.putFile(_compressedImage!);
         imageUrl = await reference.getDownloadURL();
         print('Image uploaded successfully. URL: $imageUrl');
       }

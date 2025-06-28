@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+// Import the image compressor utility
+import 'package:eato/utils/image_compressor.dart'; // Add this import
 
 import 'dart:io' as io;
 
@@ -37,6 +40,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
   XFile? _pickedImage;
   Uint8List? _webImageData;
+  File? _compressedImageFile;
+  Uint8List? _compressedWebData;
   String? _uploadedImageUrl;
   bool _imageChanged = false;
   bool _isLoading = false;
@@ -65,7 +70,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
     // Initialize controllers with existing food data
     _nameController = TextEditingController(text: widget.food.name);
-    _priceController = TextEditingController(text: widget.food.price.toString());
+    _priceController =
+        TextEditingController(text: widget.food.price.toString());
 
     // Initialize drop-down values
     _selectedMealTime = widget.food.time;
@@ -103,9 +109,9 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
   Future<void> _pickImage() async {
     try {
-      final pickedFile = await _picker.pickImage(
+      // Use Smart Compression - automatically tries different levels until it works
+      final pickedFile = await ImageCompressor.pickSmartCompressedImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
       );
 
       if (pickedFile != null) {
@@ -119,16 +125,16 @@ class _EditFoodPageState extends State<EditFoodPage> {
           final webImageData = await pickedFile.readAsBytes();
           setState(() {
             _webImageData = webImageData;
+            _compressedWebData = webImageData; // Use directly
+          });
+        } else {
+          // Use the already optimized file directly
+          setState(() {
+            _compressedImageFile = File(pickedFile.path);
           });
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('New image selected'),
-            backgroundColor: EatoTheme.infoColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,12 +152,23 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
     try {
       final fileName = 'food_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final storageRef = FirebaseStorage.instance.ref().child('food_images/$fileName');
+      final storageRef =
+          FirebaseStorage.instance.ref().child('food_images/$fileName');
 
       if (kIsWeb) {
-        await storageRef.putData(_webImageData!);
+        // Upload compressed data for web
+        if (_compressedWebData != null) {
+          await storageRef.putData(_compressedWebData!);
+        } else {
+          await storageRef.putData(_webImageData!);
+        }
       } else {
-        await storageRef.putFile(io.File(_pickedImage!.path));
+        // Upload compressed file for mobile/desktop
+        if (_compressedImageFile != null) {
+          await storageRef.putFile(_compressedImageFile!);
+        } else {
+          await storageRef.putFile(io.File(_pickedImage!.path));
+        }
       }
 
       _uploadedImageUrl = await storageRef.getDownloadURL();
@@ -196,7 +213,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context, true); // Return true to indicate successful update
+        Navigator.pop(
+            context, true); // Return true to indicate successful update
       }
     } catch (e) {
       if (mounted) {
@@ -229,7 +247,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Discard Changes?'),
-        content: Text('You have unsaved changes. Are you sure you want to discard them?'),
+        content: Text(
+            'You have unsaved changes. Are you sure you want to discard them?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -319,15 +338,21 @@ class _EditFoodPageState extends State<EditFoodPage> {
                               child: Text(
                                 mealTime,
                                 style: TextStyle(
-                                  color: isActive ? EatoTheme.primaryColor : Colors.grey,
-                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                  color: isActive
+                                      ? EatoTheme.primaryColor
+                                      : Colors.grey,
+                                  fontWeight: isActive
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
                             ),
                             Container(
                               height: 2,
                               width: screenSize.width / _mealTimes.length - 24,
-                              color: isActive ? EatoTheme.primaryColor : Colors.transparent,
+                              color: isActive
+                                  ? EatoTheme.primaryColor
+                                  : Colors.transparent,
                             ),
                           ],
                         ),
@@ -366,10 +391,12 @@ class _EditFoodPageState extends State<EditFoodPage> {
                                     width: 150,
                                     height: 150,
                                     decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor.withOpacity(0.1),
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: EatoTheme.primaryColor.withOpacity(0.5),
+                                        color: EatoTheme.primaryColor
+                                            .withOpacity(0.5),
                                         width: 1,
                                       ),
                                     ),
@@ -384,6 +411,27 @@ class _EditFoodPageState extends State<EditFoodPage> {
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
+                                // Show compressed file size
+                                if (_pickedImage != null)
+                                  FutureBuilder<String>(
+                                    future: _getCompressedSize(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4.0),
+                                          child: Text(
+                                            'Compressed size: ${snapshot.data}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.green[600],
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return SizedBox.shrink();
+                                    },
+                                  ),
                               ],
                             ),
                           ),
@@ -411,7 +459,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           SizedBox(height: 8),
                           TextFormField(
                             controller: _priceController,
-                            keyboardType: TextInputType.numberWithOptions(decimal: true),
+                            keyboardType:
+                                TextInputType.numberWithOptions(decimal: true),
                             decoration: EatoTheme.inputDecoration(
                               hintText: 'Enter price in rupees',
                             ),
@@ -437,9 +486,10 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           Text('Food Category *', style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            value: _foodCategories.contains(_selectedFoodCategory)
-                                ? _selectedFoodCategory
-                                : _foodCategories.first,
+                            value:
+                                _foodCategories.contains(_selectedFoodCategory)
+                                    ? _selectedFoodCategory
+                                    : _foodCategories.first,
                             decoration: EatoTheme.inputDecoration(
                               hintText: 'Select food category',
                             ),
@@ -494,7 +544,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
                           SizedBox(height: 16),
 
                           // Description
-                          Text('Description (Optional)', style: EatoTheme.labelLarge),
+                          Text('Description (Optional)',
+                              style: EatoTheme.labelLarge),
                           SizedBox(height: 8),
                           TextFormField(
                             controller: _descriptionController,
@@ -514,23 +565,24 @@ class _EditFoodPageState extends State<EditFoodPage> {
                                 onPressed: _isLoading ? null : _updateFood,
                                 style: EatoTheme.primaryButtonStyle,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12.0),
                                   child: _isLoading
                                       ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
+                                        )
                                       : Text(
-                                    'Update Food',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                          'Update Food',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ),
@@ -559,7 +611,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(color: EatoTheme.primaryColor),
+                        CircularProgressIndicator(
+                            color: EatoTheme.primaryColor),
                         SizedBox(height: 16),
                         Text(
                           'Updating food item...',
@@ -580,20 +633,24 @@ class _EditFoodPageState extends State<EditFoodPage> {
     if (_pickedImage != null) {
       // Show newly picked image
       if (kIsWeb) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            _webImageData!,
-            fit: BoxFit.cover,
-            width: 150,
-            height: 150,
-          ),
-        );
+        final imageData = _compressedWebData ?? _webImageData;
+        if (imageData != null) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              imageData,
+              fit: BoxFit.cover,
+              width: 150,
+              height: 150,
+            ),
+          );
+        }
       } else {
+        final imageFile = _compressedImageFile ?? io.File(_pickedImage!.path);
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.file(
-            io.File(_pickedImage!.path),
+            imageFile,
             fit: BoxFit.cover,
             width: 150,
             height: 150,
@@ -615,7 +672,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
                     ? loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!
+                        loadingProgress.expectedTotalBytes!
                     : null,
                 strokeWidth: 2,
                 color: EatoTheme.primaryColor,
@@ -631,27 +688,44 @@ class _EditFoodPageState extends State<EditFoodPage> {
           },
         ),
       );
-    } else {
-      // Show add icon
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_photo_alternate,
-            color: EatoTheme.primaryColor,
-            size: 40,
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Add Photo',
-            style: TextStyle(
-              color: EatoTheme.primaryColor,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      );
     }
+
+    // Default fallback - Show add icon
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_photo_alternate,
+          color: EatoTheme.primaryColor,
+          size: 40,
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Add Photo',
+          style: TextStyle(
+            color: EatoTheme.primaryColor,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<String> _getCompressedSize() async {
+    if (kIsWeb) {
+      final imageData = _compressedWebData ?? _webImageData;
+      if (imageData != null) {
+        return ImageCompressor.getFileSize(imageData.length);
+      }
+    } else {
+      final imageFile = _compressedImageFile ??
+          (_pickedImage != null ? io.File(_pickedImage!.path) : null);
+      if (imageFile != null) {
+        final size = await imageFile.length();
+        return ImageCompressor.getFileSize(size);
+      }
+    }
+    return '';
   }
 
   void _showDeleteConfirmationDialog() {

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +9,7 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/Model/Food&Store.dart';
+import 'package:eato/utils/image_compressor.dart';
 
 import 'dart:io' as io; // Required for mobile/desktop File
 
@@ -33,6 +35,8 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   XFile? _pickedImage;
   Uint8List? _webImageData;
+  File? _compressedImageFile;
+  Uint8List? _compressedWebData;
   String? _uploadedImageUrl;
   bool _isLoading = false;
 
@@ -82,9 +86,9 @@ class _AddFoodPageState extends State<AddFoodPage> {
 
   Future<void> _pickImage() async {
     try {
-      final pickedFile = await _picker.pickImage(
+      // Use Smart Compression - automatically tries different levels until it works
+      final pickedFile = await ImageCompressor.pickSmartCompressedImage(
         source: ImageSource.gallery,
-        imageQuality: 85,
       );
 
       if (pickedFile != null) {
@@ -96,16 +100,14 @@ class _AddFoodPageState extends State<AddFoodPage> {
           final webImageData = await pickedFile.readAsBytes();
           setState(() {
             _webImageData = webImageData;
+            _compressedWebData = webImageData; // Use directly
+          });
+        } else {
+          // Use the already optimized file directly
+          setState(() {
+            _compressedImageFile = File(pickedFile.path);
           });
         }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Image selected successfully'),
-            backgroundColor: EatoTheme.infoColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -127,11 +129,19 @@ class _AddFoodPageState extends State<AddFoodPage> {
           FirebaseStorage.instance.ref().child('food_images/$fileName');
 
       if (kIsWeb) {
-        // Upload data for web
-        await storageRef.putData(_webImageData!);
+        // Upload compressed data for web
+        if (_compressedWebData != null) {
+          await storageRef.putData(_compressedWebData!);
+        } else {
+          await storageRef.putData(_webImageData!);
+        }
       } else {
-        // Upload file for mobile/desktop
-        await storageRef.putFile(io.File(_pickedImage!.path));
+        // Upload compressed file for mobile/desktop
+        if (_compressedImageFile != null) {
+          await storageRef.putFile(_compressedImageFile!);
+        } else {
+          await storageRef.putFile(io.File(_pickedImage!.path));
+        }
       }
 
       _uploadedImageUrl = await storageRef.getDownloadURL();
@@ -337,6 +347,27 @@ class _AddFoodPageState extends State<AddFoodPage> {
                                   'Tap to select image',
                                   style: EatoTheme.bodySmall,
                                 ),
+                                // Show compressed file size
+                                if (_pickedImage != null)
+                                  FutureBuilder<String>(
+                                    future: _getCompressedSize(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4.0),
+                                          child: Text(
+                                            'Compressed size: ${snapshot.data}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.green[600],
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return SizedBox.shrink();
+                                    },
+                                  ),
                               ],
                             ),
                           ),
@@ -542,46 +573,67 @@ class _AddFoodPageState extends State<AddFoodPage> {
     if (_pickedImage != null) {
       // Show selected image
       if (kIsWeb) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            _webImageData!,
-            fit: BoxFit.cover,
-            width: 150,
-            height: 150,
-          ),
-        );
+        final imageData = _compressedWebData ?? _webImageData;
+        if (imageData != null) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              imageData,
+              fit: BoxFit.cover,
+              width: 150,
+              height: 150,
+            ),
+          );
+        }
       } else {
+        final imageFile = _compressedImageFile ?? io.File(_pickedImage!.path);
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.file(
-            io.File(_pickedImage!.path),
+            imageFile,
             fit: BoxFit.cover,
             width: 150,
             height: 150,
           ),
         );
       }
-    } else {
-      // Show placeholder
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.add_photo_alternate,
-            color: EatoTheme.primaryColor,
-            size: 40,
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Add Photo',
-            style: TextStyle(
-              color: EatoTheme.primaryColor,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      );
     }
+
+    // Show placeholder
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_photo_alternate,
+          color: EatoTheme.primaryColor,
+          size: 40,
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Add Photo',
+          style: TextStyle(
+            color: EatoTheme.primaryColor,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<String> _getCompressedSize() async {
+    if (kIsWeb) {
+      final imageData = _compressedWebData ?? _webImageData;
+      if (imageData != null) {
+        return ImageCompressor.getFileSize(imageData.length);
+      }
+    } else {
+      final imageFile = _compressedImageFile ??
+          (_pickedImage != null ? io.File(_pickedImage!.path) : null);
+      if (imageFile != null) {
+        final size = await imageFile.length();
+        return ImageCompressor.getFileSize(size);
+      }
+    }
+    return '';
   }
 }

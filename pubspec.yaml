@@ -31,7 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -48,7 +47,9 @@ dependencies:
   google_maps_flutter: ^2.12.2
   shared_preferences: ^2.0.15
   cached_network_image: ^3.4.1
-  
+  # Added for image compression functionality
+  flutter_image_compress: ^2.3.0
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
