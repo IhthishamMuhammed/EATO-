@@ -1,3 +1,5 @@
+// File: lib/pages/EditFoodPage.dart (Updated with multi-select meal times)
+
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +30,13 @@ class _EditFoodPageState extends State<EditFoodPage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _descriptionController;
 
-  late String _selectedMealTime;
+  // ✅ NEW: Multi-select meal times
+  final Map<String, bool> _selectedMealTimes = {
+    'breakfast': false,
+    'lunch': false,
+    'dinner': false,
+  };
+
   String? _selectedMainCategory;
   String? _selectedFoodType;
 
@@ -52,83 +60,56 @@ class _EditFoodPageState extends State<EditFoodPage> {
     'Mini': false,
   };
 
-  // Same hierarchical structure as AddFoodPage
-  final Map<String, Map<String, List<String>>> _foodHierarchy = {
-    'Breakfast': {
-      'Rice and Curry': [
-        'Vegetarian',
-        'Egg',
-        'Fish',
-        'Chicken',
-        'Sausage',
-        'Beef',
-        'Mutton'
-      ],
-      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
-      'Hoppers': ['Plain', 'Egg', 'With Curry'],
-      'String Hoppers': [
-        'Plain',
-        'With Dhal Curry',
-        'With Chicken Curry',
-        'With Coconut Sambol'
-      ],
-      'Parata': ['Plain', 'Egg', 'With Curry'],
-      'Egg Rotti': ['Plain', 'Egg', 'With Curry'],
-      'Roti': ['Plain'],
-      'Sandwiches': ['Regular'],
-      'Short Eats': [
-        'Veg Roll',
-        'Egg Roll',
-        'Chicken Roll',
-        'Fish Bun',
-        'Sausage Bun'
-      ],
-      'Milk Rice (Kiribath)': ['Plain'],
-      'Bread and Omelette': ['Regular'],
-      'Toast and Jam': ['Regular'],
-      'Porridge (Kenda)': ['Regular'],
-      'Chapati': ['Plain', 'With Egg', 'With Curry']
-    },
-    'Lunch': {
-      'Rice and Curry': [
-        'Vegetarian',
-        'Egg',
-        'Omelette',
-        'Fish',
-        'Chicken',
-        'Sausage',
-        'Beef',
-        'Mutton'
-      ],
-      'Biriyani': ['Chicken', 'Mutton', 'Egg'],
-      'Fried Rice': ['Chicken', 'Seafood', 'Egg', 'Veg'],
-      'Nasi Goreng': ['Chicken', 'Egg', 'Veg'],
-      'String Hoppers': ['Plain', 'With Curry'],
-      'Vegetable Rice': ['Regular']
-    },
-    'Dinner': {
-      'Rice and Curry': [
-        'Vegetarian',
-        'Egg',
-        'Omelette',
-        'Fish',
-        'Chicken',
-        'Sausage',
-        'Beef',
-        'Mutton'
-      ],
-      'Kottu': ['Veg', 'Egg', 'Chicken'],
-      'Dosa': ['Plain', 'With Masala'],
-      'Pittu': [
-        'With Coconut Sambol',
-        'With Dhal',
-        'With Chicken Curry',
-        'With Fish'
-      ],
-      'Macaroni': ['Chicken', 'Egg', 'Sausage', 'Veg'],
-      'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
-      'Roti Meals': ['Various']
-    }
+  // ✅ UPDATED: Combined food hierarchy for all meal times
+  final Map<String, List<String>> _foodHierarchy = {
+    'Rice and Curry': [
+      'Vegetarian',
+      'Egg',
+      'Omelette',
+      'Fish',
+      'Chicken',
+      'Sausage',
+      'Beef',
+      'Mutton'
+    ],
+    'Noodles': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+    'Hoppers': ['Plain', 'Egg', 'With Curry'],
+    'String Hoppers': [
+      'Plain',
+      'With Dhal Curry',
+      'With Chicken Curry',
+      'With Coconut Sambol'
+    ],
+    'Parata': ['Plain', 'Egg', 'With Curry'],
+    'Egg Rotti': ['Plain', 'Egg', 'With Curry'],
+    'Roti': ['Plain'],
+    'Sandwiches': ['Regular'],
+    'Short Eats': [
+      'Veg Roll',
+      'Egg Roll',
+      'Chicken Roll',
+      'Fish Bun',
+      'Sausage Bun'
+    ],
+    'Milk Rice (Kiribath)': ['Plain'],
+    'Bread and Omelette': ['Regular'],
+    'Toast and Jam': ['Regular'],
+    'Porridge (Kenda)': ['Regular'],
+    'Chapati': ['Plain', 'With Egg', 'With Curry'],
+    'Biriyani': ['Chicken', 'Mutton', 'Egg'],
+    'Fried Rice': ['Chicken', 'Seafood', 'Egg', 'Veg'],
+    'Nasi Goreng': ['Chicken', 'Egg', 'Veg'],
+    'Vegetable Rice': ['Regular'],
+    'Kottu': ['Veg', 'Egg', 'Chicken'],
+    'Dosa': ['Plain', 'With Masala'],
+    'Pittu': [
+      'With Coconut Sambol',
+      'With Dhal',
+      'With Chicken Curry',
+      'With Fish'
+    ],
+    'Macaroni': ['Chicken', 'Egg', 'Sausage', 'Veg'],
+    'Roti Meals': ['Various']
   };
 
   @override
@@ -140,8 +121,8 @@ class _EditFoodPageState extends State<EditFoodPage> {
     _descriptionController =
         TextEditingController(text: widget.food.description ?? '');
 
-    // Initialize selections
-    _selectedMealTime = widget.food.time;
+    // ✅ NEW: Initialize meal time - only the current meal time is selected
+    _selectedMealTimes[widget.food.time] = true;
 
     // Parse existing category and type from food name
     _parseExistingFoodData();
@@ -156,6 +137,39 @@ class _EditFoodPageState extends State<EditFoodPage> {
 
     // Add listener to detect changes
     _descriptionController.addListener(_onFormChanged);
+
+    // ✅ NEW: Check if there are other meal time versions of this food
+    _checkForOtherMealTimeVersions();
+  }
+
+  // ✅ NEW: Check if this food exists in other meal times
+  Future<void> _checkForOtherMealTimeVersions() async {
+    try {
+      final foodsSnapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('foods')
+          .where('name', isEqualTo: widget.food.name)
+          .get();
+
+      // Check which meal times already have this food
+      for (var doc in foodsSnapshot.docs) {
+        final data = doc.data();
+        final mealTime = data['time'] as String?;
+        if (mealTime != null && _selectedMealTimes.containsKey(mealTime)) {
+          _selectedMealTimes[mealTime] = true;
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      print(
+          '🔍 [EditFoodPage] Found ${widget.food.name} in meal times: ${_getSelectedMealTimesList()}');
+    } catch (e) {
+      print('❌ [EditFoodPage] Error checking meal time versions: $e');
+    }
   }
 
   void _parseExistingFoodData() {
@@ -202,13 +216,141 @@ class _EditFoodPageState extends State<EditFoodPage> {
     });
   }
 
+  // ✅ NEW: Multi-select meal times widget
+  Widget _buildMealTimeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Available Meal Times *', style: EatoTheme.labelLarge),
+        SizedBox(height: 8),
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select when this food item will be available:',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(height: 12),
+              ...['breakfast', 'lunch', 'dinner'].map((mealTime) {
+                return Container(
+                  margin: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: _selectedMealTimes[mealTime],
+                        onChanged: (bool? value) {
+                          setState(() {
+                            _selectedMealTimes[mealTime] = value ?? false;
+                            _hasChanges = true;
+                          });
+                        },
+                        activeColor: EatoTheme.primaryColor,
+                      ),
+                      SizedBox(width: 8),
+                      Icon(
+                        _getMealTimeIcon(mealTime),
+                        size: 20,
+                        color: _selectedMealTimes[mealTime]!
+                            ? EatoTheme.primaryColor
+                            : Colors.grey,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        mealTime.toUpperCase(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _selectedMealTimes[mealTime]!
+                              ? EatoTheme.primaryColor
+                              : Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              if (_getSelectedMealTimesCount() > 0) ...[
+                SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Available during: ${_getSelectedMealTimesText()}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: EatoTheme.primaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        SizedBox(height: 16),
+      ],
+    );
+  }
+
+  IconData _getMealTimeIcon(String mealTime) {
+    switch (mealTime) {
+      case 'breakfast':
+        return Icons.free_breakfast;
+      case 'lunch':
+        return Icons.lunch_dining;
+      case 'dinner':
+        return Icons.dinner_dining;
+      default:
+        return Icons.restaurant;
+    }
+  }
+
+  int _getSelectedMealTimesCount() {
+    return _selectedMealTimes.values.where((selected) => selected).length;
+  }
+
+  String _getSelectedMealTimesText() {
+    final selected = _selectedMealTimes.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key.toUpperCase())
+        .toList();
+
+    if (selected.length == 1) {
+      return selected.first;
+    } else if (selected.length == 2) {
+      return '${selected[0]} & ${selected[1]}';
+    } else if (selected.length == 3) {
+      return 'ALL MEALS';
+    }
+    return '';
+  }
+
+  List<String> _getSelectedMealTimesList() {
+    return _selectedMealTimes.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+  }
+
   List<String> _getMainCategories() {
-    return _foodHierarchy[_selectedMealTime]?.keys.toList() ?? [];
+    return _foodHierarchy.keys.toList();
   }
 
   List<String> _getFoodTypes() {
     if (_selectedMainCategory == null) return [];
-    return _foodHierarchy[_selectedMealTime]?[_selectedMainCategory!] ?? [];
+    return _foodHierarchy[_selectedMainCategory!] ?? [];
   }
 
   void _onMainCategoryChanged(String? value) {
@@ -310,6 +452,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
     }
   }
 
+  // ✅ UPDATED: Update food for multiple meal times
   Future<void> _updateFood() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -318,6 +461,18 @@ class _EditFoodPageState extends State<EditFoodPage> {
         SnackBar(
           content: Text('Invalid store ID. Cannot update food.'),
           backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+      return;
+    }
+
+    // Validate meal times selection
+    if (_getSelectedMealTimesCount() == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select at least one meal time'),
+          backgroundColor: EatoTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
@@ -342,7 +497,6 @@ class _EditFoodPageState extends State<EditFoodPage> {
     try {
       print('🔄 [EditFoodPage] Updating food: ${widget.food.name}');
       print('📍 [EditFoodPage] Store ID: ${widget.storeId}');
-      print('🆔 [EditFoodPage] Food ID: ${widget.food.id}');
 
       // Only upload new image if changed
       if (_imageChanged) {
@@ -351,34 +505,54 @@ class _EditFoodPageState extends State<EditFoodPage> {
         print('✅ [EditFoodPage] Image uploaded: $_uploadedImageUrl');
       }
 
-      // Create updated food object
-      final updatedFood = Food(
-        id: widget.food.id,
-        name: _generateFoodName(),
-        type: _selectedFoodType ?? widget.food.type,
-        category: _selectedMainCategory ?? widget.food.category,
-        price: _getMainPrice(),
-        portionPrices: selectedPortions, // NEW: Update portion prices
-        time: _selectedMealTime,
-        imageUrl: _uploadedImageUrl ?? widget.food.imageUrl,
-        description: _descriptionController.text.trim(),
-        isAvailable: widget.food.isAvailable,
-        createdAt: widget.food.createdAt,
-      );
+      final selectedMealTimes = _getSelectedMealTimesList();
+      final currentMealTime = widget.food.time;
+      final foodName = _generateFoodName();
 
-      print(
-          '💾 [EditFoodPage] Saving to: stores/${widget.storeId}/foods/${widget.food.id}');
+      print('🍽️ [EditFoodPage] Updating for meal times: $selectedMealTimes');
+      print('🍽️ [EditFoodPage] Current meal time: $currentMealTime');
 
-      // Update food via provider
-      await Provider.of<FoodProvider>(context, listen: false)
-          .updateFood(widget.storeId, updatedFood);
+      // ✅ NEW: Handle meal time changes
 
-      print('✅ [EditFoodPage] Food updated successfully');
+      // Step 1: Delete food from meal times that are no longer selected
+      await _deleteFromUnselectedMealTimes(currentMealTime, selectedMealTimes);
+
+      // Step 2: Update or create food for selected meal times
+      for (String mealTime in selectedMealTimes) {
+        final updatedFood = Food(
+          id: mealTime == currentMealTime
+              ? widget.food.id
+              : 'food_${mealTime}_${DateTime.now().millisecondsSinceEpoch}',
+          name: foodName,
+          type: _selectedFoodType ?? widget.food.type,
+          category: _selectedMainCategory ?? widget.food.category,
+          price: _getMainPrice(),
+          portionPrices: selectedPortions,
+          time: mealTime,
+          imageUrl: _uploadedImageUrl ?? widget.food.imageUrl,
+          description: _descriptionController.text.trim(),
+          isAvailable: widget.food.isAvailable,
+          createdAt: widget.food.createdAt,
+        );
+
+        if (mealTime == currentMealTime) {
+          // Update existing food
+          await Provider.of<FoodProvider>(context, listen: false)
+              .updateFood(widget.storeId, updatedFood);
+          print('✅ [EditFoodPage] Updated existing food for $mealTime');
+        } else {
+          // Create new food for other meal times
+          await Provider.of<FoodProvider>(context, listen: false)
+              .addFood(widget.storeId, updatedFood);
+          print('✅ [EditFoodPage] Created new food for $mealTime');
+        }
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Food updated successfully'),
+            content: Text(
+                'Food updated successfully for ${selectedMealTimes.length} meal time(s)'),
             backgroundColor: EatoTheme.successColor,
             behavior: SnackBarBehavior.floating,
           ),
@@ -408,6 +582,33 @@ class _EditFoodPageState extends State<EditFoodPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  // ✅ NEW: Delete food from unselected meal times
+  Future<void> _deleteFromUnselectedMealTimes(
+      String currentMealTime, List<String> selectedMealTimes) async {
+    try {
+      // Find all versions of this food
+      final foodsSnapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('foods')
+          .where('name', isEqualTo: widget.food.name)
+          .get();
+
+      for (var doc in foodsSnapshot.docs) {
+        final data = doc.data();
+        final mealTime = data['time'] as String?;
+
+        // Delete if this meal time is no longer selected
+        if (mealTime != null && !selectedMealTimes.contains(mealTime)) {
+          await doc.reference.delete();
+          print('🗑️ [EditFoodPage] Deleted food from $mealTime');
+        }
+      }
+    } catch (e) {
+      print('❌ [EditFoodPage] Error deleting from unselected meal times: $e');
     }
   }
 
@@ -504,7 +705,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            'Edit Food - $_selectedMealTime',
+            'Edit Food',
             style: TextStyle(
               color: EatoTheme.textPrimaryColor,
               fontSize: 18,
@@ -578,6 +779,9 @@ class _EditFoodPageState extends State<EditFoodPage> {
                       ),
                     ),
                     SizedBox(height: 24),
+
+                    // ✅ NEW: Meal Time Multi-Selector
+                    _buildMealTimeSelector(),
 
                     // Main Category
                     Text('Food Category *', style: EatoTheme.labelLarge),
@@ -944,7 +1148,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
           ),
           title: Text('Delete Food Item?'),
           content: Text(
-            'Are you sure you want to delete "${widget.food.name}"? This action cannot be undone.',
+            'Are you sure you want to delete "${widget.food.name}"? This will remove it from ALL meal times. This action cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -961,7 +1165,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
                 backgroundColor: EatoTheme.errorColor,
                 foregroundColor: Colors.white,
               ),
-              child: Text('Delete'),
+              child: Text('Delete All'),
             ),
           ],
         );
@@ -969,6 +1173,7 @@ class _EditFoodPageState extends State<EditFoodPage> {
     );
   }
 
+  // ✅ UPDATED: Delete food from all meal times
   Future<void> _deleteFood() async {
     if (widget.storeId.isEmpty || widget.food.id.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -985,19 +1190,30 @@ class _EditFoodPageState extends State<EditFoodPage> {
     });
 
     try {
-      print('🗑️ [EditFoodPage] Deleting food: ${widget.food.name}');
+      print(
+          '🗑️ [EditFoodPage] Deleting all versions of food: ${widget.food.name}');
       print('📍 [EditFoodPage] From store: ${widget.storeId}');
-      print('🆔 [EditFoodPage] Food ID: ${widget.food.id}');
 
-      await Provider.of<FoodProvider>(context, listen: false)
-          .deleteFood(widget.storeId, widget.food.id);
+      // ✅ NEW: Delete all versions of this food across all meal times
+      final foodsSnapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('foods')
+          .where('name', isEqualTo: widget.food.name)
+          .get();
 
-      print('✅ [EditFoodPage] Food deleted successfully');
+      for (var doc in foodsSnapshot.docs) {
+        await doc.reference.delete();
+        print(
+            '🗑️ [EditFoodPage] Deleted ${doc.id} from ${doc.data()['time']}');
+      }
+
+      print('✅ [EditFoodPage] All versions of food deleted successfully');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Food deleted successfully'),
+            content: Text('Food deleted from all meal times'),
             backgroundColor: EatoTheme.infoColor,
             behavior: SnackBarBehavior.floating,
           ),
