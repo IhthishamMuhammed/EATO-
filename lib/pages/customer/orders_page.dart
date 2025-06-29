@@ -1,5 +1,6 @@
-// File: lib/pages/customer/OrdersPage.dart (Updated with backend integration)
+// File: lib/pages/customer/OrdersPage.dart (Fixed to handle cart data properly)
 
+import 'package:eato/pages/location/location_picker_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
@@ -8,6 +9,7 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/services/CartService.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -30,7 +32,11 @@ class _OrdersPageState extends State<OrdersPage> {
   String _specialInstructions = '';
   DateTime? _scheduledTime;
   String _paymentMethod = 'Cash on Delivery';
+
+  // Location data - ENHANCED
   String _deliveryAddress = '';
+  GeoPoint? _deliveryLocation;
+  String _locationDisplayText = '';
 
   final List<String> _paymentMethods = [
     'Cash on Delivery',
@@ -45,6 +51,7 @@ class _OrdersPageState extends State<OrdersPage> {
     _loadCartItems();
   }
 
+  // ✅ FIXED: Load cart items with proper error handling
   Future<void> _loadCartItems() async {
     setState(() {
       _isLoading = true;
@@ -52,57 +59,116 @@ class _OrdersPageState extends State<OrdersPage> {
 
     try {
       final items = await CartService.getCartItems();
+      print('📋 [OrdersPage] Loaded ${items.length} cart items');
+
+      // Debug: Print each item structure
+      for (int i = 0; i < items.length; i++) {
+        print('   Item $i: ${items[i].keys.toList()}');
+        print('   Data: ${items[i]}');
+      }
+
       setState(() {
         _cartItems = items;
         _isLoading = false;
       });
       _updateCartTotals();
     } catch (e) {
-      print('Error loading cart items: $e');
+      print('❌ [OrdersPage] Error loading cart items: $e');
       setState(() {
+        _cartItems = [];
         _isLoading = false;
       });
+
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading cart. Cart has been cleared.'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Refresh',
+              onPressed: _loadCartItems,
+              textColor: Colors.white,
+            ),
+          ),
+        );
+      }
     }
   }
 
+  // ✅ FIXED: Safe cart total calculation
   void _updateCartTotals() {
-    _totalCartItems =
-        _cartItems.fold(0, (sum, item) => sum + (item['quantity'] as int));
-    _totalCartValue = _cartItems.fold(
-        0.0, (sum, item) => sum + (item['totalPrice'] as double));
+    try {
+      _totalCartItems = 0;
+      _totalCartValue = 0.0;
+
+      for (var item in _cartItems) {
+        // Safe quantity calculation
+        final quantity = item['quantity'];
+        if (quantity != null) {
+          _totalCartItems += (quantity as num).toInt();
+        }
+
+        // Safe price calculation
+        final totalPrice = item['totalPrice'];
+        if (totalPrice != null) {
+          _totalCartValue += (totalPrice as num).toDouble();
+        }
+      }
+
+      print(
+          '📊 [OrdersPage] Cart totals - Items: $_totalCartItems, Value: $_totalCartValue');
+    } catch (e) {
+      print('❌ [OrdersPage] Error calculating totals: $e');
+      _totalCartItems = 0;
+      _totalCartValue = 0.0;
+    }
   }
 
+  // ✅ FIXED: Safe quantity update
   Future<void> _updateCartItemQuantity(int index, int change) async {
-    setState(() {
-      _cartItems[index]['quantity'] += change;
+    try {
+      final currentQuantity = (_cartItems[index]['quantity'] as num).toInt();
+      final price = (_cartItems[index]['price'] as num).toDouble();
+      final newQuantity = currentQuantity + change;
 
-      if (_cartItems[index]['quantity'] <= 0) {
-        _cartItems.removeAt(index);
-      } else {
-        _cartItems[index]['totalPrice'] =
-            _cartItems[index]['quantity'] * _cartItems[index]['price'];
-      }
-      _updateCartTotals();
-    });
+      setState(() {
+        if (newQuantity <= 0) {
+          _cartItems.removeAt(index);
+        } else {
+          _cartItems[index]['quantity'] = newQuantity;
+          _cartItems[index]['totalPrice'] = newQuantity * price;
+        }
+        _updateCartTotals();
+      });
 
-    await CartService.updateCartItems(_cartItems);
+      await CartService.updateCartItems(_cartItems);
+    } catch (e) {
+      print('❌ [OrdersPage] Error updating quantity: $e');
+      _loadCartItems(); // Reload on error
+    }
   }
 
   Future<void> _removeCartItem(int index) async {
-    setState(() {
-      _cartItems.removeAt(index);
-      _updateCartTotals();
-    });
+    try {
+      setState(() {
+        _cartItems.removeAt(index);
+        _updateCartTotals();
+      });
 
-    await CartService.updateCartItems(_cartItems);
+      await CartService.updateCartItems(_cartItems);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Item removed from cart'),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 2),
-      ),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Item removed from cart'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('❌ [OrdersPage] Error removing item: $e');
+      _loadCartItems(); // Reload on error
+    }
   }
 
   Future<void> _clearCart() async {
@@ -155,7 +221,50 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 
   // ===================================
-  // NEW BACKEND INTEGRATION
+  // LOCATION PICKER INTEGRATION
+  // ===================================
+
+  Future<void> _selectDeliveryLocation() async {
+    try {
+      final result = await Navigator.push<LocationData>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LocationPickerPage(
+            initialLocation: _deliveryLocation,
+            initialAddress: _locationDisplayText,
+          ),
+        ),
+      );
+
+      if (result != null) {
+        setState(() {
+          _deliveryLocation = result.geoPoint;
+          _locationDisplayText = result.formattedAddress;
+          _deliveryAddress =
+              result.formattedAddress; // For backward compatibility
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Delivery location selected'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error selecting location: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting location. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ===================================
+  // ENHANCED BACKEND INTEGRATION
   // ===================================
 
   Future<void> _placeOrderWithBackend() async {
@@ -168,14 +277,16 @@ class _OrdersPageState extends State<OrdersPage> {
       return;
     }
 
-    // Validate delivery address for delivery orders
-    if (_deliveryOption == 'Delivery' && _deliveryAddress.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Please enter delivery address'),
-            backgroundColor: Colors.orange),
-      );
-      return;
+    // Validate delivery location for delivery orders
+    if (_deliveryOption == 'Delivery') {
+      if (_deliveryLocation == null && _deliveryAddress.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Please select delivery location'),
+              backgroundColor: Colors.orange),
+        );
+        return;
+      }
     }
 
     // Show confirmation dialog
@@ -206,13 +317,15 @@ class _OrdersPageState extends State<OrdersPage> {
         throw Exception('User not logged in');
       }
 
-      // Place orders using the backend
-      final orderIds = await CartService.placeOrdersWithBackend(
+      // Place orders using the enhanced backend with location
+      final orderIds = await CartService.placeOrdersWithBackendLocation(
         orderProvider,
         userProvider.currentUser!,
         _cartItems,
         deliveryOption: _deliveryOption,
         deliveryAddress: _deliveryAddress,
+        deliveryLocation: _deliveryLocation,
+        locationDisplayText: _locationDisplayText,
         paymentMethod: _paymentMethod,
         specialInstructions: _specialInstructions,
         scheduledTime: _scheduledTime,
@@ -256,7 +369,8 @@ class _OrdersPageState extends State<OrdersPage> {
                 Text(
                     '${_deliveryOption == 'Delivery' ? 'Delivery' : 'Pickup'}'),
                 if (_deliveryOption == 'Delivery')
-                  Text('Address: $_deliveryAddress'),
+                  Text(
+                      'Address: ${_locationDisplayText.isNotEmpty ? _locationDisplayText : _deliveryAddress}'),
                 if (_scheduledTime != null)
                   Text(
                       'Scheduled: ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}'),
@@ -280,7 +394,12 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 
   int _getUniqueShopCount() {
-    return _cartItems.map((item) => item['shopId']).toSet().length;
+    try {
+      return _cartItems.map((item) => item['shopId']).toSet().length;
+    } catch (e) {
+      print('Error getting shop count: $e');
+      return 0;
+    }
   }
 
   void _showOrderSuccessDialog(int orderCount) {
@@ -374,6 +493,14 @@ class _OrdersPageState extends State<OrdersPage> {
               onPressed: _clearCart,
               child: Text('Clear All', style: TextStyle(color: Colors.red)),
             ),
+          // DEBUG: Add debug button
+          IconButton(
+            onPressed: () async {
+              await CartService.getCartItems();
+              _loadCartItems();
+            },
+            icon: Icon(Icons.refresh, color: Colors.blue),
+          ),
         ],
       ),
       body: Column(
@@ -425,37 +552,25 @@ class _OrdersPageState extends State<OrdersPage> {
               // Cart items
               ...List.generate(_cartItems.length,
                   (index) => _buildCartItem(_cartItems[index], index)),
-
               SizedBox(height: 16),
-
-              // Delivery options
-              _buildDeliveryOptions(),
-
+              // ENHANCED: Delivery options with location picker
+              _buildDeliveryOptionsWithLocation(),
               SizedBox(height: 16),
-
               // Special instructions
               _buildSpecialInstructions(),
-
               SizedBox(height: 16),
-
               // Schedule order
               _buildScheduleOrder(),
-
               SizedBox(height: 16),
-
               // Payment method
               _buildPaymentMethod(),
-
               SizedBox(height: 16),
-
               // Order summary
               _buildOrderSummary(),
-
               SizedBox(height: 100), // Space for bottom button
             ],
           ),
         ),
-
         // Place order button (updated)
         _buildPlaceOrderButton(),
       ],
@@ -492,9 +607,17 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  // ... (Keep all the existing build methods: _buildCartItem, _buildDeliveryOptions, etc.)
-
+  // ✅ FIXED: Safe cart item display
   Widget _buildCartItem(Map<String, dynamic> item, int index) {
+    // Safe data extraction
+    final foodName = item['foodName']?.toString() ?? 'Unknown Food';
+    final shopName = item['shopName']?.toString() ?? 'Unknown Shop';
+    final variation = item['variation']?.toString() ?? 'Regular';
+    final foodImage = item['foodImage']?.toString() ?? '';
+    final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+    final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+    final totalPrice = (item['totalPrice'] as num?)?.toDouble() ?? 0.0;
+
     return Container(
       margin: EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.all(12),
@@ -509,9 +632,9 @@ class _OrdersPageState extends State<OrdersPage> {
               // Food image
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: item['foodImage'] != null && item['foodImage'].isNotEmpty
+                child: foodImage.isNotEmpty
                     ? CachedNetworkImage(
-                        imageUrl: item['foodImage'],
+                        imageUrl: foodImage,
                         width: 60,
                         height: 60,
                         fit: BoxFit.cover,
@@ -533,22 +656,19 @@ class _OrdersPageState extends State<OrdersPage> {
                         color: Colors.grey[300],
                         child: Icon(Icons.fastfood)),
               ),
-
               SizedBox(width: 12),
-
               // Food details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['foodName'],
+                    Text(foodName,
                         style: TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 14)),
-                    Text(
-                        '${item['variation'] ?? 'Traditional'} • ${item['shopName']}',
+                    Text('$variation • $shopName',
                         style:
                             TextStyle(color: Colors.grey[600], fontSize: 12)),
-                    Text('Rs. ${item['price'].toStringAsFixed(2)} each',
+                    Text('Rs. ${price.toStringAsFixed(2)} each',
                         style: TextStyle(
                             color: Colors.purple,
                             fontSize: 12,
@@ -556,7 +676,6 @@ class _OrdersPageState extends State<OrdersPage> {
                   ],
                 ),
               ),
-
               // Remove button
               IconButton(
                 onPressed: () => _removeCartItem(index),
@@ -564,9 +683,7 @@ class _OrdersPageState extends State<OrdersPage> {
               ),
             ],
           ),
-
           SizedBox(height: 12),
-
           // Quantity controls and total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -587,7 +704,7 @@ class _OrdersPageState extends State<OrdersPage> {
                     ),
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('${item['quantity']}',
+                      child: Text('$quantity',
                           style: TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
@@ -599,18 +716,15 @@ class _OrdersPageState extends State<OrdersPage> {
                   ],
                 ),
               ),
-
               // Item total
-              Text('Rs. ${item['totalPrice'].toStringAsFixed(2)}',
+              Text('Rs. ${totalPrice.toStringAsFixed(2)}',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Colors.purple)),
             ],
           ),
-
           SizedBox(height: 8),
-
           // Item-specific instructions
           TextField(
             decoration: InputDecoration(
@@ -635,65 +749,7 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  Widget _buildDeliveryOptions() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Delivery Option',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: RadioListTile<String>(
-                  title: Text('Delivery', style: TextStyle(fontSize: 14)),
-                  subtitle:
-                      Text('To your location', style: TextStyle(fontSize: 12)),
-                  value: 'Delivery',
-                  groupValue: _deliveryOption,
-                  onChanged: (value) =>
-                      setState(() => _deliveryOption = value!),
-                  dense: true,
-                ),
-              ),
-              Expanded(
-                child: RadioListTile<String>(
-                  title: Text('Pickup', style: TextStyle(fontSize: 14)),
-                  subtitle:
-                      Text('From restaurant', style: TextStyle(fontSize: 12)),
-                  value: 'Pickup',
-                  groupValue: _deliveryOption,
-                  onChanged: (value) =>
-                      setState(() => _deliveryOption = value!),
-                  dense: true,
-                ),
-              ),
-            ],
-          ),
-          if (_deliveryOption == 'Delivery') ...[
-            SizedBox(height: 8),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Delivery Address *',
-                hintText: 'Enter your delivery address...',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                prefixIcon: Icon(Icons.location_on),
-                isDense: true,
-              ),
-              onChanged: (value) => setState(() => _deliveryAddress = value),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  // ... (Keep all your other build methods - they should work fine now)
 
   Widget _buildSpecialInstructions() {
     return TextField(
@@ -826,7 +882,6 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  // UPDATED: Place order button with backend integration
   Widget _buildPlaceOrderButton() {
     final totalAmount = _calculateTotalAmount();
 
@@ -859,7 +914,7 @@ class _OrdersPageState extends State<OrdersPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _placeOrderWithBackend, // UPDATED METHOD
+              onPressed: _placeOrderWithBackend,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple,
                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -874,6 +929,138 @@ class _OrdersPageState extends State<OrdersPage> {
                       fontWeight: FontWeight.bold)),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // Add the missing delivery options method
+  Widget _buildDeliveryOptionsWithLocation() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Delivery Option',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: RadioListTile<String>(
+                  title: Text('Delivery', style: TextStyle(fontSize: 14)),
+                  subtitle:
+                      Text('To your location', style: TextStyle(fontSize: 12)),
+                  value: 'Delivery',
+                  groupValue: _deliveryOption,
+                  onChanged: (value) =>
+                      setState(() => _deliveryOption = value!),
+                  dense: true,
+                ),
+              ),
+              Expanded(
+                child: RadioListTile<String>(
+                  title: Text('Pickup', style: TextStyle(fontSize: 14)),
+                  subtitle:
+                      Text('From restaurant', style: TextStyle(fontSize: 12)),
+                  value: 'Pickup',
+                  groupValue: _deliveryOption,
+                  onChanged: (value) =>
+                      setState(() => _deliveryOption = value!),
+                  dense: true,
+                ),
+              ),
+            ],
+          ),
+          if (_deliveryOption == 'Delivery') ...[
+            SizedBox(height: 12),
+            // ENHANCED: Location picker button
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.location_on, color: Colors.purple, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _locationDisplayText.isNotEmpty
+                              ? _locationDisplayText
+                              : _deliveryAddress.isNotEmpty
+                                  ? _deliveryAddress
+                                  : 'Select delivery location',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: (_locationDisplayText.isNotEmpty ||
+                                    _deliveryAddress.isNotEmpty)
+                                ? Colors.black87
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _selectDeliveryLocation,
+                        child: Text(
+                          (_locationDisplayText.isNotEmpty ||
+                                  _deliveryAddress.isNotEmpty)
+                              ? 'Change'
+                              : 'Select',
+                          style: TextStyle(color: Colors.purple),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_deliveryLocation != null) ...[
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.gps_fixed, color: Colors.green, size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          'GPS: ${_deliveryLocation!.latitude.toStringAsFixed(4)}, ${_deliveryLocation!.longitude.toStringAsFixed(4)}',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: 8),
+            // Fallback text input for address (backup option)
+            ExpansionTile(
+              title: Text('Or enter address manually',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              children: [
+                TextField(
+                  decoration: InputDecoration(
+                    labelText: 'Delivery Address',
+                    hintText: 'Enter your delivery address...',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    prefixIcon: Icon(Icons.edit_location),
+                    isDense: true,
+                  ),
+                  onChanged: (value) =>
+                      setState(() => _deliveryAddress = value),
+                  controller: TextEditingController(text: _deliveryAddress),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

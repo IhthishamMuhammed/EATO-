@@ -5,6 +5,7 @@ import 'package:eato/services/Firebase_Storage_Service.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/pages/customer/homepage/meal_pages.dart';
+import 'package:eato/services/navigation_stack_manager.dart';
 
 class MealCategoryPage extends StatefulWidget {
   final String?

@@ -90,7 +90,7 @@ class OrderProvider with ChangeNotifier {
         double subtotal = storeItems.fold(
             0.0, (sum, item) => sum + (item['totalPrice'] as double));
         double deliveryFee = deliveryOption == 'Delivery' ? 100.0 : 0.0;
-        double serviceFee = subtotal * 0.05;
+        double serviceFee = subtotal * 0.00;
         double totalAmount = subtotal + deliveryFee + serviceFee;
 
         // Convert cart items to order items

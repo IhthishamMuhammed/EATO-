@@ -1,159 +1,12 @@
+// File: lib/pages/customer/ShopCategoryPage.dart (FIXED VERSION)
+
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:eato/services/Firebase_Storage_Service.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
-import 'package:eato/Model/Food&Store.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-
-// ✅ Cart Service (same as before)
-class CartService {
-  static const String _cartKey = 'cart_items';
-
-  static Future<void> addToCart(Map<String, dynamic> item) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    bool itemExists = false;
-    List<Map<String, dynamic>> decodedItems = cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    // Check if same item with same portion exists
-    for (int i = 0; i < decodedItems.length; i++) {
-      if (decodedItems[i]['shopId'] == item['shopId'] &&
-          decodedItems[i]['foodId'] == item['foodId'] &&
-          decodedItems[i]['portion'] == item['portion']) {
-        // Check portion match
-        decodedItems[i]['quantity'] += 1;
-        decodedItems[i]['totalPrice'] =
-            decodedItems[i]['quantity'] * decodedItems[i]['price'];
-        itemExists = true;
-        break;
-      }
-    }
-
-    if (!itemExists) {
-      item['quantity'] = 1;
-      item['totalPrice'] = item['price'];
-      item['addedAt'] = DateTime.now().toIso8601String();
-      item['specialInstructions'] = '';
-
-      // Ensure portion field exists
-      if (!item.containsKey('portion')) {
-        item['portion'] = 'Full';
-      }
-
-      decodedItems.add(item);
-    }
-
-    List<String> encodedItems =
-        decodedItems.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-
-  static Future<int> getCartCount() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    int totalCount = 0;
-    for (String item in cartItems) {
-      Map<String, dynamic> decodedItem = json.decode(item);
-      totalCount += decodedItem['quantity'] as int;
-    }
-
-    return totalCount;
-  }
-
-  static Future<List<Map<String, dynamic>>> getCartItems() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> cartItems = prefs.getStringList(_cartKey) ?? [];
-
-    return cartItems
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-
-  static Future<void> clearCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
-  }
-
-  static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> encodedItems = items.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_cartKey, encodedItems);
-  }
-}
-
-// ✅ Subscription Service (same as before)
-class SubscriptionService {
-  static const String _subscriptionsKey = 'subscribed_shops';
-
-  static Future<void> subscribeToShop(Map<String, dynamic> shop) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    bool alreadySubscribed = false;
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    for (var subscription in decodedSubscriptions) {
-      if (subscription['shopId'] == shop['shopId']) {
-        alreadySubscribed = true;
-        break;
-      }
-    }
-
-    if (!alreadySubscribed) {
-      shop['subscribedAt'] = DateTime.now().toIso8601String();
-      decodedSubscriptions.add(shop);
-
-      List<String> encodedSubscriptions =
-          decodedSubscriptions.map((item) => json.encode(item)).toList();
-      await prefs.setStringList(_subscriptionsKey, encodedSubscriptions);
-    }
-  }
-
-  static Future<void> unsubscribeFromShop(String shopId) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    decodedSubscriptions.removeWhere((shop) => shop['shopId'] == shopId);
-
-    List<String> encodedSubscriptions =
-        decodedSubscriptions.map((item) => json.encode(item)).toList();
-    await prefs.setStringList(_subscriptionsKey, encodedSubscriptions);
-  }
-
-  static Future<bool> isSubscribed(String shopId) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    List<Map<String, dynamic>> decodedSubscriptions = subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-
-    return decodedSubscriptions.any((shop) => shop['shopId'] == shopId);
-  }
-
-  static Future<List<Map<String, dynamic>>> getSubscribedShops() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> subscriptions = prefs.getStringList(_subscriptionsKey) ?? [];
-
-    return subscriptions
-        .map((item) => Map<String, dynamic>.from(json.decode(item)))
-        .toList();
-  }
-}
+import 'package:eato/services/firebase_subscription_service.dart';
+import 'package:eato/services/CartService.dart';
 
 class ShopCategoryPage extends StatefulWidget {
   final String mealTitle;
@@ -174,7 +27,6 @@ class ShopCategoryPage extends StatefulWidget {
 class _ShopCategoryPageState extends State<ShopCategoryPage> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _shopItems = [];
-  final FirebaseStorageService _storageService = FirebaseStorageService();
   String _selectedFilter = "Best Match";
   Map<String, bool> _subscriptionStatus = {};
 
@@ -199,9 +51,14 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     });
 
     try {
+      print(
+          '🔄 [ShopCategoryPage] Loading shops for ${widget.mealTitle} in ${widget.categoryTitle}');
+
       final foodProvider = Provider.of<FoodProvider>(context, listen: false);
       final shops = await foodProvider.getShopsForMealWithDetails(
           widget.mealTitle, widget.categoryTitle);
+
+      print('✅ [ShopCategoryPage] Loaded ${shops.length} shops');
 
       setState(() {
         _shopItems = shops;
@@ -211,7 +68,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
       _sortShopItems(_shopItems, _selectedFilter);
       _loadSubscriptionStatus();
     } catch (e) {
-      print('Error loading shops data: $e');
+      print('❌ [ShopCategoryPage] Error loading shops data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -219,14 +76,28 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
   }
 
   Future<void> _loadSubscriptionStatus() async {
-    Map<String, bool> status = {};
-    for (var shop in _shopItems) {
-      final shopId = shop['shopId'];
-      status[shopId] = await SubscriptionService.isSubscribed(shopId);
+    if (!FirebaseSubscriptionService.isUserAuthenticated()) {
+      return;
     }
-    setState(() {
-      _subscriptionStatus = status;
-    });
+
+    try {
+      Map<String, bool> status = {};
+      for (var shop in _shopItems) {
+        final shopId = shop['shopId'];
+        if (shopId != null) {
+          status[shopId] =
+              await FirebaseSubscriptionService.isSubscribed(shopId);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _subscriptionStatus = status;
+        });
+      }
+    } catch (e) {
+      print('❌ [ShopCategoryPage] Error loading subscription status: $e');
+    }
   }
 
   void _sortShopItems(List<Map<String, dynamic>> items, String filter) {
@@ -271,114 +142,22 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     setState(() {});
   }
 
-  // ✅ NEW: Helper method to get lowest price from portion prices
   double _getLowestPrice(Map<String, dynamic> shop) {
     final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
     if (portionPrices.isEmpty) {
-      return shop['price'] as double;
+      return (shop['price'] as num?)?.toDouble() ?? 0.0;
     }
     return portionPrices.values.reduce((a, b) => a < b ? a : b);
   }
 
-  // ✅ NEW: Helper method to get highest price from portion prices
   double _getHighestPrice(Map<String, dynamic> shop) {
     final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
     if (portionPrices.isEmpty) {
-      return shop['price'] as double;
+      return (shop['price'] as num?)?.toDouble() ?? 0.0;
     }
     return portionPrices.values.reduce((a, b) => a > b ? a : b);
   }
 
-  // ✅ NEW: Build portion selection widget
-  Widget _buildPortionSelection(Map<String, dynamic> shop) {
-    // Extract portion prices from shop data
-    final portionPrices = shop['portionPrices'] as Map<String, double>? ?? {};
-
-    // If no portion prices, fall back to single price
-    if (portionPrices.isEmpty) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Rs. ${shop['price'].toStringAsFixed(2)}',
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purple)),
-          ElevatedButton.icon(
-            onPressed: () => _addToCartWithPortion(shop, 'Full', shop['price']),
-            icon: Icon(Icons.add_shopping_cart, size: 14, color: Colors.white),
-            label: Text('Add to Cart',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 2,
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Show portion selection dropdown
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Price range display
-        Text(
-          _getPriceRangeText(portionPrices),
-          style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.purple),
-        ),
-
-        const SizedBox(height: 8),
-
-        // Portion selection dropdown
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              hint: Text('Select portion', style: TextStyle(fontSize: 12)),
-              isExpanded: true,
-              icon: Icon(Icons.keyboard_arrow_down, size: 16),
-              items: portionPrices.entries.map((entry) {
-                final portion = entry.key;
-                final price = entry.value;
-                return DropdownMenuItem<String>(
-                  value: portion,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(portion, style: TextStyle(fontSize: 12)),
-                      Text('Rs. ${price.toStringAsFixed(2)}',
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (selectedPortion) {
-                if (selectedPortion != null) {
-                  final price = portionPrices[selectedPortion]!;
-                  _addToCartWithPortion(shop, selectedPortion, price);
-                }
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ✅ NEW: Helper method to get price range text
   String _getPriceRangeText(Map<String, double> portionPrices) {
     if (portionPrices.isEmpty) return '';
 
@@ -393,7 +172,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     }
   }
 
-  // ✅ NEW: Helper method for food type colors
   Color _getFoodTypeColor(String? foodType) {
     if (foodType == null) return Colors.purple;
 
@@ -411,27 +189,23 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     }
   }
 
-  // ✅ UPDATED: Add to cart method with portion support
   Future<void> _addToCartWithPortion(
       Map<String, dynamic> shop, String portion, double price) async {
     try {
-      final cartItem = {
-        'shopId': shop['shopId'],
-        'shopName': shop['shopName'],
-        'shopImage': shop['shopImage'],
-        'foodId': shop['foodId'],
-        'foodName': '${shop['foodName']} ($portion)', // Include portion in name
-        'foodImage': shop['foodImage'],
-        'foodType': shop['foodType'],
-        'foodCategory': shop['foodCategory'],
-        'portion': portion, // Store portion information
-        'price': price, // Use portion-specific price
-        'description': shop['description'],
-        'time': shop['time'],
-        'variation': shop['variation'],
-      };
+      print(
+          '🛒 [ShopCategoryPage] Adding to cart: ${shop['foodName']} ($portion) - Rs. $price');
 
-      await CartService.addToCart(cartItem);
+      await CartService.addToCart(
+        foodId: shop['foodId'] ?? '',
+        foodName: '${shop['foodName']} ($portion)',
+        foodImage: shop['foodImage'] ?? '',
+        price: price,
+        quantity: 1,
+        shopId: shop['shopId'] ?? '',
+        shopName: shop['shopName'] ?? '',
+        variation: portion,
+        specialInstructions: '',
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -452,73 +226,103 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
         );
       }
     } catch (e) {
-      print('Error adding to cart: $e');
+      print('❌ [ShopCategoryPage] Error adding to cart: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add item to cart'),
+            content: Text('Failed to add item to cart: $e'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
           ),
         );
       }
     }
   }
 
-  // ✅ Subscribe/Unsubscribe to shop
+  void _showAuthRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.login, color: Colors.purple),
+            SizedBox(width: 8),
+            Text('Login Required'),
+          ],
+        ),
+        content: Text(
+          'Please log in to subscribe to restaurants and get updates about their menu and offers.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushNamed(context, '/login');
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+            child: Text('Login', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleSubscription(Map<String, dynamic> shop) async {
+    if (!FirebaseSubscriptionService.isUserAuthenticated()) {
+      _showAuthRequiredDialog();
+      return;
+    }
+
     final shopId = shop['shopId'];
+    if (shopId == null) return;
+
     final isCurrentlySubscribed = _subscriptionStatus[shopId] ?? false;
 
     try {
       if (isCurrentlySubscribed) {
-        await SubscriptionService.unsubscribeFromShop(shopId);
+        await FirebaseSubscriptionService.unsubscribeFromShop(shopId);
         setState(() {
           _subscriptionStatus[shopId] = false;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.unsubscribe, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Unsubscribed from ${shop['shopName']}'),
-              ],
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unsubscribed from ${shop['shopName']}'),
+              backgroundColor: Colors.orange,
             ),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+          );
+        }
       } else {
-        await SubscriptionService.subscribeToShop(shop);
+        final shopData = {
+          'shopName': shop['shopName'] ?? 'Unknown Shop',
+          'shopImage': shop['shopImage'] ?? '',
+          'shopRating': (shop['shopRating'] ?? 0.0).toDouble(),
+          'shopContact': shop['shopContact'] ?? '',
+          'shopLocation': shop['shopLocation'] ?? 'Location not specified',
+          'isPickup': shop['isPickup'] ?? true,
+          'distance': (shop['distance'] ?? 0.0).toDouble(),
+          'deliveryTime': shop['deliveryTime'] ?? 30,
+        };
+
+        await FirebaseSubscriptionService.subscribeToShop(shopId, shopData);
         setState(() {
           _subscriptionStatus[shopId] = true;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.favorite, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Subscribed to ${shop['shopName']}'),
-              ],
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Subscribed to ${shop['shopName']}'),
+              backgroundColor: Colors.purple,
             ),
-            backgroundColor: Colors.purple,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
-      print('Error toggling subscription: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update subscription'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('❌ Error toggling subscription: $e');
     }
   }
 
@@ -536,7 +340,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header with back button and title
+                        // Header
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
@@ -596,7 +400,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                   Icon(Icons.info_outline,
                                       size: 14, color: Colors.purple.shade600),
                                   SizedBox(width: 4),
-                                  Text('Select portion size to add to cart',
+                                  Text('Tap portion size to add to cart',
                                       style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.purple.shade600)),
@@ -606,7 +410,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                           ),
                         ),
 
-                        // Filter section
+                        // Filter
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: Container(
@@ -657,18 +461,9 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          Icon(Icons.store,
-                                              size: 60,
-                                              color: Colors.grey.shade300),
-                                          Icon(Icons.close,
-                                              size: 72,
-                                              color:
-                                                  Colors.red.withOpacity(0.6)),
-                                        ],
-                                      ),
+                                      Icon(Icons.store,
+                                          size: 60,
+                                          color: Colors.grey.shade300),
                                       const SizedBox(height: 16),
                                       const Text(
                                           'No shops available for this meal',
@@ -687,16 +482,13 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                   padding: const EdgeInsets.only(bottom: 16),
                                   itemCount: _shopItems.length,
                                   itemBuilder: (context, index) {
-                                    final shop = _shopItems[index];
-                                    return _buildShopCard(shop);
+                                    return _buildShopCard(_shopItems[index]);
                                   },
                                 ),
                         ),
                       ],
                     ),
                   ),
-
-                  // Bottom nav with cart functionality
                   if (widget.showBottomNav)
                     BottomNavBar(
                       currentIndex: 0,
@@ -717,7 +509,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     return '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
   }
 
-  // ✅ UPDATED: Enhanced shop card with portion selection
   Widget _buildShopCard(Map<String, dynamic> shop) {
     final shopId = shop['shopId'];
     final isSubscribed = _subscriptionStatus[shopId] ?? false;
@@ -738,7 +529,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
       ),
       child: Column(
         children: [
-          // Shop header with subscribe button
+          // Shop header
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(
@@ -752,13 +543,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                               width: 48,
                               height: 48,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                width: 48,
-                                height: 48,
-                                color: Colors.grey[300],
-                                child: const CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.purple),
-                              ),
                               errorWidget: (context, url, error) => Container(
                                 width: 48,
                                 height: 48,
@@ -785,7 +569,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
-                          // Subscribe button
                           InkWell(
                             onTap: () => _toggleSubscription(shop),
                             child: Container(
@@ -797,35 +580,31 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                                     : Colors.grey.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: isSubscribed
-                                      ? Colors.purple
-                                      : Colors.grey,
-                                  width: 1,
-                                ),
+                                    color: isSubscribed
+                                        ? Colors.purple
+                                        : Colors.grey,
+                                    width: 1),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    isSubscribed
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    size: 14,
-                                    color: isSubscribed
-                                        ? Colors.purple
-                                        : Colors.grey,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    isSubscribed ? 'Subscribed' : 'Subscribe',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
+                                      isSubscribed
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      size: 14,
                                       color: isSubscribed
                                           ? Colors.purple
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
+                                          : Colors.grey),
+                                  SizedBox(width: 4),
+                                  Text(
+                                      isSubscribed ? 'Subscribed' : 'Subscribe',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: isSubscribed
+                                              ? Colors.purple
+                                              : Colors.grey[600])),
                                 ],
                               ),
                             ),
@@ -846,14 +625,15 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                           Icon(Icons.location_on,
                               size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 2),
-                          Text('${shop['distance'].toStringAsFixed(1)} km',
+                          Text(
+                              '${(shop['distance'] ?? 0.0).toStringAsFixed(1)} km',
                               style: TextStyle(
                                   fontSize: 12, color: Colors.grey.shade600)),
                           const SizedBox(width: 8),
                           Icon(Icons.access_time,
                               size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 2),
-                          Text('${shop['deliveryTime']} min',
+                          Text('${shop['deliveryTime'] ?? 30} min',
                               style: TextStyle(
                                   fontSize: 12, color: Colors.grey.shade600)),
                         ],
@@ -865,7 +645,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
             ),
           ),
 
-          // Food details section with portion selection
+          // Food details section
           Row(
             children: [
               ClipRRect(
@@ -877,13 +657,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                         width: 120,
                         height: 120,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          width: 120,
-                          height: 120,
-                          color: Colors.grey[300],
-                          child: const CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.purple),
-                        ),
                         errorWidget: (context, url, error) => Container(
                           width: 120,
                           height: 120,
@@ -910,7 +683,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                               fontSize: 16, fontWeight: FontWeight.bold),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
-
                       const SizedBox(height: 4),
 
                       // Food type badge
@@ -922,19 +694,15 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                               .withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _getFoodTypeColor(shop['foodType'])
-                                .withOpacity(0.3),
-                            width: 1,
-                          ),
+                              color: _getFoodTypeColor(shop['foodType'])
+                                  .withOpacity(0.3),
+                              width: 1),
                         ),
-                        child: Text(
-                          shop['foodType'] ?? 'Regular',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: _getFoodTypeColor(shop['foodType']),
-                          ),
-                        ),
+                        child: Text(shop['foodType'] ?? 'Regular',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: _getFoodTypeColor(shop['foodType']))),
                       ),
 
                       const SizedBox(height: 8),
@@ -950,7 +718,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
 
                       const SizedBox(height: 12),
 
-                      // Portion selection and pricing
+                      // FIXED: Portion selection with working add to cart buttons
                       _buildPortionSelection(shop),
                     ],
                   ),
@@ -960,6 +728,100 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPortionSelection(Map<String, dynamic> shop) {
+    // Extract portion prices and handle type conversion
+    final portionPricesRaw =
+        shop['portionPrices'] as Map<String, dynamic>? ?? {};
+    final portionPrices = <String, double>{};
+
+    // Convert all values to double
+    portionPricesRaw.forEach((key, value) {
+      portionPrices[key] = (value as num).toDouble();
+    });
+
+    // If no portion prices, show single price with add button
+    if (portionPrices.isEmpty) {
+      final price = (shop['price'] as num?)?.toDouble() ?? 0.0;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Rs. ${price.toStringAsFixed(2)}',
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purple)),
+          ElevatedButton.icon(
+            onPressed: () => _addToCartWithPortion(shop, 'Regular', price),
+            icon: Icon(Icons.add_shopping_cart, size: 14, color: Colors.white),
+            label: Text('Add',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size(70, 32),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Show portion selection with multiple buttons
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Price range display
+        Text(_getPriceRangeText(portionPrices),
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple)),
+        const SizedBox(height: 8),
+
+        // Portion selection buttons
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: portionPrices.entries.map((entry) {
+            final portion = entry.key;
+            final price = entry.value;
+
+            return SizedBox(
+              height: 36,
+              child: ElevatedButton(
+                onPressed: () => _addToCartWithPortion(shop, portion, price),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size(70, 36),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(portion,
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                    Text('Rs.${price.toStringAsFixed(0)}',
+                        style: TextStyle(fontSize: 9, color: Colors.white)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

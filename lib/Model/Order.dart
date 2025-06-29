@@ -1,4 +1,4 @@
-// File: lib/Model/Order.dart
+// File: lib/Model/Order.dart (Enhanced with location support)
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -14,6 +14,42 @@ enum OrderStatus {
 }
 
 enum OrderRequestStatus { pending, accepted, rejected }
+
+class OrderLocation {
+  final GeoPoint geoPoint;
+  final String formattedAddress;
+  final String? streetName;
+  final String? city;
+  final String? postalCode;
+
+  OrderLocation({
+    required this.geoPoint,
+    required this.formattedAddress,
+    this.streetName,
+    this.city,
+    this.postalCode,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'geoPoint': geoPoint,
+      'formattedAddress': formattedAddress,
+      'streetName': streetName,
+      'city': city,
+      'postalCode': postalCode,
+    };
+  }
+
+  factory OrderLocation.fromMap(Map<String, dynamic> map) {
+    return OrderLocation(
+      geoPoint: map['geoPoint'] as GeoPoint,
+      formattedAddress: map['formattedAddress'] ?? '',
+      streetName: map['streetName'],
+      city: map['city'],
+      postalCode: map['postalCode'],
+    );
+  }
+}
 
 class OrderItem {
   final String foodId;
@@ -41,9 +77,9 @@ class OrderItem {
       'foodId': foodId,
       'foodName': foodName,
       'foodImage': foodImage,
-      'price': price,
-      'quantity': quantity,
-      'totalPrice': totalPrice,
+      'price': price.toDouble(),
+      'quantity': quantity.toInt(),
+      'totalPrice': totalPrice.toDouble(),
       'specialInstructions': specialInstructions,
       'variation': variation,
     };
@@ -77,7 +113,11 @@ class CustomerOrder {
   final double totalAmount;
   final OrderStatus status;
   final String deliveryOption; // 'Delivery' or 'Pickup'
-  final String deliveryAddress;
+
+  // Enhanced location support
+  final String deliveryAddress; // Keep for backward compatibility
+  final OrderLocation? deliveryLocation; // New location object
+
   final String paymentMethod;
   final String? specialInstructions;
   final DateTime? scheduledTime;
@@ -102,6 +142,7 @@ class CustomerOrder {
     required this.status,
     required this.deliveryOption,
     required this.deliveryAddress,
+    this.deliveryLocation,
     required this.paymentMethod,
     this.specialInstructions,
     this.scheduledTime,
@@ -127,6 +168,7 @@ class CustomerOrder {
       'status': status.toString().split('.').last,
       'deliveryOption': deliveryOption,
       'deliveryAddress': deliveryAddress,
+      'deliveryLocation': deliveryLocation?.toMap(),
       'paymentMethod': paymentMethod,
       'specialInstructions': specialInstructions,
       'scheduledTime': scheduledTime?.toIso8601String(),
@@ -159,6 +201,10 @@ class CustomerOrder {
       status: _parseOrderStatus(data['status']),
       deliveryOption: data['deliveryOption'] ?? 'Pickup',
       deliveryAddress: data['deliveryAddress'] ?? '',
+      deliveryLocation: data['deliveryLocation'] != null
+          ? OrderLocation.fromMap(
+              data['deliveryLocation'] as Map<String, dynamic>)
+          : null,
       paymentMethod: data['paymentMethod'] ?? 'Cash on Delivery',
       specialInstructions: data['specialInstructions'],
       scheduledTime: data['scheduledTime'] != null
@@ -200,6 +246,18 @@ class CustomerOrder {
     }
   }
 
+  // Helper methods for location
+  String get displayAddress {
+    if (deliveryLocation != null) {
+      return deliveryLocation!.formattedAddress;
+    }
+    return deliveryAddress;
+  }
+
+  GeoPoint? get locationCoordinates {
+    return deliveryLocation?.geoPoint;
+  }
+
   CustomerOrder copyWith({
     String? id,
     String? customerId,
@@ -215,6 +273,7 @@ class CustomerOrder {
     OrderStatus? status,
     String? deliveryOption,
     String? deliveryAddress,
+    OrderLocation? deliveryLocation,
     String? paymentMethod,
     String? specialInstructions,
     DateTime? scheduledTime,
@@ -239,6 +298,7 @@ class CustomerOrder {
       status: status ?? this.status,
       deliveryOption: deliveryOption ?? this.deliveryOption,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      deliveryLocation: deliveryLocation ?? this.deliveryLocation,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       specialInstructions: specialInstructions ?? this.specialInstructions,
       scheduledTime: scheduledTime ?? this.scheduledTime,

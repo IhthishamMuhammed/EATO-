@@ -1,10 +1,10 @@
+import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/homepage/meal_category_page.dart'; // ✅ FIXED: Correct import path
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
-import 'package:eato/pages/customer/orders_page.dart';
-import 'package:eato/pages/customer/subscribed_page.dart';
+import 'package:eato/pages/customer/shops_page.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class CustomerHomePage extends StatefulWidget {
@@ -121,7 +121,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           currentPage = _buildHomePage(context);
           break;
         case 1:
-          currentPage = const SubscribedPage(showBottomNav: false);
+          currentPage = const ShopsPage(showBottomNav: false);
           break;
         case 2:
           currentPage = const OrdersPage(showBottomNav: false);
