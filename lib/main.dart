@@ -1,14 +1,16 @@
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
-import 'package:eato/Provider/OrderProvider.dart'; // ✅ ADD THIS IMPORT
+import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:device_preview/device_preview.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:eato/services/notification_service.dart';
 
 // Firebase configuration
 import 'SplashScreen.dart';
@@ -40,6 +42,10 @@ void main() async {
   } catch (e) {
     print('Firebase initialization error: $e'); // Log Firebase errors
   }
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await NotificationService.initialize();
 
   await FirebaseAppCheck.instance.activate(
     // For Android, use AndroidProvider.playIntegrity

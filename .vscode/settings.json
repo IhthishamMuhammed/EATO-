@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "C:/Users/User/OneDrive/Desktop/Eato/EATO/flutter/examples/hello_world/windows"
+    "cmake.sourceDirectory": "C:/Users/User/OneDrive/Desktop/Eato/EATO/flutter/examples/hello_world/windows",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }
