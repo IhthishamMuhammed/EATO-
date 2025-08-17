@@ -1,4 +1,4 @@
-// File: lib/services/CartService.dart (Enhanced with location support)
+// File: lib/services/CartService.dart (Enhanced with real-time updates and callbacks)
 
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,8 +10,16 @@ import 'package:eato/Model/Order.dart';
 class CartService {
   static const String _cartKey = 'cart_items';
 
+  // ✅ NEW: Callback for real-time cart updates
+  static Function()? onCartChanged;
+
+  // ✅ NEW: Cache for faster cart count access
+  static int? _cachedCartCount;
+  static DateTime? _lastCacheUpdate;
+  static const Duration _cacheValidDuration = Duration(seconds: 5);
+
   // ===================================
-  // EXISTING CART METHODS
+  // ENHANCED CART METHODS WITH CALLBACKS
   // ===================================
 
   /// Get cart items from local storage
@@ -32,18 +40,37 @@ class CartService {
     }
   }
 
-  /// Save cart items to local storage
+  /// Save cart items to local storage with callback
   static Future<void> updateCartItems(List<Map<String, dynamic>> items) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cartJson = json.encode(items);
       await prefs.setString(_cartKey, cartJson);
+
+      // ✅ ENHANCED: Update cache and trigger callback
+      _updateCacheAndNotify(items);
     } catch (e) {
       print('Error updating cart items: $e');
     }
   }
 
-  /// Add item to cart
+  /// ✅ NEW: Update cache and notify listeners
+  static void _updateCacheAndNotify(List<Map<String, dynamic>> items) {
+    // Update cached count
+    _cachedCartCount = items.fold<int>(0, (sum, item) {
+      final quantity = item['quantity'];
+      final quantityInt = (quantity as num?)?.toInt() ?? 0;
+      return sum + quantityInt;
+    });
+    _lastCacheUpdate = DateTime.now();
+
+    // Notify listeners
+    if (onCartChanged != null) {
+      onCartChanged!();
+    }
+  }
+
+  /// ✅ ENHANCED: Add item to cart with callback
   static Future<void> addToCart({
     required String foodId,
     required String foodName,
@@ -92,7 +119,7 @@ class CartService {
     }
   }
 
-  /// Remove item from cart
+  /// ✅ ENHANCED: Remove item from cart with callback
   static Future<void> removeFromCart(String foodId, String shopId,
       {String? variation}) async {
     try {
@@ -109,30 +136,48 @@ class CartService {
     }
   }
 
-  /// Clear entire cart
+  /// ✅ ENHANCED: Clear entire cart with callback
   static Future<void> clearCart() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_cartKey);
+
+      // ✅ ENHANCED: Clear cache and notify
+      _cachedCartCount = 0;
+      _lastCacheUpdate = DateTime.now();
+
+      if (onCartChanged != null) {
+        onCartChanged!();
+      }
     } catch (e) {
       print('Error clearing cart: $e');
     }
   }
 
-  /// Get cart item count
-  /// Get cart item count (EXPLICIT FIX)
+  /// ✅ OPTIMIZED: Fast cart count with caching
   static Future<int> getCartItemCount() async {
     try {
+      // Use cache if valid
+      if (_cachedCartCount != null &&
+          _lastCacheUpdate != null &&
+          DateTime.now().difference(_lastCacheUpdate!) < _cacheValidDuration) {
+        return _cachedCartCount!;
+      }
+
+      // Otherwise fetch from storage
       final cartItems = await getCartItems();
-      int totalCount = 0; // Explicit int variable
+      int totalCount = 0;
 
       for (var item in cartItems) {
         final quantity = item['quantity'];
         if (quantity != null) {
-          totalCount +=
-              (quantity as num).toInt(); // Cast to num first, then toInt()
+          totalCount += (quantity as num).toInt();
         }
       }
+
+      // Update cache
+      _cachedCartCount = totalCount;
+      _lastCacheUpdate = DateTime.now();
 
       return totalCount;
     } catch (e) {
@@ -141,17 +186,113 @@ class CartService {
     }
   }
 
-  /// Get cart total value (EXPLICIT FIX)
+  /// ✅ NEW: Get cart count synchronously from cache (for immediate UI updates)
+  static int getCachedCartCount() {
+    return _cachedCartCount ?? 0;
+  }
+
+  /// ✅ ENHANCED: Update item quantity with callback
+  static Future<void> updateItemQuantity(
+    String foodId,
+    String shopId,
+    int newQuantity, {
+    String? variation,
+  }) async {
+    try {
+      final cartItems = await getCartItems();
+
+      final itemIndex = cartItems.indexWhere((item) =>
+          item['foodId'] == foodId &&
+          item['shopId'] == shopId &&
+          item['variation'] == variation);
+
+      if (itemIndex != -1) {
+        if (newQuantity <= 0) {
+          cartItems.removeAt(itemIndex);
+        } else {
+          cartItems[itemIndex]['quantity'] = newQuantity;
+          cartItems[itemIndex]['totalPrice'] =
+              cartItems[itemIndex]['price'] * newQuantity;
+        }
+
+        await updateCartItems(cartItems);
+      }
+    } catch (e) {
+      print('Error updating item quantity: $e');
+    }
+  }
+
+  // ===================================
+  // QUICK ACCESS METHODS
+  // ===================================
+
+  /// ✅ NEW: Add item with immediate callback
+  static Future<void> addToCartWithCallback({
+    required String foodId,
+    required String foodName,
+    required String foodImage,
+    required double price,
+    required int quantity,
+    required String shopId,
+    required String shopName,
+    String? variation,
+    String? specialInstructions,
+  }) async {
+    await addToCart(
+      foodId: foodId,
+      foodName: foodName,
+      foodImage: foodImage,
+      price: price,
+      quantity: quantity,
+      shopId: shopId,
+      shopName: shopName,
+      variation: variation,
+      specialInstructions: specialInstructions,
+    );
+    // Callback is automatically triggered in updateCartItems
+  }
+
+  /// ✅ NEW: Remove item with immediate callback
+  static Future<void> removeFromCartWithCallback(
+    String foodId,
+    String shopId, {
+    String? variation,
+  }) async {
+    await removeFromCart(foodId, shopId, variation: variation);
+    // Callback is automatically triggered in updateCartItems
+  }
+
+  /// ✅ NEW: Clear cart with immediate callback
+  static Future<void> clearCartWithCallback() async {
+    await clearCart();
+    // Callback is automatically triggered in clearCart
+  }
+
+  /// ✅ NEW: Update quantity with immediate callback
+  static Future<void> updateItemQuantityWithCallback(
+    String foodId,
+    String shopId,
+    int newQuantity, {
+    String? variation,
+  }) async {
+    await updateItemQuantity(foodId, shopId, newQuantity, variation: variation);
+    // Callback is automatically triggered in updateCartItems
+  }
+
+  // ===================================
+  // EXISTING METHODS (unchanged)
+  // ===================================
+
+  /// Get cart total value
   static Future<double> getCartTotal() async {
     try {
       final cartItems = await getCartItems();
-      double totalValue = 0.0; // Explicit double variable
+      double totalValue = 0.0;
 
       for (var item in cartItems) {
         final totalPrice = item['totalPrice'];
         if (totalPrice != null) {
-          totalValue += (totalPrice as num)
-              .toDouble(); // Cast to num first, then toDouble()
+          totalValue += (totalPrice as num).toDouble();
         }
       }
 
@@ -167,8 +308,8 @@ class CartService {
       final prefs = await SharedPreferences.getInstance();
 
       // Clear both possible cart storage formats
-      await prefs.remove('cart_items'); // String format
-      await prefs.remove(_cartKey); // Current format
+      await prefs.remove('cart_items');
+      await prefs.remove(_cartKey);
 
       // Also try to clear any List<String> format that might exist
       List<String> keys = prefs.getKeys().toList();
@@ -177,6 +318,14 @@ class CartService {
           await prefs.remove(key);
           print('🗑️ Removed cart key: $key');
         }
+      }
+
+      // ✅ ENHANCED: Clear cache and notify
+      _cachedCartCount = 0;
+      _lastCacheUpdate = DateTime.now();
+
+      if (onCartChanged != null) {
+        onCartChanged!();
       }
 
       print('🚨 Emergency cart clear completed - All cart data removed');
@@ -192,6 +341,9 @@ class CartService {
       final allKeys = prefs.getKeys();
 
       print('=== CART STORAGE DEBUG ===');
+      print('Cached count: $_cachedCartCount');
+      print('Last cache update: $_lastCacheUpdate');
+
       for (String key in allKeys) {
         if (key.contains('cart')) {
           final value = prefs.get(key);
@@ -243,11 +395,12 @@ class CartService {
       print('❌ Error fixing cart data: $e');
     }
   }
+
   // ===================================
-  // ENHANCED ORDER PLACEMENT WITH LOCATION
+  // ENHANCED ORDER PLACEMENT WITH OPTIMIZATION
   // ===================================
 
-  /// Place orders with enhanced location support
+  /// ✅ OPTIMIZED: Place orders with enhanced location support and faster processing
   static Future<List<String>> placeOrdersWithBackendLocation(
     OrderProvider orderProvider,
     CustomUser customer,
@@ -262,7 +415,7 @@ class CartService {
   }) async {
     try {
       print(
-          '🚀 [CartService] Starting enhanced order placement with location...');
+          '🚀 [CartService] Starting optimized order placement with location...');
 
       // Group cart items by store
       Map<String, List<Map<String, dynamic>>> itemsByStore = {};
@@ -275,82 +428,32 @@ class CartService {
       }
 
       List<String> orderIds = [];
+      List<Future<String>> orderFutures = [];
 
-      // Create one order per store
+      // ✅ OPTIMIZED: Create all orders in parallel for faster processing
       for (var entry in itemsByStore.entries) {
-        final storeId = entry.key;
-        final storeItems = entry.value;
-
-        // Calculate totals for this store
-        double subtotal = storeItems.fold(
-            0.0, (sum, item) => sum + (item['totalPrice'] as double));
-        double deliveryFee = deliveryOption == 'Delivery' ? 100.0 : 0.0;
-        double serviceFee = subtotal * 0.05;
-        double totalAmount = subtotal + deliveryFee + serviceFee;
-
-        // Convert cart items to order items
-        List<OrderItem> orderItems = storeItems
-            .map((item) => OrderItem(
-                  foodId: item['foodId'] ?? '',
-                  foodName: item['foodName'] ?? '',
-                  foodImage: item['foodImage'] ?? '',
-                  price: (item['price'] as num).toDouble(),
-                  quantity: item['quantity'] as int,
-                  totalPrice: (item['totalPrice'] as num).toDouble(),
-                  specialInstructions: item['specialInstructions'],
-                  variation: item['variation'],
-                ))
-            .toList();
-
-        // Create location object if location data is provided
-        OrderLocation? orderLocation;
-        if (deliveryLocation != null) {
-          orderLocation = OrderLocation(
-            geoPoint: deliveryLocation,
-            formattedAddress: locationDisplayText ?? deliveryAddress,
-          );
-        }
-
-        // Create enhanced order with location
-        final order = CustomerOrder(
-          id: '', // Will be set by Firestore
-          customerId: customer.id,
-          customerName: customer.name,
-          customerPhone: customer.phoneNumber ?? '',
-          storeId: storeId,
-          storeName: storeItems.first['shopName'] ?? '',
-          items: orderItems,
-          subtotal: subtotal,
-          deliveryFee: deliveryFee,
-          serviceFee: serviceFee,
-          totalAmount: totalAmount,
-          status: OrderStatus.pending,
+        orderFutures.add(_createSingleOrder(
+          storeId: entry.key,
+          storeItems: entry.value,
+          customer: customer,
           deliveryOption: deliveryOption,
-          deliveryAddress: locationDisplayText ?? deliveryAddress,
-          deliveryLocation: orderLocation, // ENHANCED: Location object
+          deliveryAddress: deliveryAddress,
+          deliveryLocation: deliveryLocation,
+          locationDisplayText: locationDisplayText,
           paymentMethod: paymentMethod,
           specialInstructions: specialInstructions,
           scheduledTime: scheduledTime,
-          orderTime: DateTime.now(),
-        );
-
-        // Save to Firestore
-        final docRef = await FirebaseFirestore.instance
-            .collection('orders')
-            .add(order.toMap());
-        orderIds.add(docRef.id);
-
-        // Create order request for the store
-        await _createOrderRequest(docRef.id, order);
-
-        print('✅ [CartService] Order created for store $storeId: ${docRef.id}');
+        ));
       }
 
-      // Clear cart after successful order placement
-      await clearCart();
+      // Wait for all orders to complete
+      orderIds = await Future.wait(orderFutures);
+
+      // ✅ OPTIMIZED: Clear cart immediately with callback
+      await clearCartWithCallback();
 
       print(
-          '🎉 [CartService] Successfully created ${orderIds.length} orders with location data');
+          '🎉 [CartService] Successfully created ${orderIds.length} orders in parallel');
       return orderIds;
     } catch (e) {
       print('❌ [CartService] Error placing orders with location: $e');
@@ -358,7 +461,87 @@ class CartService {
     }
   }
 
-  /// Create order request for store owner (same as before)
+  /// ✅ NEW: Create single order (helper method for parallel processing)
+  static Future<String> _createSingleOrder({
+    required String storeId,
+    required List<Map<String, dynamic>> storeItems,
+    required CustomUser customer,
+    required String deliveryOption,
+    required String deliveryAddress,
+    GeoPoint? deliveryLocation,
+    String? locationDisplayText,
+    required String paymentMethod,
+    String? specialInstructions,
+    DateTime? scheduledTime,
+  }) async {
+    // Calculate totals for this store
+    double subtotal = storeItems.fold(
+        0.0, (sum, item) => sum + (item['totalPrice'] as double));
+    double deliveryFee = deliveryOption == 'Delivery' ? 100.0 : 0.0;
+    double serviceFee = subtotal * 0.05;
+    double totalAmount = subtotal + deliveryFee + serviceFee;
+
+    // Convert cart items to order items
+    List<OrderItem> orderItems = storeItems
+        .map((item) => OrderItem(
+              foodId: item['foodId'] ?? '',
+              foodName: item['foodName'] ?? '',
+              foodImage: item['foodImage'] ?? '',
+              price: (item['price'] as num).toDouble(),
+              quantity: item['quantity'] as int,
+              totalPrice: (item['totalPrice'] as num).toDouble(),
+              specialInstructions: item['specialInstructions'],
+              variation: item['variation'],
+            ))
+        .toList();
+
+    // Create location object if location data is provided
+    OrderLocation? orderLocation;
+    if (deliveryLocation != null) {
+      orderLocation = OrderLocation(
+        geoPoint: deliveryLocation,
+        formattedAddress: locationDisplayText ?? deliveryAddress,
+      );
+    }
+
+    // Create enhanced order with location
+    final order = CustomerOrder(
+      id: '', // Will be set by Firestore
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phoneNumber ?? '',
+      storeId: storeId,
+      storeName: storeItems.first['shopName'] ?? '',
+      items: orderItems,
+      subtotal: subtotal,
+      deliveryFee: deliveryFee,
+      serviceFee: serviceFee,
+      totalAmount: totalAmount,
+      status: OrderStatus.pending,
+      deliveryOption: deliveryOption,
+      deliveryAddress: locationDisplayText ?? deliveryAddress,
+      deliveryLocation: orderLocation,
+      paymentMethod: paymentMethod,
+      specialInstructions: specialInstructions,
+      scheduledTime: scheduledTime,
+      orderTime: DateTime.now(),
+    );
+
+    // Save to Firestore
+    final docRef = await FirebaseFirestore.instance
+        .collection('orders')
+        .add(order.toMap());
+
+    // Create order request for the store (non-blocking)
+    _createOrderRequest(docRef.id, order).catchError((e) {
+      print('❌ [CartService] Error creating order request: $e');
+    });
+
+    print('✅ [CartService] Order created for store $storeId: ${docRef.id}');
+    return docRef.id;
+  }
+
+  /// Create order request for store owner
   static Future<void> _createOrderRequest(
       String orderId, CustomerOrder order) async {
     try {
@@ -406,7 +589,7 @@ class CartService {
       cartItems,
       deliveryOption: deliveryOption,
       deliveryAddress: deliveryAddress,
-      deliveryLocation: null, // No location data in legacy method
+      deliveryLocation: null,
       locationDisplayText: null,
       paymentMethod: paymentMethod,
       specialInstructions: specialInstructions,
@@ -415,7 +598,7 @@ class CartService {
   }
 
   // ===================================
-  // UTILITY METHODS
+  // UTILITY METHODS (unchanged)
   // ===================================
 
   /// Check if cart contains items from specific store
@@ -504,37 +687,6 @@ class CartService {
         'isValid': false,
         'message': 'Error validating cart: $e',
       };
-    }
-  }
-
-  /// Update item quantity in cart
-  static Future<void> updateItemQuantity(
-    String foodId,
-    String shopId,
-    int newQuantity, {
-    String? variation,
-  }) async {
-    try {
-      final cartItems = await getCartItems();
-
-      final itemIndex = cartItems.indexWhere((item) =>
-          item['foodId'] == foodId &&
-          item['shopId'] == shopId &&
-          item['variation'] == variation);
-
-      if (itemIndex != -1) {
-        if (newQuantity <= 0) {
-          cartItems.removeAt(itemIndex);
-        } else {
-          cartItems[itemIndex]['quantity'] = newQuantity;
-          cartItems[itemIndex]['totalPrice'] =
-              cartItems[itemIndex]['price'] * newQuantity;
-        }
-
-        await updateCartItems(cartItems);
-      }
-    } catch (e) {
-      print('Error updating item quantity: $e');
     }
   }
 

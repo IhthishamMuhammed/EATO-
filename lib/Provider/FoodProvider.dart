@@ -200,6 +200,131 @@ class FoodProvider with ChangeNotifier {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getShopsForMealWithDetails(
+      String mealTitle, String category) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      print(
+          '🔍 [FoodProvider] Getting shops with details for meal: $mealTitle in category: $category');
+
+      // First, get all stores
+      final storesSnapshot = await _firestore.collection('stores').get();
+      List<Map<String, dynamic>> detailedShops = [];
+
+      // For each store, check if they have the specified food
+      for (var storeDoc in storesSnapshot.docs) {
+        try {
+          Store store = Store.fromFirestore(storeDoc);
+
+          // Skip inactive stores
+          if (!store.isActive || !(store.isAvailable ?? true)) {
+            continue;
+          }
+
+          // Get foods from this store that match the meal title and category
+          final foodsSnapshot = await _firestore
+              .collection('stores')
+              .doc(storeDoc.id)
+              .collection('foods')
+              .where('name', isEqualTo: mealTitle)
+              .where('category', isEqualTo: category)
+              .where('isAvailable', isEqualTo: true)
+              .get();
+
+          // If this store offers the meal, add it to the result with details
+          for (var foodDoc in foodsSnapshot.docs) {
+            Food food = Food.fromFirestore(foodDoc);
+
+            // Calculate estimated delivery time (you can customize this logic)
+            int estimatedDeliveryTime = _calculateDeliveryTime(store);
+
+            // Get store rating (with fallback)
+            double storeRating = store.rating ?? 4.0;
+
+            // Check if store offers delivery/pickup
+            bool hasDelivery = store.isDelivery ?? true;
+            bool hasPickup = store.isPickup ?? true;
+
+            detailedShops.add({
+              'store': store,
+              'food': food,
+              'storeId': store.id,
+              'storeName': store.name,
+              'storeRating': storeRating,
+              'storeImageUrl': store.imageUrl ?? '',
+              'storeLocation': store.location ?? 'Location not specified',
+              'storeContact': store.contact ?? '',
+              'hasDelivery': hasDelivery,
+              'hasPickup': hasPickup,
+              'estimatedDeliveryTime': estimatedDeliveryTime,
+              'distance': _calculateDistance(store), // You can implement this
+              'foodPrice': food.price,
+              'foodPortionPrices':
+                  food.portionPrices, // Use existing portionPrices structure
+              'foodImageUrl': food.imageUrl ?? '',
+              'foodDescription': food.description ?? '',
+              'isSubscribed': false, // You can implement subscription check
+            });
+          }
+        } catch (e) {
+          print('⚠️ [FoodProvider] Error processing store ${storeDoc.id}: $e');
+          continue;
+        }
+      }
+
+      // Sort by rating and delivery time
+      detailedShops.sort((a, b) {
+        // Primary sort by rating (highest first)
+        int ratingComparison =
+            (b['storeRating'] as double).compareTo(a['storeRating'] as double);
+        if (ratingComparison != 0) return ratingComparison;
+
+        // Secondary sort by delivery time (fastest first)
+        return (a['estimatedDeliveryTime'] as int)
+            .compareTo(b['estimatedDeliveryTime'] as int);
+      });
+
+      _isLoading = false;
+      notifyListeners();
+
+      print(
+          '✅ [FoodProvider] Found ${detailedShops.length} shops offering $mealTitle');
+      return detailedShops;
+    } catch (e) {
+      _error = e.toString();
+      print('❌ [FoodProvider] Error getting shops with details: $_error');
+      _isLoading = false;
+      notifyListeners();
+      return [];
+    }
+  }
+
+// Helper method to calculate estimated delivery time
+  int _calculateDeliveryTime(Store store) {
+    // You can customize this logic based on:
+    // - Store location vs customer location
+    // - Current order volume
+    // - Time of day
+    // - Store's average preparation time
+
+    // For now, return a random time between 20-45 minutes
+    return 20 +
+        (store.name.length % 25); // Simple pseudo-random based on store name
+  }
+
+// Helper method to calculate distance (placeholder)
+  double _calculateDistance(Store store) {
+    // You can implement actual distance calculation here using:
+    // - Customer's current location
+    // - Store's location (store.location)
+    // - Google Maps API or similar
+
+    // For now, return a placeholder distance
+    return 1.5 + (store.name.length % 30) / 10; // Simple pseudo-distance
+  }
+
   // Update an existing food
   Future<void> updateFood(String storeId, Food updatedFood) async {
     if (storeId.isEmpty || updatedFood.id.isEmpty) {
@@ -377,6 +502,7 @@ class FoodProvider with ChangeNotifier {
 
       print(
           '✅ [FoodProvider] Found ${uniqueMeals.length} unique meals for $category${mealTime != null ? ' at $mealTime' : ''}');
+
       return uniqueMeals;
     } catch (e) {
       _error = e.toString();
@@ -702,87 +828,6 @@ class FoodProvider with ChangeNotifier {
   }
 
 // Enhanced method to get shops with better sorting options
-  Future<List<Map<String, dynamic>>> getShopsForMealWithDetails(
-      String mealTitle, String category) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      print('🏪 [FoodProvider] Getting shops for: $mealTitle in $category');
-
-      final storesSnapshot = await _firestore.collection('stores').get();
-      List<Map<String, dynamic>> shopItems = [];
-
-      for (var storeDoc in storesSnapshot.docs) {
-        try {
-          Store store = Store.fromFirestore(storeDoc);
-
-          // Skip inactive stores
-          if (!store.isActive || !(store.isAvailable ?? true)) {
-            continue;
-          }
-
-          // Get foods from this store that match criteria
-          final foodsSnapshot = await _firestore
-              .collection('stores')
-              .doc(storeDoc.id)
-              .collection('foods')
-              .where('name', isEqualTo: mealTitle)
-              .where('category', isEqualTo: category)
-              .where('isAvailable', isEqualTo: true)
-              .get();
-
-          for (var foodDoc in foodsSnapshot.docs) {
-            Food food = Food.fromFirestore(foodDoc);
-
-            // Calculate additional details
-            final distance = _calculateMockDistance(store.coordinates);
-            final deliveryTime = _estimateDeliveryTime(distance);
-
-            shopItems.add({
-              'shopId': store.id,
-              'shopName': store.name,
-              'shopImage': store.imageUrl,
-              'shopRating': store.rating ?? 4.0,
-              'shopContact': store.contact,
-              'shopLocation': store.location ?? 'Location not specified',
-              'isPickup': store.isPickup,
-              'foodId': food.id,
-              'foodName': food.name,
-              'foodImage': food.imageUrl,
-              'foodType': food.type,
-              'foodCategory': food.category,
-              'price': food.price, // Keep for backward compatibility
-              'portionPrices':
-                  food.portionPrices, // NEW: Include portion prices
-              'description': food.description ?? 'No description available',
-              'time': food.time,
-              'distance': distance,
-              'deliveryTime': deliveryTime,
-              'variation': _getVariationName(food.type),
-              'availabilityScore': _calculateAvailabilityScore(store, food),
-            });
-          }
-        } catch (e) {
-          print('⚠️ [FoodProvider] Error processing store ${storeDoc.id}: $e');
-          continue;
-        }
-      }
-
-      _isLoading = false;
-      notifyListeners();
-
-      print(
-          '✅ [FoodProvider] Found ${shopItems.length} shops offering $mealTitle');
-      return shopItems;
-    } catch (e) {
-      _error = e.toString();
-      print('❌ [FoodProvider] Error getting shops for meal: $_error');
-      _isLoading = false;
-      notifyListeners();
-      return [];
-    }
-  }
 
 // Helper methods for enhanced shop details
   double _calculateMockDistance(dynamic coordinates) {

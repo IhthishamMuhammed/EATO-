@@ -1,9 +1,14 @@
-// File: lib/pages/customer/shop_menu_modal.dart (FIXED VERSION)
+// FILE: lib/pages/customer/shop_menu_modal.dart
+// Fixed version with cart confirmation modal instead of direct additions
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/services/CartService.dart';
+import 'package:eato/services/firebase_subscription_service.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/EatoComponents.dart';
 
 class ShopMenuModal extends StatefulWidget {
   final String shopId;
@@ -22,16 +27,18 @@ class ShopMenuModal extends StatefulWidget {
 class _ShopMenuModalState extends State<ShopMenuModal>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   Map<String, dynamic>? _shop;
-  bool _isLoading = true;
-  String? _error;
-  String _selectedMealTime = 'breakfast';
-  String _selectedCategory = '';
   List<String> _availableCategories = [];
   List<Map<String, dynamic>> _currentFoods = [];
+  String _selectedMealTime = 'Breakfast';
+  String _selectedCategory = '';
+  bool _isLoading = true;
+  String? _error;
+  bool _isSubscribed = false;
 
-  final List<String> _mealTimes = ['breakfast', 'lunch', 'dinner'];
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
 
   @override
   void initState() {
@@ -52,29 +59,23 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     if (_tabController.indexIsChanging) {
       setState(() {
         _selectedMealTime = _mealTimes[_tabController.index];
-        _selectedCategory = '';
-        _currentFoods = []; // Clear current foods
+        _selectedCategory = ''; // Reset category when meal time changes
       });
       _loadCategoriesForMealTime();
     }
   }
 
   Future<void> _loadShopData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
     try {
-      print('🔄 [ShopMenuModal] Loading shop data for: ${widget.shopId}');
+      print('🏪 [ShopMenuModal] Loading shop data for ${widget.shopId}');
 
       // Load shop details
-      final storeDoc =
+      final shopDoc =
           await _firestore.collection('stores').doc(widget.shopId).get();
 
-      if (storeDoc.exists) {
-        _shop = storeDoc.data();
-        _shop!['id'] = storeDoc.id;
+      if (shopDoc.exists) {
+        _shop = shopDoc.data();
+        _shop!['id'] = shopDoc.id;
         print('✅ [ShopMenuModal] Shop loaded: ${_shop!['name']}');
       } else {
         _shop = {
@@ -91,6 +92,9 @@ class _ShopMenuModalState extends State<ShopMenuModal>
         print('⚠️ [ShopMenuModal] Shop not found, using default data');
       }
 
+      // Load subscription status
+      await _loadSubscriptionStatus();
+
       // Load categories and foods for the default meal time
       await _loadCategoriesForMealTime();
     } catch (e) {
@@ -102,6 +106,18 @@ class _ShopMenuModalState extends State<ShopMenuModal>
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadSubscriptionStatus() async {
+    try {
+      final isSubscribed =
+          await FirebaseSubscriptionService.isSubscribed(widget.shopId);
+      setState(() {
+        _isSubscribed = isSubscribed;
+      });
+    } catch (e) {
+      print('⚠️ [ShopMenuModal] Error loading subscription status: $e');
     }
   }
 
@@ -131,9 +147,6 @@ class _ShopMenuModalState extends State<ShopMenuModal>
         allFoods.add(data);
 
         final category = data['category'] as String?;
-        print(
-            '   - Food: ${data['name']}, Category: $category, Available: ${data['isAvailable']}');
-
         if (category != null && category.isNotEmpty) {
           categories.add(category);
         }
@@ -167,14 +180,14 @@ class _ShopMenuModalState extends State<ShopMenuModal>
 
     try {
       print(
-          '🍽️ [ShopMenuModal] Loading foods for $_selectedMealTime > $_selectedCategory');
+          '🍽️ [ShopMenuModal] Loading foods for $_selectedCategory at $_selectedMealTime');
 
       final foodsSnapshot = await _firestore
           .collection('stores')
           .doc(widget.shopId)
           .collection('foods')
-          .where('time', isEqualTo: _selectedMealTime)
           .where('category', isEqualTo: _selectedCategory)
+          .where('time', isEqualTo: _selectedMealTime)
           .where('isAvailable', isEqualTo: true)
           .get();
 
@@ -183,7 +196,6 @@ class _ShopMenuModalState extends State<ShopMenuModal>
         final data = doc.data();
         data['id'] = doc.id;
         foods.add(data);
-        print('   - Added food: ${data['name']} - Rs.${data['price']}');
       }
 
       setState(() {
@@ -197,296 +209,330 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     }
   }
 
-  IconData _getMealTimeIcon(String mealTime) {
-    switch (mealTime.toLowerCase()) {
-      case 'breakfast':
-        return Icons.free_breakfast;
-      case 'lunch':
-        return Icons.lunch_dining;
-      case 'dinner':
-        return Icons.dinner_dining;
-      default:
-        return Icons.restaurant;
+  void _onCategorySelected(String category) {
+    if (_selectedCategory != category) {
+      setState(() {
+        _selectedCategory = category;
+      });
+      _loadFoodsForCategoryAndTime();
     }
+  }
+
+  // ✅ FIXED: Show cart modal instead of direct addition
+  Future<void> _addToCart(Map<String, dynamic> foodData) async {
+    try {
+      // Convert food data to portionPrices format
+      final portionPrices = foodData['portionPrices'] as Map<String, dynamic>?;
+      final convertedPortionPrices = <String, double>{};
+
+      if (portionPrices != null) {
+        portionPrices.forEach((key, value) {
+          convertedPortionPrices[key] = (value as num).toDouble();
+        });
+      }
+
+      // Show the cart confirmation modal using EatoComponents
+      await EatoComponents.showAddToCartModal(
+        context: context,
+        foodName: foodData['name'],
+        foodImage: foodData['imageUrl'] ?? '',
+        basePrice: (foodData['price'] as num).toDouble(),
+        portionPrices: convertedPortionPrices,
+        description: foodData['description'],
+        onAddToCart: (portion, quantity, instructions) async {
+          // Calculate the effective price (from portion or base price)
+          final effectivePrice = convertedPortionPrices[portion] ??
+              (foodData['price'] as num).toDouble();
+
+          // Add to cart using CartService with correct parameters
+          await CartService.addToCart(
+            foodId: foodData['id'],
+            foodName: foodData['name'],
+            foodImage: foodData['imageUrl'] ?? '',
+            price: effectivePrice,
+            quantity: quantity,
+            shopId: widget.shopId,
+            shopName: _shop!['name'],
+            variation: portion.isNotEmpty ? portion : null,
+            specialInstructions: instructions ?? '',
+          );
+        },
+      );
+
+      // Optional: Update UI or show feedback
+      setState(() {
+        // Could update cart count or other UI elements
+      });
+    } catch (e) {
+      print('❌ [ShopMenuModal] Error showing cart modal: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleSubscription() async {
+    try {
+      if (_isSubscribed) {
+        await FirebaseSubscriptionService.unsubscribeFromShop(widget.shopId);
+      } else {
+        // Prepare shop data for subscription
+        final shopData = {
+          'shopName': _shop!['name'],
+          'shopImage': _shop!['imageUrl'] ?? '',
+          'shopRating': (_shop!['rating'] as num?)?.toDouble() ?? 0.0,
+          'shopContact': _shop!['contact'] ?? '',
+          'shopLocation': _shop!['location'] ?? 'Location not specified',
+          'isPickup': _shop!['isPickup'] ?? true,
+          'distance': 2.5, // Mock distance
+          'deliveryTime': 30, // Mock time
+        };
+
+        await FirebaseSubscriptionService.subscribeToShop(
+            widget.shopId, shopData);
+      }
+
+      setState(() {
+        _isSubscribed = !_isSubscribed;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isSubscribed ? 'Subscribed!' : 'Unsubscribed'),
+          backgroundColor:
+              _isSubscribed ? EatoTheme.successColor : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      print('❌ [ShopMenuModal] Error toggling subscription: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating subscription'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  String _getPriceDisplayText(Map<String, dynamic> foodData) {
+    final portionPrices = foodData['portionPrices'] as Map<String, dynamic>?;
+
+    if (portionPrices != null && portionPrices.isNotEmpty) {
+      // Find the cheapest portion
+      double minPrice = portionPrices.values
+          .map((price) => (price as num).toDouble())
+          .reduce((a, b) => a < b ? a : b);
+
+      if (portionPrices.length > 1) {
+        return 'From ₹${minPrice.toStringAsFixed(2)}';
+      } else {
+        return '₹${minPrice.toStringAsFixed(2)}';
+      }
+    }
+
+    final price = (foodData['price'] as num).toDouble();
+    return '₹${price.toStringAsFixed(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
           // Handle bar
           Container(
+            margin: const EdgeInsets.only(top: 8),
             width: 40,
             height: 4,
-            margin: EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: Colors.grey[300],
               borderRadius: BorderRadius.circular(2),
             ),
           ),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? _buildLoadingState()
-                : _error != null
-                    ? _buildErrorState()
-                    : _buildMenuContent(),
-          ),
-        ],
-      ),
-    );
-  }
+          if (_isLoading)
+            const Expanded(
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                ),
+              ),
+            )
+          else if (_error != null)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline,
+                          size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: EatoTheme.bodyMedium.copyWith(
+                          color: EatoTheme.textSecondaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            // Shop Header
+            _buildShopHeader(),
 
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(color: Colors.purple),
-          SizedBox(height: 16),
-          Text('Loading menu...',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
-        ],
-      ),
-    );
-  }
+            // Meal Time Tabs
+            _buildMealTimeTabs(),
 
-  Widget _buildErrorState() {
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red),
-            SizedBox(height: 16),
-            Text('Oops! Something went wrong',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32),
-              child: Text(_error ?? 'Failed to load shop menu',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
-            ),
-            SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadShopData,
-              icon: Icon(Icons.refresh, color: Colors.white),
-              label: Text('Try Again', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+            // Category Selection (if categories available)
+            if (_availableCategories.isNotEmpty) _buildCategorySelection(),
+
+            // Foods List
+            Expanded(
+              child: _currentFoods.isEmpty
+                  ? _buildEmptyState()
+                  : _buildFoodsList(),
             ),
           ],
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildMenuContent() {
-    return Column(
-      children: [
-        // Shop header
-        _buildShopHeader(),
-        // Tab bar
-        _buildTabBar(),
-        // Content
-        Expanded(child: _buildTabBarView()),
-      ],
     );
   }
 
   Widget _buildShopHeader() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          // Shop image
+          // Shop Image
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: (_shop?['imageUrl']?.isNotEmpty == true)
+            borderRadius: BorderRadius.circular(8),
+            child: _shop!['imageUrl'] != null && _shop!['imageUrl'].isNotEmpty
                 ? CachedNetworkImage(
                     imageUrl: _shop!['imageUrl'],
                     width: 60,
                     height: 60,
                     fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 60,
+                      height: 60,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.store),
+                    ),
                     errorWidget: (context, url, error) => Container(
                       width: 60,
                       height: 60,
-                      color: Colors.purple.shade100,
-                      child: Icon(Icons.store, color: Colors.purple),
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.store),
                     ),
                   )
                 : Container(
                     width: 60,
                     height: 60,
-                    color: Colors.purple.shade100,
-                    child: Icon(Icons.store, color: Colors.purple),
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.store),
                   ),
           ),
-          SizedBox(width: 16),
-          // Shop details
+          const SizedBox(width: 12),
+
+          // Shop Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_shop?['name'] ?? widget.shopName ?? 'Restaurant',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 4),
-                if ((_shop?['rating'] ?? 0) > 0) ...[
+                Text(
+                  _shop!['name'],
+                  style: EatoTheme.headingMedium,
+                ),
+                const SizedBox(height: 4),
+                if (_shop!['location'] != null && _shop!['location'].isNotEmpty)
+                  Text(
+                    _shop!['location'],
+                    style: EatoTheme.bodySmall.copyWith(
+                      color: EatoTheme.textSecondaryColor,
+                    ),
+                  ),
+                if (_shop!['rating'] != null) ...[
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       Icon(Icons.star, color: Colors.amber, size: 16),
-                      SizedBox(width: 4),
-                      Text('${(_shop?['rating'] ?? 0.0).toStringAsFixed(1)}',
-                          style: TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(
+                        (_shop!['rating'] as num).toStringAsFixed(1),
+                        style: EatoTheme.bodySmall,
+                      ),
                     ],
                   ),
                 ],
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                          _shop?['location'] ?? 'Location not specified',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
-          // Subscribe button
+
+          // Subscription Button
           IconButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Subscription feature coming soon!')),
-              );
-            },
-            icon: Icon(Icons.favorite_border, color: Colors.purple),
+            onPressed: _toggleSubscription,
+            icon: Icon(
+              _isSubscribed
+                  ? Icons.notifications
+                  : Icons.notifications_outlined,
+              color: _isSubscribed ? EatoTheme.primaryColor : Colors.grey,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: Colors.purple,
-        labelColor: Colors.purple,
-        unselectedLabelColor: Colors.grey,
-        labelStyle: TextStyle(fontWeight: FontWeight.w600),
-        tabs: _mealTimes.map((time) {
-          return Tab(
-            text: time.toUpperCase(),
-            icon: Icon(_getMealTimeIcon(time)),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTabBarView() {
-    return TabBarView(
-      controller: _tabController,
-      children: _mealTimes.map((mealTime) {
-        return _buildMealTimeContent(mealTime);
-      }).toList(),
-    );
-  }
-
-  Widget _buildMealTimeContent(String mealTime) {
-    // Only show content for the currently selected meal time
-    if (mealTime != _selectedMealTime) {
-      return Center(
-          child: Text('Switch to $_selectedMealTime tab to see content'));
-    }
-
-    if (_availableCategories.isEmpty && _currentFoods.isEmpty) {
-      return _buildEmptyMealTime(mealTime);
-    }
-
-    return Column(
-      children: [
-        // Category selector (if more than one category)
-        if (_availableCategories.length > 1) _buildCategorySelector(),
-
-        // Debug info
-        Padding(
-          padding: EdgeInsets.all(8),
-          child: Text(
-            'Categories: ${_availableCategories.length}, Foods: ${_currentFoods.length}',
-            style: TextStyle(fontSize: 10, color: Colors.grey),
-          ),
-        ),
-
-        // Food items
-        Expanded(
-          child:
-              _currentFoods.isEmpty ? _buildEmptyCategory() : _buildFoodGrid(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCategorySelector() {
+  Widget _buildMealTimeTabs() {
     return Container(
       height: 50,
-      padding: EdgeInsets.symmetric(vertical: 8),
+      child: TabBar(
+        controller: _tabController,
+        labelColor: EatoTheme.primaryColor,
+        unselectedLabelColor: Colors.grey,
+        indicatorColor: EatoTheme.primaryColor,
+        tabs: _mealTimes.map((time) => Tab(text: time)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCategorySelection() {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 16),
         itemCount: _availableCategories.length,
         itemBuilder: (context, index) {
           final category = _availableCategories[index];
-          final isSelected = category == _selectedCategory;
+          final isSelected = _selectedCategory == category;
 
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedCategory = category;
-              });
-              _loadFoodsForCategoryAndTime();
-            },
-            child: Container(
-              margin: EdgeInsets.only(right: 12),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.purple : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: isSelected ? Colors.purple : Colors.grey.shade300),
-              ),
-              child: Center(
-                child: Text(
-                  category,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey.shade700,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 12,
-                  ),
-                ),
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilterChip(
+              label: Text(category),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) _onCategorySelected(category);
+              },
+              backgroundColor: Colors.grey[200],
+              selectedColor: EatoTheme.primaryColor.withOpacity(0.2),
+              labelStyle: TextStyle(
+                color: isSelected ? EatoTheme.primaryColor : Colors.black,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           );
@@ -495,315 +541,180 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     );
   }
 
-  Widget _buildFoodGrid() {
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.restaurant_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No ${_selectedMealTime.toLowerCase()} items available',
+              textAlign: TextAlign.center,
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
+            ),
+            if (_availableCategories.isNotEmpty &&
+                _selectedCategory.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'in $_selectedCategory category',
+                textAlign: TextAlign.center,
+                style: EatoTheme.bodySmall.copyWith(
+                  color: EatoTheme.textSecondaryColor,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFoodsList() {
     return ListView.builder(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       itemCount: _currentFoods.length,
       itemBuilder: (context, index) {
-        return _buildFoodCard(_currentFoods[index]);
+        final food = _currentFoods[index];
+        return _buildFoodCard(food);
       },
     );
   }
 
   Widget _buildFoodCard(Map<String, dynamic> food) {
-    // Extract portion prices
-    final portionPrices = food['portionPrices'] as Map<String, dynamic>? ?? {};
-    final hasPortions = portionPrices.isNotEmpty;
-    final basePrice = (food['price'] ?? 0.0).toDouble();
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
       ),
-      child: Row(
-        children: [
-          // Food image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: (food['imageUrl']?.isNotEmpty == true)
-                ? CachedNetworkImage(
-                    imageUrl: food['imageUrl'],
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorWidget: (context, url, error) => Container(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Food Image
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: food['imageUrl'] != null && food['imageUrl'].isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: food['imageUrl'],
                       width: 80,
                       height: 80,
-                      color: Colors.grey.shade200,
-                      child: Icon(Icons.fastfood, color: Colors.grey),
-                    ),
-                  )
-                : Container(
-                    width: 80,
-                    height: 80,
-                    color: Colors.grey.shade200,
-                    child: Icon(Icons.fastfood, color: Colors.grey),
-                  ),
-          ),
-          SizedBox(width: 12),
-          // Food details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Food name and type
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        food['name'] ?? 'Food Item',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 80,
+                        height: 80,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.restaurant),
                       ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getFoodTypeColor(food['type'] ?? 'other')
-                            .withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _getFoodTypeColor(food['type'] ?? 'other')
-                              .withOpacity(0.3),
-                          width: 1,
-                        ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 80,
+                        height: 80,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.restaurant),
                       ),
-                      child: Text(
-                        food['type'] ?? 'Other',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: _getFoodTypeColor(food['type'] ?? 'other'),
-                        ),
-                      ),
+                    )
+                  : Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.restaurant),
                     ),
-                  ],
-                ),
-                SizedBox(height: 4),
-
-                // Description
-                if (food['description']?.isNotEmpty == true)
-                  Text(
-                    food['description'],
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                SizedBox(height: 8),
-
-                // Price and Add to Cart
-                if (hasPortions)
-                  _buildPortionSelection(food)
-                else
-                  _buildSimpleAddToCart(food, basePrice),
-              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(width: 12),
 
-  Widget _buildSimpleAddToCart(Map<String, dynamic> food, double price) {
-    return Row(
-      children: [
-        Text(
-          'Rs. ${price.toStringAsFixed(2)}',
-          style: TextStyle(
-              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.purple),
-        ),
-        Spacer(),
-        ElevatedButton(
-          onPressed: (food['isAvailable'] ?? true)
-              ? () => _addToCart(food, 'Regular', price)
-              : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.purple,
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            minimumSize: Size(60, 32),
-          ),
-          child:
-              Text('Add', style: TextStyle(color: Colors.white, fontSize: 12)),
-        ),
-      ],
-    );
-  }
+            // Food Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    food['name'],
+                    style: EatoTheme.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (food['description'] != null &&
+                      food['description'].isNotEmpty)
+                    Text(
+                      food['description'],
+                      style: EatoTheme.bodySmall.copyWith(
+                        color: EatoTheme.textSecondaryColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _getPriceDisplayText(food),
+                    style: EatoTheme.bodyMedium.copyWith(
+                      color: EatoTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-  Widget _buildPortionSelection(Map<String, dynamic> food) {
-    final portionPrices = Map<String, double>.from(
-        (food['portionPrices'] as Map<String, dynamic>? ?? {})
-            .map((key, value) => MapEntry(key, (value as num).toDouble())));
-
-    if (portionPrices.isEmpty) {
-      return _buildSimpleAddToCart(food, (food['price'] ?? 0.0).toDouble());
-    }
-
-    final prices = portionPrices.values.toList()..sort();
-    final minPrice = prices.first;
-    final maxPrice = prices.last;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Price range
-        Text(
-          minPrice == maxPrice
-              ? 'Rs. ${minPrice.toStringAsFixed(2)}'
-              : 'From Rs. ${minPrice.toStringAsFixed(2)}',
-          style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.bold, color: Colors.purple),
-        ),
-        SizedBox(height: 8),
-
-        // Portion buttons
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: portionPrices.entries.map((entry) {
-            final portion = entry.key;
-            final price = entry.value;
-
-            return SizedBox(
-              height: 32,
-              child: ElevatedButton(
-                onPressed: () => _addToCart(food, portion, price),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple,
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  minimumSize: Size(80, 32),
+            // ✅ FIXED: Add to Cart button shows modal
+            ElevatedButton(
+              onPressed: () => _addToCart(food),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  '$portion\nRs.${price.toStringAsFixed(0)}',
-                  style: TextStyle(color: Colors.white, fontSize: 10),
-                  textAlign: TextAlign.center,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyMealTime(String mealTime) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_getMealTimeIcon(mealTime),
-              size: 48, color: Colors.grey.shade400),
-          SizedBox(height: 16),
-          Text('No $mealTime items',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade600)),
-          SizedBox(height: 8),
-          Text('This restaurant doesn\'t offer $mealTime items yet.',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyCategory() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.restaurant_menu, size: 48, color: Colors.grey.shade400),
-          SizedBox(height: 16),
-          Text('No items available',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade600)),
-          SizedBox(height: 8),
-          Text('No $_selectedCategory items for $_selectedMealTime.',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  Color _getFoodTypeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'vegetarian':
-        return Colors.green;
-      case 'non-vegetarian':
-        return Colors.red;
-      case 'vegan':
-        return Colors.lightGreen;
-      case 'dessert':
-        return Colors.pink;
-      default:
-        return Colors.blue;
-    }
-  }
-
-  Future<void> _addToCart(
-      Map<String, dynamic> food, String portion, double price) async {
-    try {
-      print(
-          '🛒 [ShopMenuModal] Adding to cart: ${food['name']} ($portion) - Rs.$price');
-
-      await CartService.addToCart(
-        foodId: food['id'] ?? '',
-        foodName: food['name'] ?? 'Food Item',
-        foodImage: food['imageUrl'] ?? '',
-        price: price,
-        quantity: 1,
-        shopId: widget.shopId,
-        shopName: _shop?['name'] ?? widget.shopName ?? 'Restaurant',
-        variation: portion,
-        specialInstructions: '',
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                    child: Text('${food['name']} ($portion) added to cart!')),
-              ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_shopping_cart, size: 16, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Add',
+                    style: EatoTheme.bodySmall.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Static method to show the modal
+  static Future<void> show({
+    required BuildContext context,
+    required String shopId,
+    String? shopName,
+  }) async {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return ShopMenuModal(
+          shopId: shopId,
+          shopName: shopName,
         );
-      }
-    } catch (e) {
-      print('❌ [ShopMenuModal] Error adding to cart: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to add to cart: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
+      },
+    );
   }
 }

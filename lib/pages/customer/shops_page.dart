@@ -23,23 +23,27 @@ class _ShopsPageState extends State<ShopsPage>
   bool _isLoading = true;
   String? _error;
   Map<String, bool> _subscriptionStatus = {};
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
+
     _loadData();
   }
 
   @override
   void dispose() {
+    _isDisposed = true; // ✅ Add this line
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
   void _onTabChanged() {
+    if (_isDisposed) return;
     if (_tabController.index == 1) {
       // Refresh subscribed shops when switching to subscribed tab
       _loadSubscribedShops();
@@ -47,11 +51,13 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
+    if (_isDisposed) return;
+    if (mounted && !_isDisposed) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
     try {
       await Future.wait([
         _loadAllShops(),
@@ -59,17 +65,22 @@ class _ShopsPageState extends State<ShopsPage>
       ]);
     } catch (e) {
       print('❌ [ShopsPage] Error loading data: $e');
-      setState(() {
-        _error = 'Failed to load shops: $e';
-      });
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _error = 'Failed to load shops: $e';
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _loadAllShops() async {
+    if (_isDisposed) return;
     try {
       print('🔄 [ShopsPage] Loading all shops...');
 
@@ -92,10 +103,11 @@ class _ShopsPageState extends State<ShopsPage>
 
       // Sort shops by rating (highest first)
       shops.sort((a, b) => (b.rating ?? 0.0).compareTo(a.rating ?? 0.0));
-
-      setState(() {
-        _allShops = shops;
-      });
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _allShops = shops;
+        });
+      }
 
       // Load subscription status for all shops
       await _loadSubscriptionStatus();
@@ -108,11 +120,14 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Future<void> _loadSubscribedShops() async {
+    if (_isDisposed) return;
     if (!FirebaseSubscriptionService.isUserAuthenticated()) {
-      setState(() {
-        _subscribedShops = [];
-      });
-      return;
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _subscribedShops = [];
+        });
+        return;
+      }
     }
 
     try {
@@ -120,12 +135,14 @@ class _ShopsPageState extends State<ShopsPage>
 
       final subscribedShops =
           await FirebaseSubscriptionService.getSubscribedShops();
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _subscribedShops = subscribedShops;
+        });
 
-      setState(() {
-        _subscribedShops = subscribedShops;
-      });
-
-      print('✅ [ShopsPage] Loaded ${subscribedShops.length} subscribed shops');
+        print(
+            '✅ [ShopsPage] Loaded ${subscribedShops.length} subscribed shops');
+      }
     } catch (e) {
       print('❌ [ShopsPage] Error loading subscribed shops: $e');
       setState(() {
@@ -135,6 +152,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Future<void> _loadSubscriptionStatus() async {
+    if (_isDisposed) return;
     if (!FirebaseSubscriptionService.isUserAuthenticated()) {
       return;
     }
@@ -146,7 +164,7 @@ class _ShopsPageState extends State<ShopsPage>
             await FirebaseSubscriptionService.isSubscribed(shop.id);
       }
 
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _subscriptionStatus = status;
         });
@@ -157,6 +175,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Future<void> _toggleSubscription(Store shop) async {
+    if (_isDisposed) return;
     if (!FirebaseSubscriptionService.isUserAuthenticated()) {
       _showAuthRequiredDialog();
       return;
@@ -167,11 +186,11 @@ class _ShopsPageState extends State<ShopsPage>
     try {
       if (isCurrentlySubscribed) {
         await FirebaseSubscriptionService.unsubscribeFromShop(shop.id);
-
-        setState(() {
-          _subscriptionStatus[shop.id] = false;
-        });
-
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _subscriptionStatus[shop.id] = false;
+          });
+        }
         // Refresh subscribed shops list
         await _loadSubscribedShops();
 
@@ -203,25 +222,25 @@ class _ShopsPageState extends State<ShopsPage>
         };
 
         await FirebaseSubscriptionService.subscribeToShop(shop.id, shopData);
-
-        setState(() {
-          _subscriptionStatus[shop.id] = true;
-        });
-
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _subscriptionStatus[shop.id] = true;
+          });
+        }
         // Refresh subscribed shops list
         await _loadSubscribedShops();
 
-        if (mounted) {
+        if (mounted && !_isDisposed) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.favorite, color: Colors.white, size: 20),
+                  Icon(Icons.unsubscribe, color: Colors.white, size: 20),
                   SizedBox(width: 8),
-                  Text('Subscribed to ${shop.name}'),
+                  Text('Unsubscribed from ${shop.name}'),
                 ],
               ),
-              backgroundColor: Colors.purple,
+              backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -229,17 +248,17 @@ class _ShopsPageState extends State<ShopsPage>
       }
     } catch (e) {
       print('❌ [ShopsPage] Error toggling subscription: $e');
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                Icon(Icons.error, color: Colors.white, size: 20),
+                Icon(Icons.favorite, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Expanded(child: Text('Failed to update subscription: $e')),
+                Text('Subscribed to ${shop.name}'),
               ],
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: Colors.purple,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -248,6 +267,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   void _showAuthRequiredDialog() {
+    if (_isDisposed) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -280,6 +300,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   void _viewShopMenu(Store shop) {
+    if (_isDisposed) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -292,7 +313,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   void _onBottomNavTap(int index) {
-    if (index == 1) {
+    if (index == 1 || _isDisposed) {
       // Already on shops page
       return;
     }
@@ -969,6 +990,7 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Future<void> _unsubscribeFromShop(Store shop) async {
+    if (_isDisposed) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1001,10 +1023,11 @@ class _ShopsPageState extends State<ShopsPage>
         await _loadSubscribedShops(); // Refresh the list
 
         if (mounted) {
-          setState(() {
-            _subscriptionStatus[shop.id] = false;
-          });
-
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _subscriptionStatus[shop.id] = false;
+            });
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -1020,7 +1043,7 @@ class _ShopsPageState extends State<ShopsPage>
           );
         }
       } catch (e) {
-        if (mounted) {
+        if (mounted && !_isDisposed) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Failed to unsubscribe: $e'),

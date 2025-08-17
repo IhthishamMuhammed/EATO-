@@ -10,6 +10,7 @@ import 'package:eato/services/CartService.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:eato/widgets/test_notification_widget.dart';
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -318,10 +319,12 @@ class _OrdersPageState extends State<OrdersPage> {
       }
 
       // Place orders using the enhanced backend with location
-      final orderIds = await CartService.placeOrdersWithBackendLocation(
-        orderProvider,
-        userProvider.currentUser!,
-        _cartItems,
+      // Place orders with notifications
+      final orderIds = await orderProvider.placeOrdersWithNotifications(
+        customerId: userProvider.currentUser!.id,
+        customerName: userProvider.currentUser!.name,
+        customerPhone: userProvider.currentUser!.phoneNumber ?? '',
+        cartItems: _cartItems,
         deliveryOption: _deliveryOption,
         deliveryAddress: _deliveryAddress,
         deliveryLocation: _deliveryLocation,
@@ -549,6 +552,8 @@ class _OrdersPageState extends State<OrdersPage> {
           child: ListView(
             padding: EdgeInsets.all(16),
             children: [
+              TestNotificationWidget(),
+              SizedBox(height: 16),
               // Cart items
               ...List.generate(_cartItems.length,
                   (index) => _buildCartItem(_cartItems[index], index)),
@@ -1060,7 +1065,7 @@ class _OrdersPageState extends State<OrdersPage> {
                 ),
               ],
             ),
-          ],
+          ], // Add this button temporarily to your orders page
         ],
       ),
     );

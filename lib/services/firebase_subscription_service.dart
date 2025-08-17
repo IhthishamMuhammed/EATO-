@@ -124,6 +124,78 @@ class FirebaseSubscriptionService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getUserSubscriptions(
+      String userId) async {
+    try {
+      print('📋 [SubscriptionService] Loading subscriptions for user: $userId');
+
+      final subscriptionsSnapshot = await _firestore
+          .collection('subscriptions')
+          .where('userId', isEqualTo: userId)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      List<Map<String, dynamic>> subscriptions = [];
+
+      for (var doc in subscriptionsSnapshot.docs) {
+        try {
+          final data = doc.data();
+          final shopId = data['shopId'] as String?;
+
+          if (shopId != null) {
+            // Get shop details
+            final shopDoc =
+                await _firestore.collection('stores').doc(shopId).get();
+
+            if (shopDoc.exists) {
+              final shopData = shopDoc.data()!;
+              subscriptions.add({
+                'subscriptionId': doc.id,
+                'shopId': shopId,
+                'shopName': shopData['name'] ?? 'Unknown Shop',
+                'shopImage': shopData['imageUrl'] ?? '',
+                'shopRating': shopData['rating'] ?? 4.0,
+                'shopLocation':
+                    shopData['location'] ?? 'Location not specified',
+                'subscribedAt': data['subscribedAt'],
+              });
+            }
+          }
+        } catch (e) {
+          print(
+              '⚠️ [SubscriptionService] Error processing subscription ${doc.id}: $e');
+        }
+      }
+
+      print(
+          '✅ [SubscriptionService] Loaded ${subscriptions.length} subscriptions');
+      return subscriptions;
+    } catch (e) {
+      print('❌ [SubscriptionService] Error loading subscriptions: $e');
+      return [];
+    }
+  }
+
+  // ✅ Subscribe to shop
+
+  // ✅ Check if user is subscribed to shop
+  static Future<bool> isSubscribedToShop(String userId, String shopId) async {
+    try {
+      final subscriptionSnapshot = await _firestore
+          .collection('subscriptions')
+          .where('userId', isEqualTo: userId)
+          .where('shopId', isEqualTo: shopId)
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      return subscriptionSnapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('❌ [SubscriptionService] Error checking subscription: $e');
+      return false;
+    }
+  }
+
   /// Get user's subscribed shops with real-time updates
   static Stream<List<Map<String, dynamic>>> getSubscribedShopsStream() {
     final userId = _auth.currentUser?.uid;

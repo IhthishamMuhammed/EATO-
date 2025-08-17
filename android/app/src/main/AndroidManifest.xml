@@ -1,40 +1,49 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    
+    <!-- All permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:label="eato"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- ✅ Existing Google Maps API key -->
+        <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBXGNIuY8yE6RVrSZ0RwfYKaKlzvCRVw3c" />
 
-        <!-- ✅ ADD: Default notification channel for FCM -->
+        <!-- ✅ UPDATED: Firebase Messaging Configuration -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="high_importance_channel" />
+            android:value="eato_notifications" />
+        
+        <!-- ✅ NEW: Custom notification icon and color -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
 
-        <!-- ✅ ADD: Firebase Messaging service -->
+        <!-- ✅ UPDATED: Firebase Messaging Service (corrected path) -->
         <service
-            android:name="io.flutter.plugins.firebasemessaging.FlutterFirebaseMessagingService"
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
 
-        <!-- ✅ ADD: Firebase Messaging receiver -->
+        <!-- ✅ KEEP: Firebase Messaging Receiver -->
         <receiver
-            android:name="io.flutter.plugins.firebasemessaging.FlutterFirebaseMessagingReceiver"
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingReceiver"
             android:exported="true" />
 
         <activity
@@ -51,9 +60,18 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
+            <!-- ✅ UPDATED: Main launcher intent -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- ✅ NEW: Deep link handling for notifications -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="eato" />
             </intent-filter>
         </activity>
 

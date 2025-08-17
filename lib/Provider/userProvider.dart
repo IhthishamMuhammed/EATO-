@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:eato/services/notification_service.dart';
 import 'dart:io';
 
 class UserProvider with ChangeNotifier {
@@ -11,6 +12,7 @@ class UserProvider with ChangeNotifier {
   String? _errorMessage;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance; // ✅ ADD THIS LINE
 
   bool get isLoading => _isLoading;
   CustomUser? get currentUser => _currentUser;
@@ -62,7 +64,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Fetch user from Firestore
+  // ✅ KEEP ONLY THIS fetchUser method (enhanced with token)
   Future<void> fetchUser(String userId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -86,6 +88,11 @@ class UserProvider with ChangeNotifier {
         userData['id'] = userId;
 
         _currentUser = CustomUser.fromMap(userData);
+
+        // ✅ Save FCM token for existing user
+        await NotificationService.saveUserToken(userId);
+
+        print("✅ User fetched successfully: ${_currentUser!.name}");
       } else {
         print('User document not found for ID: $userId');
         _errorMessage = 'User not found';
@@ -326,6 +333,154 @@ class UserProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ✅ Enhanced login method with notification token
+  Future<bool> loginUser(String email, String password) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      await fetchUser(userCredential.user!.uid);
+
+      // ✅ Save FCM token after successful login
+      await NotificationService.saveUserToken(userCredential.user!.uid);
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Login failed: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ✅ Enhanced logout method with token removal
+  Future<void> logout() async {
+    try {
+      // Remove FCM token before logout
+      await NotificationService.removeUserToken();
+
+      // Sign out from Firebase
+      await _auth.signOut();
+
+      // Clear current user
+      _currentUser = null;
+      _errorMessage = null;
+
+      notifyListeners();
+      print("✅ User logged out successfully");
+    } catch (e) {
+      _errorMessage = 'Logout failed: $e';
+      print("❌ Logout error: $e");
+      notifyListeners();
+    }
+  }
+
+  // ✅ Enhanced user creation with token
+  Future<void> createUser(CustomUser user) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      await _firestore.collection('users').doc(user.id).set({
+        'name': user.name,
+        'email': user.email,
+        'phoneNumber': user.phoneNumber,
+        'userType': user.userType,
+        'profileImageUrl': user.profileImageUrl,
+        'address': user.address,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Set current user
+      _currentUser = user;
+
+      // ✅ Save FCM token for new user
+      await NotificationService.saveUserToken(user.id);
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Error creating user: $e';
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ✅ New method: Update notification preferences
+  Future<bool> updateNotificationPreferences({
+    bool orderUpdates = true,
+    bool promotions = true,
+    bool newRestaurants = true,
+  }) async {
+    if (_currentUser == null) return false;
+
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      await _firestore.collection('users').doc(_currentUser!.id).update({
+        'notificationPreferences': {
+          'orderUpdates': orderUpdates,
+          'promotions': promotions,
+          'newRestaurants': newRestaurants,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      });
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error updating notification preferences: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ✅ New method: Get notification preferences
+  Future<Map<String, bool>> getNotificationPreferences() async {
+    if (_currentUser == null) return {};
+
+    try {
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(_currentUser!.id).get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        Map<String, dynamic>? prefs = userData['notificationPreferences'];
+
+        if (prefs != null) {
+          return {
+            'orderUpdates': prefs['orderUpdates'] ?? true,
+            'promotions': prefs['promotions'] ?? true,
+            'newRestaurants': prefs['newRestaurants'] ?? true,
+          };
+        }
+      }
+
+      // Default preferences if not set
+      return {
+        'orderUpdates': true,
+        'promotions': true,
+        'newRestaurants': true,
+      };
+    } catch (e) {
+      print("❌ Error getting notification preferences: $e");
+      return {};
     }
   }
 

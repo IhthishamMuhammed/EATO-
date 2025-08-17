@@ -1,7 +1,9 @@
-// File: lib/widgets/bottom_nav_bar.dart (Updated to work with backend integration)
+// FILE: lib/widgets/bottom_nav_bar.dart
+// FIXED VERSION - Safe provider access and lifecycle management
 
 import 'package:flutter/material.dart';
-import 'package:eato/services/CartService.dart'; // Import the updated CartService
+import 'package:provider/provider.dart';
+import '../Provider/CartProvider.dart';
 
 class BottomNavBar extends StatefulWidget {
   final int currentIndex;
@@ -18,54 +20,20 @@ class BottomNavBar extends StatefulWidget {
 }
 
 class _BottomNavBarState extends State<BottomNavBar> {
-  int _cartCount = 0;
+  bool _isDisposed = false;
 
   @override
-  void initState() {
-    super.initState();
-    _loadCartCount();
-  }
-
-  @override
-  void didUpdateWidget(BottomNavBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Reload cart count when widget updates
-    _loadCartCount();
-  }
-
-  Future<void> _loadCartCount() async {
-    try {
-      // Use the updated CartService method
-      final cartItems = await CartService.getCartItems();
-      int totalCount = 0;
-
-      for (var item in cartItems) {
-        totalCount += item['quantity'] as int;
-      }
-
-      if (mounted) {
-        setState(() {
-          _cartCount = totalCount;
-        });
-      }
-    } catch (e) {
-      print('Error loading cart count in bottom nav: $e');
-      // Set to 0 on error to prevent UI issues
-      if (mounted) {
-        setState(() {
-          _cartCount = 0;
-        });
-      }
-    }
-  }
-
-  // Public method to refresh cart count from outside
-  void refreshCartCount() {
-    _loadCartCount();
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isDisposed) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       height: 75,
       decoration: BoxDecoration(
@@ -87,7 +55,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          // Main row with navigation items
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -103,7 +70,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
                 isSelected: widget.currentIndex == 1,
                 index: 1,
               ),
-              // Empty space for the center button
               const SizedBox(width: 65),
               _buildNavItem(
                 icon: Icons.timeline,
@@ -120,13 +86,12 @@ class _BottomNavBarState extends State<BottomNavBar> {
             ],
           ),
 
-          // Center floating cart button with real count
+          // ✅ FIXED: Safe cart button with provider access
           Positioned(
             top: -20,
-            child: _buildCartButton(),
+            child: _buildSafeCartButton(context),
           ),
 
-          // Selection indicator lines
           _buildSelectionIndicator(context),
         ],
       ),
@@ -134,28 +99,25 @@ class _BottomNavBarState extends State<BottomNavBar> {
   }
 
   Widget _buildSelectionIndicator(BuildContext context) {
-    // Skip if center button is selected
-    if (widget.currentIndex == 2) {
+    if (widget.currentIndex == 2 || _isDisposed) {
       return const SizedBox.shrink();
     }
 
-    // Calculate position based on screen width
     final screenWidth = MediaQuery.of(context).size.width;
     final itemWidth = screenWidth / 5;
 
-    // Adjust positions for each tab (manually tuned)
     double leftPosition;
     switch (widget.currentIndex) {
-      case 0: // Home
+      case 0:
         leftPosition = itemWidth * 0.5 - 15;
         break;
-      case 1: // Subscribed
+      case 1:
         leftPosition = itemWidth * 1.5 - 15;
         break;
-      case 3: // Activity
+      case 3:
         leftPosition = itemWidth * 3.5 - 15;
         break;
-      case 4: // Account
+      case 4:
         leftPosition = itemWidth * 4.5 - 15;
         break;
       default:
@@ -182,8 +144,16 @@ class _BottomNavBarState extends State<BottomNavBar> {
     required bool isSelected,
     required int index,
   }) {
+    if (_isDisposed) {
+      return const SizedBox.shrink();
+    }
+
     return InkWell(
-      onTap: () => widget.onTap(index),
+      onTap: () {
+        if (!_isDisposed && mounted) {
+          widget.onTap(index);
+        }
+      },
       child: Container(
         width: 70,
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -211,15 +181,64 @@ class _BottomNavBarState extends State<BottomNavBar> {
     );
   }
 
-  Widget _buildCartButton() {
-    return GestureDetector(
-      onTap: () {
-        widget.onTap(2);
-        // Refresh cart count after navigation
-        Future.delayed(Duration(milliseconds: 500), () {
-          _loadCartCount();
-        });
+  // ✅ FIXED: Safe cart button with try-catch for provider access
+  Widget _buildSafeCartButton(BuildContext context) {
+    if (_isDisposed) {
+      return _buildFallbackCartButton();
+    }
+
+    return Consumer<CartProvider>(
+      builder: (context, cartProvider, child) {
+        // ✅ FIX: Handle null cartProvider gracefully
+        if (cartProvider == null) {
+          return _buildFallbackCartButton();
+        }
+
+        final cartCount = cartProvider.cartCount;
+        final isLoading = cartProvider.isLoading;
+
+        return _buildCartButton(
+          cartCount: cartCount,
+          isLoading: isLoading,
+          onTap: () {
+            if (!_isDisposed && mounted) {
+              widget.onTap(2);
+              // ✅ FIX: Safe refresh with null check
+              Future.delayed(const Duration(milliseconds: 200), () {
+                if (!_isDisposed && mounted) {
+                  try {
+                    cartProvider.refreshCartCount();
+                  } catch (e) {
+                    print('⚠️ Cart refresh failed: $e');
+                  }
+                }
+              });
+            }
+          },
+        );
       },
+    );
+  }
+
+  Widget _buildFallbackCartButton() {
+    return _buildCartButton(
+      cartCount: 0,
+      isLoading: false,
+      onTap: () {
+        if (!_isDisposed && mounted) {
+          widget.onTap(2);
+        }
+      },
+    );
+  }
+
+  Widget _buildCartButton({
+    required int cartCount,
+    required bool isLoading,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
         width: 65,
         height: 65,
@@ -245,12 +264,13 @@ class _BottomNavBarState extends State<BottomNavBar> {
                 size: 30,
               ),
 
-              // Real cart count badge
-              if (_cartCount > 0)
+              // ✅ Cart count badge
+              if (cartCount > 0)
                 Positioned(
                   top: -8,
                   right: -8,
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: Colors.red,
@@ -263,7 +283,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
                     ),
                     child: Center(
                       child: Text(
-                        _cartCount > 99 ? '99+' : '$_cartCount',
+                        cartCount > 99 ? '99+' : '$cartCount',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -273,131 +293,25 @@ class _BottomNavBarState extends State<BottomNavBar> {
                     ),
                   ),
                 ),
+
+              // ✅ Loading indicator
+              if (isLoading)
+                Positioned(
+                  top: -6,
+                  right: -6,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-// ===============================================
-// Enhanced Bottom Nav Bar with Cart Refresh
-// ===============================================
-
-/// Enhanced version that can be used to automatically refresh cart count
-/// when cart items change throughout the app
-class EnhancedBottomNavBar extends StatefulWidget {
-  final int currentIndex;
-  final Function(int) onTap;
-
-  const EnhancedBottomNavBar({
-    Key? key,
-    required this.currentIndex,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  State<EnhancedBottomNavBar> createState() => _EnhancedBottomNavBarState();
-}
-
-class _EnhancedBottomNavBarState extends State<EnhancedBottomNavBar>
-    with WidgetsBindingObserver {
-  int _cartCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _loadCartCount();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    // Refresh cart count when app resumes
-    if (state == AppLifecycleState.resumed) {
-      _loadCartCount();
-    }
-  }
-
-  @override
-  void didUpdateWidget(EnhancedBottomNavBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Reload cart count when widget updates
-    _loadCartCount();
-  }
-
-  Future<void> _loadCartCount() async {
-    try {
-      final cartItems = await CartService.getCartItems();
-      int totalCount = 0;
-
-      for (var item in cartItems) {
-        totalCount += item['quantity'] as int;
-      }
-
-      if (mounted) {
-        setState(() {
-          _cartCount = totalCount;
-        });
-      }
-    } catch (e) {
-      print('Error loading cart count in enhanced bottom nav: $e');
-      if (mounted) {
-        setState(() {
-          _cartCount = 0;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BottomNavBar(
-      currentIndex: widget.currentIndex,
-      onTap: widget.onTap,
-    );
-  }
-}
-
-// ===============================================
-// Global Cart State Notifier (Optional)
-// ===============================================
-
-/// A simple notifier that can be used to update cart count globally
-class CartCountNotifier extends ChangeNotifier {
-  int _cartCount = 0;
-
-  int get cartCount => _cartCount;
-
-  Future<void> updateCartCount() async {
-    try {
-      final cartItems = await CartService.getCartItems();
-      int totalCount = 0;
-
-      for (var item in cartItems) {
-        totalCount += item['quantity'] as int;
-      }
-
-      _cartCount = totalCount;
-      notifyListeners();
-    } catch (e) {
-      print('Error updating cart count: $e');
-      _cartCount = 0;
-      notifyListeners();
-    }
-  }
-
-  void clearCount() {
-    _cartCount = 0;
-    notifyListeners();
   }
 }

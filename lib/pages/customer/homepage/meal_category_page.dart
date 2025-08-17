@@ -1,3 +1,6 @@
+// FILE: lib/pages/customer/homepage/meal_category_page.dart
+// Fixed version with proper userType handling
+
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,7 +8,6 @@ import 'package:eato/services/Firebase_Storage_Service.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/pages/customer/homepage/meal_pages.dart';
-import 'package:eato/services/navigation_stack_manager.dart';
 
 class MealCategoryPage extends StatefulWidget {
   final String?
@@ -187,8 +189,8 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
             'imageUrl': 'https://via.placeholder.com/150?text=Rice+and+Curry',
           },
           {
-            'title': 'String Hoppers',
-            'imageUrl': 'https://via.placeholder.com/150?text=String+Hoppers',
+            'title': 'Short Eats',
+            'imageUrl': 'https://via.placeholder.com/150?text=Short+Eats',
           },
         ]);
       }
@@ -199,15 +201,14 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
         _isLoading = false;
       });
 
-      print(
-          '✅ [MealCategoryPage] Loaded ${categories.length} categories for display');
+      print('✅ [MealCategoryPage] Data loaded successfully');
     } catch (e) {
       print('❌ [MealCategoryPage] Critical error loading data: $e');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load categories. Please try again.'),
+            content: Text('Unable to load categories. Please try again.'),
             backgroundColor: Colors.red,
             action: SnackBarAction(
               label: 'Retry',
@@ -293,238 +294,219 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.purple))
-            : Column(
-                children: [
-                  Expanded(
-                    child: CustomScrollView(
-                      slivers: [
-                        // Hero image with title overlay
-                        SliverToBoxAdapter(
-                          child: Stack(
-                            children: [
-                              // Hero image
-                              SizedBox(
-                                width: double.infinity,
-                                height:
-                                    MediaQuery.of(context).size.height * 0.25,
-                                child: _heroImageUrl.isNotEmpty
-                                    ? CachedNetworkImage(
-                                        imageUrl: _heroImageUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            Container(
-                                          color: Colors.grey[300],
-                                          child: const Center(
-                                            child: CircularProgressIndicator(
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Colors.purple),
-                                            ),
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            Container(
-                                          color: Colors.purple.withOpacity(0.1),
-                                          child: Center(
-                                            child: Icon(
-                                              _getIconForMealTime(
-                                                  widget.mealTime),
-                                              size: 48,
-                                              color: Colors.purple
-                                                  .withOpacity(0.5),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                    : Container(
-                                        color: Colors.purple.withOpacity(0.1),
-                                        child: Center(
-                                          child: Icon(
-                                            _getIconForMealTime(
-                                                widget.mealTime),
-                                            size: 48,
-                                            color:
-                                                Colors.purple.withOpacity(0.5),
-                                          ),
-                                        ),
-                                      ),
+        child: Column(
+          children: [
+            // ✅ FIXED: Constrained layout to prevent overflow
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  // Hero image section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            spreadRadius: 1,
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Hero image
+                            Positioned.fill(
+                              child: CachedNetworkImage(
+                                imageUrl: _heroImageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.purple.withOpacity(0.3),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.restaurant,
+                                      size: 50,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
                               ),
+                            ),
 
-                              // Dark gradient overlay for better text visibility
-                              Container(
-                                height:
-                                    MediaQuery.of(context).size.height * 0.25,
+                            // Dark overlay
+                            Positioned.fill(
+                              child: Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                     colors: [
-                                      Colors.black.withOpacity(0.1),
-                                      Colors.black.withOpacity(0.5),
+                                      Colors.black.withOpacity(0.3),
+                                      Colors.black.withOpacity(0.7),
                                     ],
                                   ),
                                 ),
                               ),
+                            ),
 
-                              // Status bar and back button
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      // Back button
-                                      InkWell(
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                        },
-                                        child: const Row(
-                                          children: [
-                                            Icon(Icons.arrow_back,
-                                                size: 20, color: Colors.white),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              'Back',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w500,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                            // Header content
+                            Positioned(
+                              top: 16,
+                              left: 16,
+                              right: 16,
+                              child: Row(
+                                children: [
+                                  // Back button
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: IconButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      icon: const Icon(
+                                        Icons.arrow_back_ios_new,
+                                        color: Colors.white,
                                       ),
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  // Time indicator
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      _getCurrentTime(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                                      // Time
+                            // Title section
+                            Positioned(
+                              bottom: 20,
+                              left: 16,
+                              right: 16,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        _getIconForMealTime(widget.mealTime),
+                                        color: Colors.white,
+                                        size: 28,
+                                      ),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        _getCurrentTime(),
+                                        widget.mealTime ?? 'Food Categories',
                                         style: const TextStyle(
                                           color: Colors.white,
+                                          fontSize: 24,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-
-                              // Category page title based on meal time
-                              Positioned(
-                                bottom: 16,
-                                left: 16,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.mealTime ?? 'Food Categories',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        shadows: [
-                                          Shadow(
-                                            offset: Offset(0, 1),
-                                            blurRadius: 3.0,
-                                            color: Color.fromARGB(150, 0, 0, 0),
-                                          ),
-                                        ],
-                                      ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.mealTime != null
+                                        ? 'Choose your ${widget.mealTime!.toLowerCase()} category'
+                                        : 'Explore food categories',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      widget.mealTime != null
-                                          ? 'Available ${widget.mealTime} options'
-                                          : 'Discover delicious Sri Lankan cuisine',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.white.withOpacity(0.9),
-                                        shadows: const [
-                                          Shadow(
-                                            offset: Offset(0, 1),
-                                            blurRadius: 3.0,
-                                            color: Color.fromARGB(150, 0, 0, 0),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
+                      ),
+                    ),
+                  ),
 
-                        // Search bar
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Container(
-                              height: 45,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                    color: Colors.grey.shade300, width: 1),
-                              ),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.search,
-                                        color: Colors.grey.shade500, size: 18),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _searchController,
-                                        decoration: InputDecoration(
-                                          hintText: 'Search categories',
-                                          hintStyle: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey.shade500,
-                                          ),
-                                          border: InputBorder.none,
-                                          isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                  vertical: 8),
-                                        ),
-                                      ),
-                                    ),
-                                    if (_searchController.text.isNotEmpty)
-                                      GestureDetector(
-                                        onTap: () {
-                                          _searchController.clear();
-                                        },
-                                        child: Icon(Icons.clear,
-                                            size: 18,
-                                            color: Colors.grey.shade600),
-                                      ),
-                                  ],
-                                ),
-                              ),
+                  // Search bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              spreadRadius: 1,
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: const InputDecoration(
+                            hintText: 'Search categories...',
+                            prefixIcon: Icon(Icons.search),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 15,
                             ),
                           ),
                         ),
+                      ),
+                    ),
+                  ),
 
-                        // Categories grid
-                        _filteredCategoryItems.isEmpty
-                            ? SliverFillRemaining(
-                                child: Center(
+                  // Loading or content
+                  _isLoading
+                      ? const SliverToBoxAdapter(
+                          child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(50.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                        )
+                      : _filteredCategoryItems.isEmpty
+                          ? SliverToBoxAdapter(
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(50.0),
                                   child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.category_outlined,
-                                        size: 48,
+                                        Icons.search_off,
+                                        size: 64,
                                         color: Colors.grey.shade400,
                                       ),
                                       const SizedBox(height: 16),
@@ -542,46 +524,47 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
                                     ],
                                   ),
                                 ),
-                              )
-                            : SliverPadding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                sliver: SliverGrid(
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 1.0,
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                  ),
-                                  delegate: SliverChildBuilderDelegate(
-                                    (context, index) {
-                                      return _buildCategoryItem(
-                                          _filteredCategoryItems[index]);
-                                    },
-                                    childCount: _filteredCategoryItems.length,
-                                  ),
+                              ),
+                            )
+                          : SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  childAspectRatio: 1.0,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    return _buildCategoryItem(
+                                        _filteredCategoryItems[index]);
+                                  },
+                                  childCount: _filteredCategoryItems.length,
                                 ),
                               ),
+                            ),
 
-                        // Add bottom padding for bottom nav
-                        if (widget.showBottomNav)
-                          const SliverToBoxAdapter(
-                            child: SizedBox(height: 80),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // ✅ Bottom Navigation Bar with proper navigation handling
+                  // Add bottom padding for bottom nav
                   if (widget.showBottomNav)
-                    BottomNavBar(
-                      currentIndex: 0, // Home tab is selected
-                      onTap: _onBottomNavTap,
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: 80),
                     ),
                 ],
               ),
+            ),
+          ],
+        ),
       ),
+
+      // ✅ FIXED: Bottom Navigation Bar
+      bottomNavigationBar: widget.showBottomNav
+          ? BottomNavBar(
+              currentIndex: 0, // Home tab is selected
+              onTap: _onBottomNavTap,
+            )
+          : null,
     );
   }
 
@@ -593,13 +576,11 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
 
   // Get icon for meal time
   IconData _getIconForMealTime(String? mealTime) {
-    if (mealTime == null) return Icons.restaurant_menu;
-
-    switch (mealTime.toLowerCase()) {
+    switch (mealTime?.toLowerCase()) {
       case 'breakfast':
-        return Icons.coffee;
+        return Icons.free_breakfast;
       case 'lunch':
-        return Icons.restaurant;
+        return Icons.lunch_dining;
       case 'dinner':
         return Icons.dinner_dining;
       default:
@@ -607,101 +588,76 @@ class _MealCategoryPageState extends State<MealCategoryPage> {
     }
   }
 
-  // Build category item widget
   Widget _buildCategoryItem(Map<String, dynamic> category) {
-    final title = category['title'] as String;
-    final imageUrl = category['imageUrl'] as String? ?? '';
-
-    return GestureDetector(
-      onTap: () => _selectCategory(title),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8E1F4), // Light pink background
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 1,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _selectCategory(category['title']),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Image
-            Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.contain,
-                        placeholder: (context, url) => const Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.purple),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          padding: const EdgeInsets.all(12),
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: Text(
-                              title.substring(0, 1).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple.shade300,
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(12),
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: Text(
-                            title.substring(0, 1).toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.purple.shade300,
-                            ),
-                          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Category image
+                Expanded(
+                  flex: 3,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CachedNetworkImage(
+                      imageUrl: category['imageUrl'],
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       ),
-              ),
-            ),
-            // Title
-            Expanded(
-              flex: 1,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.purple.withOpacity(0.1),
+                        child: Icon(
+                          Icons.restaurant_menu,
+                          size: 40,
+                          color: Colors.purple.withOpacity(0.7),
+                        ),
+                      ),
                     ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Category title
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    category['title'],
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );

@@ -1,3 +1,6 @@
+// FILE: lib/widgets/OrderProgressIndicator.dart
+// FIXED VERSION - Complete and working implementation
+
 import 'package:flutter/material.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
@@ -56,6 +59,9 @@ class OrderProgressIndicator extends StatelessWidget {
                           ? Border.all(color: EatoTheme.primaryColor, width: 2)
                           : null,
                     ),
+                    child: isActive
+                        ? Icon(Icons.check, size: 8, color: Colors.white)
+                        : null,
                   ),
                   if (index < steps.length - 1)
                     Expanded(
