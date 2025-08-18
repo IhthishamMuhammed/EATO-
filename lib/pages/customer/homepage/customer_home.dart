@@ -1,3 +1,6 @@
+// FIXED CustomerHomePage with robust image loading
+// Multiple fallback URLs for reliable image loading
+
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/homepage/meal_category_page.dart';
 import 'package:flutter/material.dart';
@@ -29,13 +32,26 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   bool _userLoaded = false;
   bool _userLoading = false;
 
-  final Map<String, String> _mealImageUrls = {
-    'BREAKFAST':
-        'https://images.unsplash.com/photo-1533089860892-a9b9ac6cd6b4?q=80&w=600',
-    'LUNCH':
-        'https://images.unsplash.com/photo-1547592180-85f173990888?q=80&w=600',
-    'DINNER':
-        'https://images.unsplash.com/photo-1559847844-5315695dadae?q=80&w=600',
+  // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal
+  final Map<String, List<String>> _mealImageOptions = {
+    'BREAKFAST': [
+      'https://images.unsplash.com/photo-1533089860892-a9b9ac6cd6b4?q=80&w=600',
+      'https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=600',
+      'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2017/05/07/08/56/pancakes-2291908_960_720.jpg',
+    ],
+    'LUNCH': [
+      'https://images.unsplash.com/photo-1547592180-85f173990888?q=80&w=600',
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?q=80&w=600',
+      'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2017/12/09/08/18/pizza-3007395_960_720.jpg',
+    ],
+    'DINNER': [
+      'https://images.unsplash.com/photo-1559847844-5315695dadae?q=80&w=600',
+      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?q=80&w=600',
+      'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2016/12/26/17/28/spaghetti-1932466_960_720.jpg',
+    ],
   };
 
   bool _isLoading = false;
@@ -91,9 +107,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         }
       }
 
-      if (mounted && !_isDisposed) {
-        _loadFirebaseImagesInBackground();
-      }
+      // ✅ REMOVED: Firebase storage loading since we're using direct URLs now
+      print("✅ Using direct image URLs with fallbacks");
     } catch (e) {
       print("⚠️ Background initialization failed: $e");
       if (mounted && !_isDisposed) {
@@ -101,45 +116,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           _userLoading = false;
         });
       }
-    }
-  }
-
-  Future<void> _loadFirebaseImagesInBackground() async {
-    if (_isDisposed) return;
-
-    try {
-      final storage = FirebaseStorage.instance;
-
-      final futures = [
-        storage
-            .ref()
-            .child('meals/breakfast.jpg')
-            .getDownloadURL()
-            .catchError((_) => _mealImageUrls['BREAKFAST']!),
-        storage
-            .ref()
-            .child('meals/lunch.jpg')
-            .getDownloadURL()
-            .catchError((_) => _mealImageUrls['LUNCH']!),
-        storage
-            .ref()
-            .child('meals/dinner.jpg')
-            .getDownloadURL()
-            .catchError((_) => _mealImageUrls['DINNER']!),
-      ];
-
-      final urls = await Future.wait(futures);
-
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _mealImageUrls['BREAKFAST'] = urls[0];
-          _mealImageUrls['LUNCH'] = urls[1];
-          _mealImageUrls['DINNER'] = urls[2];
-        });
-        print("✅ Firebase images loaded successfully");
-      }
-    } catch (e) {
-      print('Firebase images failed, using fallbacks: $e');
     }
   }
 
@@ -335,27 +311,27 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                 ),
                 const SizedBox(height: 16),
 
-                // Meal Time Cards
+                // ✅ ROBUST MEAL TIME CARDS: With fallback image loading
                 Column(
                   children: [
                     _buildMealTimeCard(
                       'BREAKFAST',
                       'Start your day right',
-                      _mealImageUrls['BREAKFAST']!,
+                      _mealImageOptions['BREAKFAST']!,
                       () => _navigateToMealPage('Breakfast'),
                     ),
                     const SizedBox(height: 16),
                     _buildMealTimeCard(
                       'LUNCH',
                       'Fuel your afternoon',
-                      _mealImageUrls['LUNCH']!,
+                      _mealImageOptions['LUNCH']!,
                       () => _navigateToMealPage('Lunch'),
                     ),
                     const SizedBox(height: 16),
                     _buildMealTimeCard(
                       'DINNER',
                       'End your day deliciously',
-                      _mealImageUrls['DINNER']!,
+                      _mealImageOptions['DINNER']!,
                       () => _navigateToMealPage('Dinner'),
                     ),
                   ],
@@ -401,10 +377,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     );
   }
 
+  // ✅ ROBUST MEAL TIME CARD: With multiple fallback URLs
   Widget _buildMealTimeCard(
     String title,
     String subtitle,
-    String imageUrl,
+    List<String> imageUrls,
     VoidCallback onTap,
   ) {
     return GestureDetector(
@@ -425,29 +402,53 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           borderRadius: BorderRadius.circular(16),
           child: Stack(
             children: [
+              // ✅ ROBUST IMAGE: Using fallback widget
               Positioned.fill(
-                child: Image.network(
-                  imageUrl,
+                child: _ImageWithFallbacks(
+                  imageUrls: imageUrls,
                   fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      color: Colors.grey[300],
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                  loadingWidget: Container(
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          EatoTheme.primaryColor.withOpacity(0.3),
+                          EatoTheme.primaryColor.withOpacity(0.1),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: EatoTheme.primaryColor.withOpacity(0.1),
-                      child: const Center(
-                        child: Icon(Icons.restaurant, size: 48),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.restaurant,
+                            size: 32,
+                            color: EatoTheme.primaryColor,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            title,
+                            style: EatoTheme.bodySmall.copyWith(
+                              color: EatoTheme.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
+
+              // Gradient overlay
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -462,6 +463,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   ),
                 ),
               ),
+
+              // Text content
               Positioned(
                 left: 20,
                 top: 0,
@@ -487,6 +490,8 @@ class _CustomerHomePageState extends State<CustomerHomePage>
                   ],
                 ),
               ),
+
+              // Arrow icon
               const Positioned(
                 right: 20,
                 top: 0,
@@ -501,6 +506,103 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           ),
         ),
       ),
+    );
+  }
+}
+
+// ✅ HELPER WIDGET: Image widget that tries multiple URLs automatically
+class _ImageWithFallbacks extends StatefulWidget {
+  final List<String> imageUrls;
+  final BoxFit fit;
+  final Widget loadingWidget;
+  final Widget errorWidget;
+
+  const _ImageWithFallbacks({
+    required this.imageUrls,
+    required this.fit,
+    required this.loadingWidget,
+    required this.errorWidget,
+  });
+
+  @override
+  _ImageWithFallbacksState createState() => _ImageWithFallbacksState();
+}
+
+class _ImageWithFallbacksState extends State<_ImageWithFallbacks> {
+  int _currentIndex = 0;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError && _currentIndex >= widget.imageUrls.length) {
+      return widget.errorWidget;
+    }
+
+    if (_isLoading) {
+      return Stack(
+        children: [
+          widget.loadingWidget,
+          _buildCurrentImage(),
+        ],
+      );
+    }
+
+    return _buildCurrentImage();
+  }
+
+  Widget _buildCurrentImage() {
+    if (_currentIndex >= widget.imageUrls.length) {
+      return widget.errorWidget;
+    }
+
+    return Image.network(
+      widget.imageUrls[_currentIndex],
+      fit: widget.fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          // Image loaded successfully
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _isLoading) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          });
+          return child;
+        }
+        // Still loading, show nothing (loading widget is shown from parent Stack)
+        return const SizedBox.shrink();
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print(
+            '❌ [HomePage] Image failed to load: ${widget.imageUrls[_currentIndex]} - Error: $error');
+
+        // Try next image URL
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            if (_currentIndex < widget.imageUrls.length - 1) {
+              // Try next image
+              print(
+                  '🔄 [HomePage] Trying next image URL: ${widget.imageUrls[_currentIndex + 1]}');
+              setState(() {
+                _currentIndex++;
+                _isLoading = true;
+              });
+            } else {
+              // All images failed, show error widget
+              print(
+                  '💥 [HomePage] All ${widget.imageUrls.length} image URLs failed, showing error widget');
+              setState(() {
+                _hasError = true;
+                _isLoading = false;
+              });
+            }
+          }
+        });
+
+        return const SizedBox.shrink();
+      },
     );
   }
 }

@@ -1,8 +1,9 @@
-// FILE: lib/pages/customer/Activity_Page.dart
-// FIXED VERSION - Proper navigation handling for embedded mode
+// File: lib/pages/customer/activity_page.dart (Enhanced with store contact visibility)
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/Provider/OrderProvider.dart';
@@ -12,6 +13,7 @@ import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/widgets/OrderProgressIndicator.dart';
 import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 class ActivityPage extends StatefulWidget {
@@ -30,122 +32,43 @@ class _ActivityPageState extends State<ActivityPage>
   bool _isLoading = false;
   String? _error;
 
-  // ✅ FIX: Store provider references to avoid disposal issues
-  OrderProvider? _orderProvider;
-  UserProvider? _userProvider;
-  bool _isDisposed = false;
-
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _initializeDataInBackground();
+    _tabController = TabController(length: 3, vsync: this);
+    _initializeOrders();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // ✅ FIX: Store provider references early to avoid disposal issues
-    if (!_isDisposed) {
-      _orderProvider = Provider.of<OrderProvider>(context, listen: false);
-      _userProvider = Provider.of<UserProvider>(context, listen: false);
-    }
-  }
+  Future<void> _initializeOrders() async {
+    if (_isInitialized) return;
 
-  Future<void> _initializeDataInBackground() async {
-    if (_isInitialized || _isDisposed) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _isLoading = true;
-          _error = null;
-        });
-      }
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-      await _ensureUserDataLoaded();
-
-      if (_userProvider?.currentUser != null && !_isDisposed) {
-        _orderProvider?.listenToCustomerOrders(_userProvider!.currentUser!.id);
+      if (userProvider.currentUser != null) {
+        // Start listening to customer orders
+        orderProvider.listenToCustomerOrders(userProvider.currentUser!.id);
         _isInitialized = true;
-        print(
-            "✅ Activity page initialized for user: ${_userProvider!.currentUser!.name}");
       } else {
-        throw Exception("User not authenticated");
+        throw Exception('User not logged in');
       }
     } catch (e) {
-      print("⚠️ Activity page initialization failed: $e");
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _error = e.toString();
-        });
-      }
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _ensureUserDataLoaded() async {
-    if (_userProvider?.currentUser == null && !_isDisposed) {
-      final User? authUser = FirebaseAuth.instance.currentUser;
-      if (authUser != null) {
-        await _userProvider?.fetchUser(authUser.uid);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    _tabController.dispose();
-
-    // ✅ FIX: Safely stop listening without accessing Provider.of()
-    try {
-      _orderProvider?.stopListening();
-    } catch (e) {
-      print("⚠️ Error stopping order listener: $e");
-    }
-
-    super.dispose();
-  }
-
-  // ✅ FIX: Proper navigation handling - don't pop back to CustomerHomePage
-  void _onBottomNavTap(int index) {
-    if (index == 3 || !mounted || _isDisposed)
-      return; // Already on Activity tab
-
-    if (widget.showBottomNav) {
-      // Standalone mode: Use named routes
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_isDisposed) {
-          switch (index) {
-            case 0:
-              Navigator.pushReplacementNamed(context, '/home');
-              break;
-            case 1:
-              Navigator.pushReplacementNamed(context, '/shops');
-              break;
-            case 2:
-              Navigator.pushReplacementNamed(context, '/orders');
-              break;
-            case 4:
-              Navigator.pushReplacementNamed(context, '/account');
-              break;
-          }
-        }
+      setState(() {
+        _error = e.toString();
       });
-    } else {
-      // ✅ FIX: In embedded mode, do nothing - let CustomerHomePage handle it
-      // Don't pop or navigate - the tab switching is handled by the parent
-      print(
-          "🔄 Activity page embedded mode - ignoring navigation to index $index");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -155,97 +78,38 @@ class _ActivityPageState extends State<ActivityPage>
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
-      appBar: _buildAppBar(),
-      body: _buildBody(),
+      appBar: EatoComponents.appBar(
+        context: context,
+        title: 'Order Activity',
+        titleIcon: Icons.history,
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'Active'),
+            Tab(text: 'Completed'),
+            Tab(text: 'All Orders'),
+          ],
+          labelColor: EatoTheme.primaryColor,
+          unselectedLabelColor: EatoTheme.textSecondaryColor,
+          indicatorColor: EatoTheme.primaryColor,
+        ),
+      ),
+      body: _isLoading
+          ? _buildLoadingState()
+          : _error != null
+              ? _buildErrorState()
+              : _buildContent(),
       bottomNavigationBar: widget.showBottomNav
           ? BottomNavBar(
               currentIndex: 3,
-              onTap: _onBottomNavTap,
+              onTap: (index) {
+                if (index != 3) {
+                  Navigator.pushReplacementNamed(
+                      context, _getRouteForIndex(index));
+                }
+              },
             )
           : null,
-    );
-  }
-
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 1,
-      automaticallyImplyLeading: false,
-      title: Row(
-        children: [
-          Icon(
-            Icons.timeline,
-            color: EatoTheme.primaryColor,
-            size: 24,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Activity',
-            style: EatoTheme.headingMedium.copyWith(
-              color: EatoTheme.textPrimaryColor,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          onPressed: _refreshData,
-          icon: Icon(
-            Icons.refresh,
-            color: EatoTheme.textSecondaryColor,
-          ),
-          tooltip: 'Refresh',
-        ),
-      ],
-      bottom: TabBar(
-        controller: _tabController,
-        indicatorColor: EatoTheme.primaryColor,
-        labelColor: EatoTheme.primaryColor,
-        unselectedLabelColor: EatoTheme.textSecondaryColor,
-        labelStyle: EatoTheme.labelLarge,
-        tabs: const [
-          Tab(text: 'Active Orders'),
-          Tab(text: 'Order History'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_error != null) {
-      return _buildErrorState();
-    }
-
-    return Consumer2<UserProvider, OrderProvider>(
-      builder: (context, userProvider, orderProvider, child) {
-        final user = userProvider.currentUser;
-
-        if (user == null) {
-          return _buildLoginRequiredState();
-        }
-
-        if (_isLoading && orderProvider.customerOrders.isEmpty) {
-          return _buildLoadingState();
-        }
-
-        return TabBarView(
-          controller: _tabController,
-          children: [
-            _buildActiveOrdersTab(orderProvider),
-            _buildOrderHistoryTab(orderProvider),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildLoginRequiredState() {
-    return EatoComponents.emptyState(
-      message: "Please login to view your orders",
-      icon: Icons.person_outline,
-      actionText: "Go to Login",
-      onActionPressed: () =>
-          Navigator.pushReplacementNamed(context, '/role_selection'),
     );
   }
 
@@ -254,20 +118,11 @@ class _ActivityPageState extends State<ActivityPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(EatoTheme.primaryColor),
-            ),
-          ),
-          const SizedBox(height: 16),
+          CircularProgressIndicator(color: EatoTheme.primaryColor),
+          SizedBox(height: 16),
           Text(
-            'Loading your activity...',
-            style: EatoTheme.bodyMedium.copyWith(
-              color: EatoTheme.textSecondaryColor,
-            ),
+            'Loading your orders...',
+            style: TextStyle(color: EatoTheme.textSecondaryColor),
           ),
         ],
       ),
@@ -275,275 +130,763 @@ class _ActivityPageState extends State<ActivityPage>
   }
 
   Widget _buildErrorState() {
-    return EatoComponents.emptyState(
-      message: "Something went wrong. Please try again.",
-      icon: Icons.error_outline,
-      actionText: "Retry",
-      onActionPressed: () {
-        if (mounted && !_isDisposed) {
-          setState(() {
-            _error = null;
-            _isInitialized = false;
-          });
-          _initializeDataInBackground();
-        }
-      },
-    );
-  }
-
-  Widget _buildActiveOrdersTab(OrderProvider orderProvider) {
-    final activeOrders = orderProvider.customerOrders
-        .where((order) =>
-            order.status != OrderStatus.delivered &&
-            order.status != OrderStatus.cancelled &&
-            order.status != OrderStatus.rejected)
-        .toList();
-
-    if (activeOrders.isEmpty) {
-      return EatoComponents.emptyState(
-        message: "No active orders",
-        icon: Icons.shopping_cart_outlined,
-        actionText: "Start Shopping",
-        onActionPressed: () {
-          if (widget.showBottomNav) {
-            Navigator.pushReplacementNamed(context, '/home');
-          } else {
-            // ✅ FIX: In embedded mode, don't pop - let parent handle tab switching
-            print(
-                "🔄 Activity page: Start Shopping - staying in embedded mode");
-          }
-        },
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      color: EatoTheme.primaryColor,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: activeOrders.length,
-        itemBuilder: (context, index) {
-          return _buildOrderCard(activeOrders[index], isActive: true);
-        },
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
+          SizedBox(height: 16),
+          Text(
+            'Failed to load orders',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          SizedBox(height: 8),
+          Text(
+            _error ?? 'Unknown error occurred',
+            style: TextStyle(color: EatoTheme.textSecondaryColor),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          EatoComponents.primaryButton(
+            text: 'Retry',
+            onPressed: () {
+              setState(() {
+                _isInitialized = false;
+              });
+              _initializeOrders();
+            },
+            width: 120,
+            height: 40,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildOrderHistoryTab(OrderProvider orderProvider) {
-    final completedOrders = orderProvider.customerOrders
+  Widget _buildContent() {
+    return Consumer<OrderProvider>(
+      builder: (context, orderProvider, _) {
+        final allOrders = orderProvider.customerOrders;
+
+        if (allOrders.isEmpty) {
+          return EatoComponents.emptyState(
+            message:
+                'No orders found\nStart ordering to see your order history!',
+            icon: Icons.receipt_long,
+            actionText: 'Browse Restaurants',
+            onActionPressed: () => Navigator.pushNamed(context, '/home'),
+          );
+        }
+
+        return TabBarView(
+          controller: _tabController,
+          children: [
+            _buildOrdersList(_getActiveOrders(allOrders)),
+            _buildOrdersList(_getCompletedOrders(allOrders)),
+            _buildOrdersList(allOrders),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOrdersList(List<CustomerOrder> orders) {
+    if (orders.isEmpty) {
+      return EatoComponents.emptyState(
+        message: 'No orders in this category',
+        icon: Icons.inbox,
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: orders.length,
+      itemBuilder: (context, index) => _buildOrderCard(orders[index]),
+    );
+  }
+
+  Widget _buildOrderCard(CustomerOrder order) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Order Header
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.restaurant, color: EatoTheme.primaryColor),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.storeName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: EatoTheme.textPrimaryColor,
+                        ),
+                        overflow:
+                            TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
+                      ),
+                      Text(
+                        'Order #${order.id.substring(0, 8)}',
+                        style: TextStyle(
+                          color: EatoTheme.textSecondaryColor,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    OrderStatusWidget(
+                      status: order.status,
+                      showAnimation: _isActiveStatus(order.status),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Rs. ${order.totalAmount.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: EatoTheme.primaryColor,
+                        fontSize:
+                            14, // ✅ FIXED: Slightly smaller to prevent overflow
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Order Items Summary
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${order.items.length} item${order.items.length > 1 ? 's' : ''}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: EatoTheme.textSecondaryColor,
+                  ),
+                ),
+                SizedBox(height: 8),
+                // ✅ FIXED: Better item list with overflow handling
+                ...order.items.take(2).map((item) => Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${item.quantity}x ',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: EatoTheme.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              item.foodName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: EatoTheme.textSecondaryColor,
+                              ),
+                              overflow: TextOverflow
+                                  .ellipsis, // ✅ FIXED: Prevent overflow
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                if (order.items.length > 2)
+                  Text(
+                    '+${order.items.length - 2} more items',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: EatoTheme.primaryColor,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 16),
+
+          // Store Contact Information
+          _buildStoreContactSection(order),
+
+          // Order Actions - ✅ FIXED: Better spacing and layout
+          _buildOrderActions(order),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStoreContactSection(CustomerOrder order) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('stores')
+          .doc(order.storeId)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: EatoTheme.primaryColor),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Loading restaurant contact...',
+                  style: TextStyle(
+                      fontSize: 12, color: EatoTheme.textSecondaryColor),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final storeData = snapshot.data!.data() as Map<String, dynamic>?;
+        final contact = storeData?['contact']?.toString() ?? '';
+
+        if (contact.isEmpty) {
+          return SizedBox(); // Don't show anything if no contact
+        }
+
+        return Container(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            // ✅ FIXED: Use EatoTheme purple instead of blue
+            color: EatoTheme.primaryColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.phone, color: EatoTheme.primaryColor, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Restaurant Contact',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: EatoTheme.primaryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    // ✅ FIXED: Better text wrapping and overflow handling
+                    Text(
+                      contact,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: EatoTheme.primaryColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              // ✅ FIXED: More compact call button
+              SizedBox(
+                width: 60,
+                height: 32,
+                child: ElevatedButton(
+                  onPressed: () => _callStore(contact, order.storeName),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: EatoTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size(60, 32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.call, size: 14),
+                      SizedBox(width: 2),
+                      Text('Call', style: TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOrderActions(CustomerOrder order) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: EatoTheme.backgroundColor,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+      ),
+      child: Column(
+        children: [
+          // ✅ FIXED: Date/time in separate row to prevent overflow
+          Row(
+            children: [
+              Icon(Icons.access_time,
+                  size: 14, color: EatoTheme.textSecondaryColor),
+              SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  DateFormat('MMM dd, yyyy • hh:mm a').format(order.orderTime),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: EatoTheme.textSecondaryColor,
+                  ),
+                  overflow: TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          // ✅ FIXED: Action buttons in separate row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_canCancelOrder(order)) ...[
+                TextButton(
+                  onPressed: () => _showCancelOrderDialog(order),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: Size(60, 32),
+                  ),
+                ),
+                SizedBox(width: 8),
+              ],
+              ElevatedButton(
+                onPressed: () => _showOrderDetailsDialog(order),
+                child: Text(
+                  'View Details',
+                  style: TextStyle(fontSize: 12),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size(80, 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===================================
+  // CALL FUNCTIONALITY
+  // ===================================
+
+  Future<void> _callStore(String phoneNumber, String storeName) async {
+    try {
+      final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        // Fallback: Copy to clipboard
+        await Clipboard.setData(ClipboardData(text: phoneNumber));
+        _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
+      }
+    } catch (e) {
+      print('Error launching phone call: $e');
+      // Fallback: Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: phoneNumber));
+      _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
+    }
+  }
+
+  // ===================================
+  // ORDER MANAGEMENT
+  // ===================================
+
+  List<CustomerOrder> _getActiveOrders(List<CustomerOrder> orders) {
+    return orders
+        .where((order) =>
+            order.status == OrderStatus.pending ||
+            order.status == OrderStatus.confirmed ||
+            order.status == OrderStatus.preparing ||
+            order.status == OrderStatus.ready ||
+            order.status == OrderStatus.onTheWay)
+        .toList();
+  }
+
+  List<CustomerOrder> _getCompletedOrders(List<CustomerOrder> orders) {
+    return orders
         .where((order) =>
             order.status == OrderStatus.delivered ||
             order.status == OrderStatus.cancelled ||
             order.status == OrderStatus.rejected)
         .toList();
-
-    if (completedOrders.isEmpty) {
-      return EatoComponents.emptyState(
-        message: "No completed orders yet",
-        icon: Icons.history,
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      color: EatoTheme.primaryColor,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: completedOrders.length,
-        itemBuilder: (context, index) {
-          return _buildOrderCard(completedOrders[index], isActive: false);
-        },
-      ),
-    );
   }
 
-  Widget _buildOrderCard(CustomerOrder order, {required bool isActive}) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+  bool _isActiveStatus(OrderStatus status) {
+    return status == OrderStatus.pending ||
+        status == OrderStatus.confirmed ||
+        status == OrderStatus.preparing ||
+        status == OrderStatus.ready ||
+        status == OrderStatus.onTheWay;
+  }
+
+  bool _canCancelOrder(CustomerOrder order) {
+    return order.status == OrderStatus.pending ||
+        order.status == OrderStatus.confirmed;
+  }
+
+  Future<void> _showCancelOrderDialog(CustomerOrder order) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Cancel Order'),
+        content: Text('Are you sure you want to cancel this order?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Keep Order'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Cancel Order', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () => _viewOrderDetails(order),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    );
+
+    if (confirmed == true) {
+      try {
+        final orderProvider =
+            Provider.of<OrderProvider>(context, listen: false);
+        await orderProvider.cancelOrder(order.id, 'Cancelled by customer');
+        _showSnackBar('Order cancelled successfully', Colors.orange);
+      } catch (e) {
+        _showSnackBar('Failed to cancel order', Colors.red);
+      }
+    }
+  }
+
+  void _showOrderDetailsDialog(CustomerOrder order) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.storeName,
-                        style: EatoTheme.labelLarge.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: EatoTheme.textPrimaryColor,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Order #${order.id.substring(0, 8)}',
-                        style: EatoTheme.bodySmall.copyWith(
-                          color: EatoTheme.textSecondaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  OrderStatusWidget(
-                    status: order.status,
-                    showAnimation: isActive,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (isActive) ...[
-                OrderProgressIndicator(currentStatus: order.status),
-                const SizedBox(height: 12),
-              ],
+              // Dialog Header
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: EatoTheme.primaryColor.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: EatoTheme.primaryColor.withOpacity(0.1),
-                    width: 1,
+                  color: EatoTheme.primaryColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      'Items (${order.items.length})',
-                      style: EatoTheme.labelMedium.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: EatoTheme.textPrimaryColor,
+                    Icon(Icons.receipt_long, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Order Details',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          Text(
+                            'Order #${order.id.substring(0, 8)}',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ...order.items
-                        .take(2)
-                        .map((item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Dialog Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Order Status
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: EatoTheme.backgroundColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Order Status',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            OrderStatusWidget(
+                              status: order.status,
+                              showAnimation: _isActiveStatus(order.status),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Restaurant Info with Contact
+                      _buildDetailSection(
+                        title: 'Restaurant Information',
+                        child: _buildRestaurantInfoWithContact(order),
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Order Items
+                      _buildDetailSection(
+                        title: 'Order Items',
+                        child: Column(
+                          children: order.items
+                              .map((item) => Container(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: EatoTheme.primaryColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                item.foodName,
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w500),
+                                              ),
+                                              if (item.variation != null)
+                                                Text(
+                                                  item.variation!,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: EatoTheme
+                                                        .textSecondaryColor,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          '${item.quantity}x',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            color: EatoTheme.textSecondaryColor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 16),
+                                        Text(
+                                          'Rs. ${item.totalPrice.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: EatoTheme.primaryColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Order Summary
+                      _buildDetailSection(
+                        title: 'Order Summary',
+                        child: Column(
+                          children: [
+                            _buildSummaryRow('Subtotal', order.subtotal),
+                            if (order.deliveryFee > 0)
+                              _buildSummaryRow(
+                                  'Delivery Fee', order.deliveryFee),
+                            _buildSummaryRow('Service Fee', order.serviceFee),
+                            Divider(),
+                            _buildSummaryRow('Total Amount', order.totalAmount,
+                                isTotal: true),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 16),
+
+                      // Delivery Information
+                      if (order.deliveryOption == 'Delivery')
+                        _buildDetailSection(
+                          title: 'Delivery Information',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
+                                  Icon(Icons.location_on,
+                                      size: 16, color: EatoTheme.primaryColor),
+                                  SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      '${item.quantity}x ${item.foodName}',
-                                      style: EatoTheme.bodySmall.copyWith(
-                                        color: EatoTheme.textSecondaryColor,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Rs. ${item.totalPrice.toStringAsFixed(0)}',
-                                    style: EatoTheme.bodySmall.copyWith(
-                                      fontWeight: FontWeight.w500,
-                                      color: EatoTheme.accentColor,
+                                      order.displayAddress,
+                                      style: TextStyle(fontSize: 14),
                                     ),
                                   ),
                                 ],
                               ),
-                            ))
-                        .toList(),
-                    if (order.items.length > 2) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '+${order.items.length - 2} more items',
-                        style: EatoTheme.bodySmall.copyWith(
-                          color: EatoTheme.primaryColor,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 16,
-                            color: EatoTheme.textSecondaryColor,
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.payment,
+                                      size: 16, color: EatoTheme.primaryColor),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    order.paymentMethod,
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatOrderTime(order.orderTime),
-                            style: EatoTheme.bodySmall.copyWith(
+                        ),
+
+                      // Special Instructions
+                      if (order.specialInstructions != null &&
+                          order.specialInstructions!.isNotEmpty)
+                        _buildDetailSection(
+                          title: 'Special Instructions',
+                          child: Text(
+                            order.specialInstructions!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
                               color: EatoTheme.textSecondaryColor,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            order.deliveryOption == 'Delivery'
-                                ? Icons.delivery_dining
-                                : Icons.store,
-                            size: 16,
-                            color: EatoTheme.textSecondaryColor,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            order.deliveryOption,
-                            style: EatoTheme.bodySmall.copyWith(
-                              color: EatoTheme.textSecondaryColor,
+                        ),
+
+                      SizedBox(height: 16),
+
+                      // Order Timeline
+                      _buildDetailSection(
+                        title: 'Order Timeline',
+                        child: Column(
+                          children: [
+                            _buildTimelineItem(
+                              'Order Placed',
+                              order.orderTime,
+                              true,
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Total',
-                        style: EatoTheme.bodySmall.copyWith(
-                          color: EatoTheme.textSecondaryColor,
+                            if (order.confirmedTime != null)
+                              _buildTimelineItem(
+                                'Order Confirmed',
+                                order.confirmedTime!,
+                                true,
+                              ),
+                            if (order.readyTime != null)
+                              _buildTimelineItem(
+                                'Order Ready',
+                                order.readyTime!,
+                                true,
+                              ),
+                            if (order.deliveredTime != null)
+                              _buildTimelineItem(
+                                order.status == OrderStatus.delivered
+                                    ? 'Order Delivered'
+                                    : 'Order Completed',
+                                order.deliveredTime!,
+                                true,
+                              ),
+                          ],
                         ),
                       ),
-                      Text(
-                        'Rs. ${order.totalAmount.toStringAsFixed(0)}',
-                        style: EatoTheme.labelLarge.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: EatoTheme.primaryColor,
-                        ),
-                      ),
                     ],
-                  ),
-                ],
-              ),
-              if (isActive && _shouldShowActionButton(order.status)) ...[
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: EatoComponents.primaryButton(
-                    text: _getActionButtonText(order.status),
-                    onPressed: () => _handleOrderAction(order),
-                    height: 40,
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -551,73 +894,233 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
-  String _formatOrderTime(DateTime orderTime) {
-    final now = DateTime.now();
-    final difference = now.difference(orderTime);
+  Widget _buildRestaurantInfoWithContact(CustomerOrder order) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('stores')
+          .doc(order.storeId)
+          .get(),
+      builder: (context, snapshot) {
+        final contact = snapshot.hasData
+            ? (snapshot.data!.data() as Map<String, dynamic>?)
+                ?.let((data) => data['contact']?.toString())
+            : null;
 
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} min ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} hr ago';
-    } else {
-      return DateFormat('MMM dd, HH:mm').format(orderTime);
-    }
-  }
-
-  bool _shouldShowActionButton(OrderStatus status) {
-    return status == OrderStatus.pending ||
-        status == OrderStatus.confirmed ||
-        status == OrderStatus.ready;
-  }
-
-  String _getActionButtonText(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.pending:
-        return 'Track Order';
-      case OrderStatus.confirmed:
-        return 'Track Order';
-      case OrderStatus.ready:
-        return 'Ready for Pickup';
-      case OrderStatus.onTheWay:
-        return 'Track Delivery';
-      default:
-        return 'View Details';
-    }
-  }
-
-  void _handleOrderAction(CustomerOrder order) {
-    _viewOrderDetails(order);
-  }
-
-  void _viewOrderDetails(CustomerOrder order) {
-    if (mounted && !_isDisposed) {
-      Navigator.pushNamed(
-        context,
-        '/order_details',
-        arguments: {'order': order},
-      );
-    }
-  }
-
-  Future<void> _refreshData() async {
-    if (_isDisposed) return;
-
-    try {
-      await _ensureUserDataLoaded();
-
-      if (_userProvider?.currentUser != null && !_isDisposed) {
-        _orderProvider?.listenToCustomerOrders(_userProvider!.currentUser!.id);
-      }
-    } catch (e) {
-      print("⚠️ Error refreshing activity data: $e");
-      if (mounted && !_isDisposed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to refresh data'),
-            backgroundColor: EatoTheme.errorColor,
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.store, size: 16, color: EatoTheme.primaryColor),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    order.storeName,
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            if (contact != null && contact.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(Icons.phone, size: 16, color: EatoTheme.primaryColor),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      contact,
+                      style: TextStyle(fontSize: 14),
+                      overflow:
+                          TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
+                    ),
+                  ),
+                  SizedBox(
+                    width: 70,
+                    height: 32,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _callStore(contact, order.storeName),
+                      icon: Icon(Icons.call, size: 14),
+                      label: Text('Call', style: TextStyle(fontSize: 10)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: EatoTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size(70, 32),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (snapshot.connectionState == ConnectionState.waiting) ...[
+              Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: EatoTheme.primaryColor),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Loading contact...',
+                    style: TextStyle(
+                        fontSize: 12, color: EatoTheme.textSecondaryColor),
+                  ),
+                ],
+              ),
+            ],
+          ],
         );
-      }
+      },
+    );
+  }
+
+  Widget _buildDetailSection({required String title, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: EatoTheme.textPrimaryColor,
+          ),
+        ),
+        SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: EatoTheme.backgroundColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: isTotal
+                  ? EatoTheme.textPrimaryColor
+                  : EatoTheme.textSecondaryColor,
+            ),
+          ),
+          Text(
+            'Rs. ${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+              color:
+                  isTotal ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem(String title, DateTime time, bool isCompleted) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: isCompleted
+                  ? Colors.green
+                  : EatoTheme.primaryColor.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: isCompleted
+                        ? Colors.green.shade700
+                        : EatoTheme.textSecondaryColor,
+                  ),
+                ),
+                Text(
+                  DateFormat('MMM dd, yyyy • hh:mm a').format(time),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: EatoTheme.textSecondaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===================================
+  // HELPER METHODS
+  // ===================================
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  String _getRouteForIndex(int index) {
+    switch (index) {
+      case 0:
+        return '/home';
+      case 1:
+        return '/subscribed';
+      case 2:
+        return '/orders';
+      case 4:
+        return '/account';
+      default:
+        return '/home';
     }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+}
+
+// Extension to add null-aware let function
+extension NullableExtension<T> on T? {
+  R? let<R>(R Function(T) operation) {
+    final value = this;
+    return value != null ? operation(value) : null;
   }
 }

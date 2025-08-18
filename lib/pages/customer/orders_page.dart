@@ -1,16 +1,21 @@
-// File: lib/pages/customer/OrdersPage.dart (Fixed to handle cart data properly)
+// File: lib/pages/customer/OrdersPage.dart
+// Professional UI with EatoComponents, store availability checking, and proper cart clearing
 
+import 'package:eato/Provider/CartProvider.dart';
 import 'package:eato/pages/location/location_picker_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/services/CartService.dart';
-import 'package:eato/widgets/OrderStatusWidget.dart';
+import 'package:eato/services/PaymentService.dart';
+import 'package:eato/EatoComponents.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:eato/widgets/test_notification_widget.dart';
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -21,7 +26,7 @@ class OrdersPage extends StatefulWidget {
   State<OrdersPage> createState() => _OrdersPageState();
 }
 
-class _OrdersPageState extends State<OrdersPage> {
+class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   // Cart Management
   List<Map<String, dynamic>> _cartItems = [];
   int _totalCartItems = 0;
@@ -29,30 +34,56 @@ class _OrdersPageState extends State<OrdersPage> {
   bool _isLoading = true;
 
   // Order Options
-  String _deliveryOption = 'Delivery';
+  DeliveryType _deliveryOption = DeliveryType.pickup;
+  PaymentType _paymentMethod = PaymentType.cash;
   String _specialInstructions = '';
   DateTime? _scheduledTime;
-  String _paymentMethod = 'Cash on Delivery';
 
-  // Location data - ENHANCED
+  // Location data
   String _deliveryAddress = '';
   GeoPoint? _deliveryLocation;
   String _locationDisplayText = '';
 
-  final List<String> _paymentMethods = [
-    'Cash on Delivery',
-    'Card Payment',
-    'Mobile Wallet',
-    'Bank Transfer'
-  ];
+  // Store availability data
+  Map<String, Map<String, dynamic>> _storeAvailability = {};
+  bool _checkingStoreAvailability = false;
 
+  // UI Controllers
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  @override
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
     _loadCartItems();
+
+    // ✅ SIMPLE FIX: Listen to provider changes correctly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<CartProvider>(context, listen: false).addListener(() {
+        if (mounted) {
+          _loadCartItems();
+        }
+      });
+    });
   }
 
-  // ✅ FIXED: Load cart items with proper error handling
+  void _initializeAnimations() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+  }
+
+  // ===================================
+  // CART LOADING WITH STORE AVAILABILITY
+  // ===================================
+
   Future<void> _loadCartItems() async {
     setState(() {
       _isLoading = true;
@@ -60,57 +91,36 @@ class _OrdersPageState extends State<OrdersPage> {
 
     try {
       final items = await CartService.getCartItems();
-      print('📋 [OrdersPage] Loaded ${items.length} cart items');
-
-      // Debug: Print each item structure
-      for (int i = 0; i < items.length; i++) {
-        print('   Item $i: ${items[i].keys.toList()}');
-        print('   Data: ${items[i]}');
-      }
+      print('🛒 [OrdersPage] Loaded ${items.length} cart items');
 
       setState(() {
         _cartItems = items;
         _isLoading = false;
       });
+
       _updateCartTotals();
+      await _checkStoreAvailability();
     } catch (e) {
       print('❌ [OrdersPage] Error loading cart items: $e');
       setState(() {
         _cartItems = [];
         _isLoading = false;
       });
-
-      // Show error to user
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading cart. Cart has been cleared.'),
-            backgroundColor: Colors.orange,
-            action: SnackBarAction(
-              label: 'Refresh',
-              onPressed: _loadCartItems,
-              textColor: Colors.white,
-            ),
-          ),
-        );
-      }
+      _showErrorSnackBar('Error loading cart. Please try again.');
     }
   }
 
-  // ✅ FIXED: Safe cart total calculation
   void _updateCartTotals() {
     try {
       _totalCartItems = 0;
       _totalCartValue = 0.0;
 
       for (var item in _cartItems) {
-        // Safe quantity calculation
         final quantity = item['quantity'];
         if (quantity != null) {
           _totalCartItems += (quantity as num).toInt();
         }
 
-        // Safe price calculation
         final totalPrice = item['totalPrice'];
         if (totalPrice != null) {
           _totalCartValue += (totalPrice as num).toDouble();
@@ -126,7 +136,92 @@ class _OrdersPageState extends State<OrdersPage> {
     }
   }
 
-  // ✅ FIXED: Safe quantity update
+  // ===================================
+  // STORE AVAILABILITY CHECKING
+  // ===================================
+
+  Future<void> _checkStoreAvailability() async {
+    if (_cartItems.isEmpty) return;
+
+    setState(() {
+      _checkingStoreAvailability = true;
+    });
+
+    try {
+      final storeIds =
+          _cartItems.map((item) => item['shopId'] as String).toSet();
+
+      for (String storeId in storeIds) {
+        final storeDoc = await FirebaseFirestore.instance
+            .collection('stores')
+            .doc(storeId)
+            .get();
+
+        if (storeDoc.exists) {
+          final storeData = storeDoc.data() as Map<String, dynamic>;
+
+          // Parse delivery mode
+          String deliveryMode = storeData['deliveryMode'] ?? 'pickup';
+          bool supportsPickup =
+              deliveryMode == 'pickup' || deliveryMode == 'both';
+          bool supportsDelivery =
+              deliveryMode == 'delivery' || deliveryMode == 'both';
+
+          _storeAvailability[storeId] = {
+            'name': storeData['name'] ?? 'Unknown Store',
+            'supportsPickup': supportsPickup,
+            'supportsDelivery': supportsDelivery,
+            'deliveryMode': deliveryMode,
+            'isActive': storeData['isActive'] ?? true,
+            'isAvailable': storeData['isAvailable'] ?? true,
+          };
+        }
+      }
+
+      // Update delivery option based on store availability
+      _updateDeliveryOptionBasedOnAvailability();
+    } catch (e) {
+      print('❌ Error checking store availability: $e');
+    } finally {
+      setState(() {
+        _checkingStoreAvailability = false;
+      });
+    }
+  }
+
+  void _updateDeliveryOptionBasedOnAvailability() {
+    if (_storeAvailability.isEmpty) return;
+
+    bool allStoresSupportPickup = _storeAvailability.values
+        .every((store) => store['supportsPickup'] == true);
+    bool allStoresSupportDelivery = _storeAvailability.values
+        .every((store) => store['supportsDelivery'] == true);
+
+    // If current option is not supported by all stores, switch to supported option
+    if (_deliveryOption == DeliveryType.delivery && !allStoresSupportDelivery) {
+      if (allStoresSupportPickup) {
+        setState(() {
+          _deliveryOption = DeliveryType.pickup;
+        });
+        _showInfoSnackBar(
+            'Switched to Pickup - some restaurants don\'t deliver');
+      }
+    } else if (_deliveryOption == DeliveryType.pickup &&
+        !allStoresSupportPickup) {
+      if (allStoresSupportDelivery) {
+        setState(() {
+          _deliveryOption = DeliveryType.delivery;
+        });
+        _showInfoSnackBar(
+            'Switched to Delivery - some restaurants are pickup only');
+      }
+    }
+  }
+
+  // ===================================
+  // CART ITEM MANAGEMENT
+  // ===================================
+
   Future<void> _updateCartItemQuantity(int index, int change) async {
     try {
       final currentQuantity = (_cartItems[index]['quantity'] as num).toInt();
@@ -158,14 +253,7 @@ class _OrdersPageState extends State<OrdersPage> {
       });
 
       await CartService.updateCartItems(_cartItems);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Item removed from cart'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _showSuccessSnackBar('Item removed from cart');
     } catch (e) {
       print('❌ [OrdersPage] Error removing item: $e');
       _loadCartItems(); // Reload on error
@@ -173,51 +261,92 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 
   Future<void> _clearCart() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Clear Cart'),
-        content:
-            Text('Are you sure you want to remove all items from your cart?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Clear', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await _showClearCartDialog();
+    if (!confirmed) return;
 
-    if (confirmed == true) {
+    try {
       await CartService.clearCart();
       setState(() {
         _cartItems.clear();
         _updateCartTotals();
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cart cleared'), backgroundColor: Colors.red),
-      );
+      _showSuccessSnackBar('Cart cleared successfully');
+    } catch (e) {
+      print('❌ Error clearing cart: $e');
+      _showErrorSnackBar('Failed to clear cart');
     }
   }
 
-  void _selectScheduleTime() async {
-    final now = DateTime.now();
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(now.add(Duration(hours: 1))),
-    );
+  // ===================================
+  // ORDER PLACEMENT WITH PROPER CLEARING
+  // ===================================
 
-    if (time != null) {
-      setState(() {
-        _scheduledTime =
-            DateTime(now.year, now.month, now.day, time.hour, time.minute);
-      });
+  Future<void> _placeOrderWithBackend() async {
+    if (_cartItems.isEmpty) {
+      _showErrorSnackBar('Your cart is empty');
+      return;
+    }
+
+    // Validate delivery location for delivery orders
+    if (_deliveryOption == DeliveryType.delivery) {
+      if (_deliveryLocation == null && _deliveryAddress.trim().isEmpty) {
+        _showErrorSnackBar('Please select delivery location');
+        return;
+      }
+    }
+
+    // Show confirmation dialog
+    final confirmed = await _showOrderConfirmationDialog();
+    if (!confirmed) return;
+
+    // Show loading overlay
+    _showLoadingDialog('Placing your orders...');
+
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+      if (userProvider.currentUser == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Place orders with notifications
+      final orderIds = await orderProvider.placeOrdersWithNotifications(
+        customerId: userProvider.currentUser!.id,
+        customerName: userProvider.currentUser!.name,
+        customerPhone: userProvider.currentUser!.phoneNumber ?? '',
+        cartItems: _cartItems,
+        deliveryOption: _deliveryOption.displayName,
+        deliveryAddress: _deliveryAddress,
+        deliveryLocation: _deliveryLocation,
+        locationDisplayText: _locationDisplayText,
+        paymentMethod: _paymentMethod.displayName,
+        specialInstructions:
+            _specialInstructions.isNotEmpty ? _specialInstructions : null,
+        scheduledTime: _scheduledTime,
+      );
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (orderIds.isNotEmpty) {
+        // ✅ FIXED: Properly clear cart after successful order placement
+        await CartService.clearCart();
+        setState(() {
+          _cartItems.clear();
+          _updateCartTotals();
+        });
+
+        // Start listening to customer orders for real-time updates
+        orderProvider.listenToCustomerOrders(userProvider.currentUser!.id);
+
+        // Show success dialog
+        _showOrderSuccessDialog(orderIds.length);
+      } else {
+        throw Exception('No orders were created');
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      _showOrderFailureDialog(e.toString());
     }
   }
 
@@ -241,283 +370,52 @@ class _OrdersPageState extends State<OrdersPage> {
         setState(() {
           _deliveryLocation = result.geoPoint;
           _locationDisplayText = result.formattedAddress;
-          _deliveryAddress =
-              result.formattedAddress; // For backward compatibility
+          _deliveryAddress = result.formattedAddress;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Delivery location selected'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showSuccessSnackBar('Delivery location selected');
       }
     } catch (e) {
       print('Error selecting location: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error selecting location. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showErrorSnackBar('Error selecting location. Please try again.');
     }
   }
 
   // ===================================
-  // ENHANCED BACKEND INTEGRATION
+  // UI BUILDERS
   // ===================================
-
-  Future<void> _placeOrderWithBackend() async {
-    if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Your cart is empty'),
-            backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    // Validate delivery location for delivery orders
-    if (_deliveryOption == 'Delivery') {
-      if (_deliveryLocation == null && _deliveryAddress.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Please select delivery location'),
-              backgroundColor: Colors.orange),
-        );
-        return;
-      }
-    }
-
-    // Show confirmation dialog
-    final confirmed = await _showOrderConfirmationDialog();
-    if (!confirmed) return;
-
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: Colors.purple),
-            SizedBox(height: 16),
-            Text('Placing your orders...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
-      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-
-      if (userProvider.currentUser == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Place orders using the enhanced backend with location
-      // Place orders with notifications
-      final orderIds = await orderProvider.placeOrdersWithNotifications(
-        customerId: userProvider.currentUser!.id,
-        customerName: userProvider.currentUser!.name,
-        customerPhone: userProvider.currentUser!.phoneNumber ?? '',
-        cartItems: _cartItems,
-        deliveryOption: _deliveryOption,
-        deliveryAddress: _deliveryAddress,
-        deliveryLocation: _deliveryLocation,
-        locationDisplayText: _locationDisplayText,
-        paymentMethod: _paymentMethod,
-        specialInstructions: _specialInstructions,
-        scheduledTime: _scheduledTime,
-      );
-
-      Navigator.pop(context); // Close loading dialog
-
-      // Start listening to customer orders for real-time updates
-      orderProvider.listenToCustomerOrders(userProvider.currentUser!.id);
-
-      // Show success dialog
-      _showOrderSuccessDialog(orderIds.length);
-
-      // Refresh cart
-      await _loadCartItems();
-    } catch (e) {
-      Navigator.pop(context);
-      _showOrderFailureDialog(e.toString());
-    }
-  }
-
-  Future<bool> _showOrderConfirmationDialog() async {
-    final deliveryFee = _deliveryOption == 'Delivery' ? 100.0 : 0.0;
-    final serviceFee = _totalCartValue * 0.05;
-    final totalAmount = _totalCartValue + deliveryFee + serviceFee;
-
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Confirm Order'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    'You are about to place orders with ${_getUniqueShopCount()} restaurants.'),
-                SizedBox(height: 8),
-                Text('Total Amount: Rs. ${totalAmount.toStringAsFixed(2)}',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text('Payment: $_paymentMethod'),
-                Text(
-                    '${_deliveryOption == 'Delivery' ? 'Delivery' : 'Pickup'}'),
-                if (_deliveryOption == 'Delivery')
-                  Text(
-                      'Address: ${_locationDisplayText.isNotEmpty ? _locationDisplayText : _deliveryAddress}'),
-                if (_scheduledTime != null)
-                  Text(
-                      'Scheduled: ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
-                child: Text('Confirm Order',
-                    style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  int _getUniqueShopCount() {
-    try {
-      return _cartItems.map((item) => item['shopId']).toSet().length;
-    } catch (e) {
-      print('Error getting shop count: $e');
-      return 0;
-    }
-  }
-
-  void _showOrderSuccessDialog(int orderCount) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: Icon(Icons.check_circle, color: Colors.green, size: 48),
-        title: Text('Orders Placed!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('✅ Placed $orderCount orders successfully'),
-            SizedBox(height: 8),
-            Text(
-                'Your orders have been sent to the restaurants. You will receive notifications about order status.'),
-            SizedBox(height: 8),
-            Text('Check the Activity tab for order updates.',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('View Orders'),
-            style: TextButton.styleFrom(foregroundColor: Colors.purple),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: Text('Great!', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showOrderFailureDialog(String error) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: Icon(Icons.error, color: Colors.red, size: 48),
-        title: Text('Order Failed'),
-        content: Text('Failed to place orders: $error'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  double _calculateTotalAmount() {
-    final deliveryFee = _deliveryOption == 'Delivery' ? 100.0 : 0.0;
-    final serviceFee = _totalCartValue * 0.05;
-    return _totalCartValue + deliveryFee + serviceFee;
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: Row(
-          children: [
-            Icon(Icons.shopping_cart, color: Colors.purple, size: 24),
-            SizedBox(width: 8),
-            Text('My Cart',
-                style: TextStyle(
-                    color: Colors.black87, fontWeight: FontWeight.bold)),
-            if (_totalCartItems > 0) ...[
-              SizedBox(width: 8),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.purple,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text('$_totalCartItems items',
-                    style: TextStyle(color: Colors.white, fontSize: 12)),
-              ),
-            ],
-          ],
-        ),
+      backgroundColor: EatoTheme.backgroundColor,
+      appBar: EatoComponents.appBar(
+        context: context,
+        title: 'My Cart',
+        titleIcon: Icons.shopping_cart,
         actions: [
           if (_cartItems.isNotEmpty)
             TextButton(
               onPressed: _clearCart,
               child: Text('Clear All', style: TextStyle(color: Colors.red)),
             ),
-          // DEBUG: Add debug button
-          IconButton(
-            onPressed: () async {
-              await CartService.getCartItems();
-              _loadCartItems();
-            },
-            icon: Icon(Icons.refresh, color: Colors.blue),
-          ),
         ],
       ),
       body: Column(
         children: [
+          // Cart count indicator
+          if (_totalCartItems > 0) _buildCartIndicator(),
+
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Colors.purple))
+                ? _buildLoadingState()
                 : _cartItems.isEmpty
                     ? _buildEmptyCart()
                     : _buildCartContent(),
           ),
+
           if (widget.showBottomNav)
             BottomNavBar(
-              currentIndex: 2, // Orders tab
+              currentIndex: 2,
               onTap: (index) {
                 if (index != 2) {
                   Navigator.pushReplacementNamed(
@@ -528,6 +426,1363 @@ class _OrdersPageState extends State<OrdersPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildCartIndicator() {
+    return AnimatedBuilder(
+      animation: _fadeAnimation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - _fadeAnimation.value)),
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: Container(
+              margin: EdgeInsets.all(16),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: EatoTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: EatoTheme.primaryColor.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.shopping_cart,
+                        color: Colors.white, size: 20),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_totalCartItems items in your cart',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          'Rs. ${_totalCartValue.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_getUniqueShopCount()} restaurants',
+                      style: TextStyle(
+                        color: EatoTheme.primaryColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: EatoTheme.primaryColor),
+          SizedBox(height: 16),
+          Text(
+            'Loading your cart...',
+            style: TextStyle(
+              color: EatoTheme.textSecondaryColor,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyCart() {
+    return EatoComponents.emptyState(
+      message: 'Your cart is empty\nAdd some delicious items to get started!',
+      icon: Icons.shopping_cart_outlined,
+      actionText: 'Browse Meals',
+      onActionPressed: () => Navigator.pushNamed(context, '/home'),
+    );
+  }
+
+  Widget _buildCartContent() {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.all(16),
+            children: [
+              // Cart items
+              ...List.generate(_cartItems.length,
+                  (index) => _buildCartItem(_cartItems[index], index)),
+
+              SizedBox(height: 24),
+
+              // Delivery options
+              _buildDeliveryOptions(),
+
+              SizedBox(height: 16),
+
+              // Payment method
+              _buildPaymentMethod(),
+
+              SizedBox(height: 16),
+
+              // Special instructions
+              _buildSpecialInstructions(),
+
+              SizedBox(height: 16),
+
+              // Schedule order
+              _buildScheduleOrder(),
+
+              SizedBox(height: 16),
+
+              // Order summary
+              _buildOrderSummary(),
+
+              SizedBox(height: 100), // Space for bottom button
+            ],
+          ),
+        ),
+
+        // Place order button
+        _buildPlaceOrderButton(),
+      ],
+    );
+  }
+
+  Widget _buildCartItem(Map<String, dynamic> item, int index) {
+    final foodName = item['foodName']?.toString() ?? 'Unknown Food';
+    final shopName = item['shopName']?.toString() ?? 'Unknown Shop';
+    final variation = item['variation']?.toString() ?? 'Regular';
+    final foodImage = item['foodImage']?.toString() ?? '';
+    final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+    final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+    final totalPrice = (item['totalPrice'] as num?)?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Food image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: foodImage.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: foodImage,
+                          width: 70,
+                          height: 70,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            width: 70,
+                            height: 70,
+                            color: Colors.grey.shade200,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: EatoTheme.primaryColor,
+                              ),
+                            ),
+                          ),
+                          errorWidget: (context, error, stackTrace) =>
+                              Container(
+                            width: 70,
+                            height: 70,
+                            color: Colors.grey.shade200,
+                            child: Icon(Icons.fastfood,
+                                color: EatoTheme.primaryColor),
+                          ),
+                        )
+                      : Container(
+                          width: 70,
+                          height: 70,
+                          color: Colors.grey.shade200,
+                          child: Icon(Icons.fastfood,
+                              color: EatoTheme.primaryColor),
+                        ),
+                ),
+
+                SizedBox(width: 16),
+
+                // Food details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        foodName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: EatoTheme.textPrimaryColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: EatoTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              variation,
+                              style: TextStyle(
+                                color: EatoTheme.primaryColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              shopName,
+                              style: TextStyle(
+                                color: EatoTheme.textSecondaryColor,
+                                fontSize: 12,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Rs. ${price.toStringAsFixed(2)} each',
+                        style: TextStyle(
+                          color: EatoTheme.primaryColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Remove button
+                IconButton(
+                  onPressed: () => _removeCartItem(index),
+                  icon: Icon(Icons.delete_outline,
+                      color: Colors.red.shade400, size: 22),
+                  constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                ),
+              ],
+            ),
+          ),
+
+          // Quantity controls and total
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: EatoTheme.backgroundColor,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Quantity controls
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildQuantityButton(
+                        icon: Icons.remove,
+                        onPressed: () => _updateCartItemQuantity(index, -1),
+                        color: Colors.red.shade400,
+                      ),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          '$quantity',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: EatoTheme.textPrimaryColor,
+                          ),
+                        ),
+                      ),
+                      _buildQuantityButton(
+                        icon: Icons.add,
+                        onPressed: () => _updateCartItemQuantity(index, 1),
+                        color: Colors.green.shade400,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Item total
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Total',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: EatoTheme.textSecondaryColor,
+                      ),
+                    ),
+                    Text(
+                      'Rs. ${totalPrice.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: EatoTheme.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color color,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeliveryOptions() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.delivery_dining, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Delivery Options',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_checkingStoreAvailability)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: EatoTheme.primaryColor),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Checking store availability...',
+                    style: TextStyle(color: EatoTheme.textSecondaryColor),
+                  ),
+                ],
+              ),
+            )
+          else
+            _buildDeliveryOptionsList(),
+          if (_deliveryOption == DeliveryType.delivery) ...[
+            Divider(height: 1),
+            _buildLocationSelector(),
+          ],
+          SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryOptionsList() {
+    bool pickupAvailable = _storeAvailability.values
+        .every((store) => store['supportsPickup'] == true);
+    bool deliveryAvailable = _storeAvailability.values
+        .every((store) => store['supportsDelivery'] == true);
+
+    return Column(
+      children: [
+        if (pickupAvailable)
+          _buildDeliveryOptionTile(
+            type: DeliveryType.pickup,
+            title: 'Pickup',
+            subtitle: 'Collect from restaurant',
+            icon: Icons.store,
+            selected: _deliveryOption == DeliveryType.pickup,
+          ),
+        if (deliveryAvailable)
+          _buildDeliveryOptionTile(
+            type: DeliveryType.delivery,
+            title: 'Delivery',
+            subtitle: 'Deliver to your location',
+            icon: Icons.delivery_dining,
+            selected: _deliveryOption == DeliveryType.delivery,
+          ),
+        if (!pickupAvailable || !deliveryAvailable)
+          _buildStoreAvailabilityWarning(),
+      ],
+    );
+  }
+
+  Widget _buildDeliveryOptionTile({
+    required DeliveryType type,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool selected,
+  }) {
+    return InkWell(
+      onTap: () => setState(() => _deliveryOption = type),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? EatoTheme.primaryColor.withOpacity(0.1)
+              : Colors.transparent,
+          border: selected
+              ? Border.all(color: EatoTheme.primaryColor, width: 1)
+              : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected
+                    ? EatoTheme.primaryColor
+                    : EatoTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                color: selected ? Colors.white : EatoTheme.primaryColor,
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: selected
+                          ? EatoTheme.primaryColor
+                          : EatoTheme.textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: EatoTheme.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_circle, color: EatoTheme.primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoreAvailabilityWarning() {
+    List<String> pickupOnlyStores = [];
+    List<String> deliveryOnlyStores = [];
+
+    _storeAvailability.forEach((storeId, data) {
+      if (data['supportsPickup'] && !data['supportsDelivery']) {
+        pickupOnlyStores.add(data['name']);
+      } else if (!data['supportsPickup'] && data['supportsDelivery']) {
+        deliveryOnlyStores.add(data['name']);
+      }
+    });
+
+    if (pickupOnlyStores.isEmpty && deliveryOnlyStores.isEmpty)
+      return SizedBox();
+
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade600, size: 20),
+          SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (pickupOnlyStores.isNotEmpty)
+                  Text(
+                    'Pickup only: ${pickupOnlyStores.join(', ')}',
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                  ),
+                if (deliveryOnlyStores.isNotEmpty)
+                  Text(
+                    'Delivery only: ${deliveryOnlyStores.join(', ')}',
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationSelector() {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Delivery Location',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: EatoTheme.textPrimaryColor,
+            ),
+          ),
+          SizedBox(height: 12),
+          InkWell(
+            onTap: _selectDeliveryLocation,
+            child: Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: EatoTheme.backgroundColor,
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _deliveryLocation != null
+                        ? Icons.location_on
+                        : Icons.add_location,
+                    color: EatoTheme.primaryColor,
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _locationDisplayText.isNotEmpty
+                              ? _locationDisplayText
+                              : 'Select delivery location',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _locationDisplayText.isNotEmpty
+                                ? EatoTheme.textPrimaryColor
+                                : EatoTheme.textSecondaryColor,
+                          ),
+                        ),
+                        if (_deliveryLocation != null) ...[
+                          SizedBox(height: 4),
+                          Text(
+                            'GPS: ${_deliveryLocation!.latitude.toStringAsFixed(4)}, ${_deliveryLocation!.longitude.toStringAsFixed(4)}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: EatoTheme.textSecondaryColor,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios,
+                      size: 16, color: EatoTheme.textSecondaryColor),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethod() {
+    final calculation = PaymentService.calculateFees(
+      subtotal: _totalCartValue,
+      paymentMethod: _paymentMethod,
+      deliveryMethod: _deliveryOption,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.payment, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Payment Method',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          ...PaymentType.values
+              .map((payment) => _buildPaymentMethodTile(payment)),
+
+          // Fee savings message
+          if (PaymentService.getFeeSavingsMessage(
+                  _paymentMethod, _deliveryOption) !=
+              null)
+            Container(
+              margin: EdgeInsets.all(16),
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.savings, color: Colors.green.shade600, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      PaymentService.getFeeSavingsMessage(
+                          _paymentMethod, _deliveryOption)!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodTile(PaymentType payment) {
+    final bool selected = _paymentMethod == payment;
+
+    return InkWell(
+      onTap: () => setState(() => _paymentMethod = payment),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? EatoTheme.primaryColor.withOpacity(0.1)
+              : Colors.transparent,
+          border: selected
+              ? Border.all(color: EatoTheme.primaryColor, width: 1)
+              : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected
+                    ? EatoTheme.primaryColor
+                    : EatoTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                PaymentService.getPaymentMethodIcon(payment),
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    payment.displayName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: selected
+                          ? EatoTheme.primaryColor
+                          : EatoTheme.textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    PaymentService.getPaymentMethodDescription(payment),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: EatoTheme.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_circle, color: EatoTheme.primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpecialInstructions() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.note_add, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Special Instructions',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Any specific requests for your order...',
+                hintStyle: TextStyle(color: EatoTheme.textSecondaryColor),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                      color: EatoTheme.primaryColor.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: EatoTheme.primaryColor),
+                ),
+                filled: true,
+                fillColor: EatoTheme.backgroundColor,
+              ),
+              maxLines: 3,
+              onChanged: (value) =>
+                  setState(() => _specialInstructions = value),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleOrder() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.schedule, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Schedule Order',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            InkWell(
+              onTap: _selectScheduleTime,
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: EatoTheme.backgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: EatoTheme.primaryColor.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _scheduledTime == null
+                          ? Icons.access_time
+                          : Icons.schedule,
+                      color: EatoTheme.primaryColor,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _scheduledTime == null
+                            ? 'Order now'
+                            : 'Scheduled for ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: EatoTheme.textPrimaryColor,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _scheduledTime == null ? 'Set Time' : 'Change',
+                      style: TextStyle(
+                        color: EatoTheme.primaryColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderSummary() {
+    final calculation = PaymentService.calculateFees(
+      subtotal: _totalCartValue,
+      paymentMethod: _paymentMethod,
+      deliveryMethod: _deliveryOption,
+    );
+
+    return Column(
+      children: [
+        // Restaurant Contact Information
+        _buildRestaurantContacts(),
+
+        SizedBox(height: 16),
+
+        // Order Summary
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.receipt_long, color: EatoTheme.primaryColor),
+                    SizedBox(width: 12),
+                    Text(
+                      'Order Summary',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: EatoTheme.textPrimaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                _buildSummaryRow(
+                    'Subtotal ($_totalCartItems items)', calculation.subtotal),
+                if (calculation.deliveryFee > 0)
+                  _buildSummaryRow('Delivery Fee', calculation.deliveryFee),
+                if (calculation.serviceFee > 0)
+                  _buildSummaryRow('Service Fee', calculation.serviceFee),
+                if (calculation.paymentProcessingFee > 0)
+                  _buildSummaryRow(
+                      'Processing Fee', calculation.paymentProcessingFee),
+                Divider(
+                    thickness: 1,
+                    color: EatoTheme.primaryColor.withOpacity(0.3)),
+                _buildSummaryRow('Total Amount', calculation.totalAmount,
+                    isTotal: true),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRestaurantContacts() {
+    if (_cartItems.isEmpty) return SizedBox();
+
+    // Get unique store IDs and their details
+    Map<String, Map<String, dynamic>> storeDetails = {};
+    for (var item in _cartItems) {
+      final storeId = item['shopId']?.toString() ?? '';
+      final storeName = item['shopName']?.toString() ?? 'Unknown Store';
+
+      if (storeId.isNotEmpty && !storeDetails.containsKey(storeId)) {
+        storeDetails[storeId] = {
+          'name': storeName,
+          'contact': null, // Will be fetched
+        };
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.phone, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text(
+                  'Restaurant Contacts',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            ...storeDetails.entries.map((entry) =>
+                _buildStoreContactCard(entry.key, entry.value['name'])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoreContactCard(String storeId, String storeName) {
+    return FutureBuilder<DocumentSnapshot>(
+      future:
+          FirebaseFirestore.instance.collection('stores').doc(storeId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            margin: EdgeInsets.only(bottom: 12),
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: EatoTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: EatoTheme.primaryColor),
+                ),
+                SizedBox(width: 12),
+                Text('Loading $storeName contact...'),
+              ],
+            ),
+          );
+        }
+
+        final storeData = snapshot.data!.data() as Map<String, dynamic>?;
+        final contact = storeData?['contact']?.toString() ?? '';
+
+        if (contact.isEmpty) {
+          return Container(
+            margin: EdgeInsets.only(bottom: 12),
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    color: Colors.orange.shade600, size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$storeName - Contact not available',
+                    style: TextStyle(color: Colors.orange.shade800),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          margin: EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.store, color: Colors.blue.shade600, size: 20),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      storeName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      contact,
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _callStore(contact, storeName),
+                icon: Icon(Icons.call, size: 16),
+                label: Text('Call'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade600,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: Size(70, 32),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              color: isTotal
+                  ? EatoTheme.textPrimaryColor
+                  : EatoTheme.textSecondaryColor,
+            ),
+          ),
+          Text(
+            'Rs. ${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: isTotal ? 18 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
+              color:
+                  isTotal ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceOrderButton() {
+    final calculation = PaymentService.calculateFees(
+      subtotal: _totalCartValue,
+      paymentMethod: _paymentMethod,
+      deliveryMethod: _deliveryOption,
+    );
+
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rs. ${calculation.totalAmount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: EatoTheme.primaryColor,
+                    ),
+                  ),
+                  Text(
+                    '${_getUniqueShopCount()} restaurants • ${_deliveryOption.displayName}',
+                    style: TextStyle(
+                      color: EatoTheme.textSecondaryColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          EatoComponents.primaryButton(
+            text: 'Place Orders',
+            onPressed: _placeOrderWithBackend,
+            icon: Icons.shopping_cart_checkout,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===================================
+  // CALL FUNCTIONALITY
+  // ===================================
+
+  Future<void> _callStore(String phoneNumber, String storeName) async {
+    try {
+      final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        // Fallback: Copy to clipboard
+        await Clipboard.setData(ClipboardData(text: phoneNumber));
+        _showInfoSnackBar('Phone number copied: $phoneNumber');
+      }
+    } catch (e) {
+      print('Error launching phone call: $e');
+      // Fallback: Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: phoneNumber));
+      _showInfoSnackBar('Phone number copied: $phoneNumber');
+    }
+  }
+
+  // ===================================
+  // HELPER METHODS
+  // ===================================
+
+  void _selectScheduleTime() async {
+    final now = DateTime.now();
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now.add(Duration(hours: 1))),
+    );
+
+    if (time != null) {
+      setState(() {
+        _scheduledTime =
+            DateTime(now.year, now.month, now.day, time.hour, time.minute);
+      });
+    }
+  }
+
+  int _getUniqueShopCount() {
+    try {
+      return _cartItems.map((item) => item['shopId']).toSet().length;
+    } catch (e) {
+      print('Error getting shop count: $e');
+      return 0;
+    }
   }
 
   String _getRouteForIndex(int index) {
@@ -545,529 +1800,301 @@ class _OrdersPageState extends State<OrdersPage> {
     }
   }
 
-  Widget _buildCartContent() {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.all(16),
-            children: [
-              TestNotificationWidget(),
-              SizedBox(height: 16),
-              // Cart items
-              ...List.generate(_cartItems.length,
-                  (index) => _buildCartItem(_cartItems[index], index)),
-              SizedBox(height: 16),
-              // ENHANCED: Delivery options with location picker
-              _buildDeliveryOptionsWithLocation(),
-              SizedBox(height: 16),
-              // Special instructions
-              _buildSpecialInstructions(),
-              SizedBox(height: 16),
-              // Schedule order
-              _buildScheduleOrder(),
-              SizedBox(height: 16),
-              // Payment method
-              _buildPaymentMethod(),
-              SizedBox(height: 16),
-              // Order summary
-              _buildOrderSummary(),
-              SizedBox(height: 100), // Space for bottom button
-            ],
-          ),
-        ),
-        // Place order button (updated)
-        _buildPlaceOrderButton(),
-      ],
-    );
-  }
+  // ===================================
+  // DIALOG METHODS
+  // ===================================
 
-  Widget _buildEmptyCart() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.shopping_cart_outlined,
-              size: 80, color: Colors.grey.shade400),
-          SizedBox(height: 20),
-          Text('Your cart is empty',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          SizedBox(height: 8),
-          Text('Add some delicious items to get started!',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/home'),
-            icon: Icon(Icons.restaurant_menu, color: Colors.white),
-            label: Text('Browse Meals', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+  Future<bool> _showClearCartDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('Clear Cart'),
+              ],
             ),
+            content: Text(
+                'Are you sure you want to remove all items from your cart?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              EatoComponents.primaryButton(
+                text: 'Clear All',
+                onPressed: () => Navigator.pop(context, true),
+                height: 40,
+                width: 100,
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ) ??
+        false;
   }
 
-  // ✅ FIXED: Safe cart item display
-  Widget _buildCartItem(Map<String, dynamic> item, int index) {
-    // Safe data extraction
-    final foodName = item['foodName']?.toString() ?? 'Unknown Food';
-    final shopName = item['shopName']?.toString() ?? 'Unknown Shop';
-    final variation = item['variation']?.toString() ?? 'Regular';
-    final foodImage = item['foodImage']?.toString() ?? '';
-    final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-    final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-    final totalPrice = (item['totalPrice'] as num?)?.toDouble() ?? 0.0;
+  Future<bool> _showOrderConfirmationDialog() async {
+    final calculation = PaymentService.calculateFees(
+      subtotal: _totalCartValue,
+      paymentMethod: _paymentMethod,
+      deliveryMethod: _deliveryOption,
+    );
 
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[200]!),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              // Food image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: foodImage.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: foodImage,
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.grey[300],
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        errorWidget: (context, error, stackTrace) => Container(
-                            width: 60,
-                            height: 60,
-                            color: Colors.grey[300],
-                            child: Icon(Icons.fastfood)),
-                      )
-                    : Container(
-                        width: 60,
-                        height: 60,
-                        color: Colors.grey[300],
-                        child: Icon(Icons.fastfood)),
-              ),
-              SizedBox(width: 12),
-              // Food details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(foodName,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14)),
-                    Text('$variation • $shopName',
-                        style:
-                            TextStyle(color: Colors.grey[600], fontSize: 12)),
-                    Text('Rs. ${price.toStringAsFixed(2)} each',
-                        style: TextStyle(
-                            color: Colors.purple,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
-              ),
-              // Remove button
-              IconButton(
-                onPressed: () => _removeCartItem(index),
-                icon: Icon(Icons.delete_outline, color: Colors.red, size: 20),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          // Quantity controls and total
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Quantity controls
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[300]!),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () => _updateCartItemQuantity(index, -1),
-                      icon: Icon(Icons.remove, color: Colors.red, size: 18),
-                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                    ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('$quantity',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16)),
-                    ),
-                    IconButton(
-                      onPressed: () => _updateCartItemQuantity(index, 1),
-                      icon: Icon(Icons.add, color: Colors.green, size: 18),
-                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                    ),
-                  ],
-                ),
-              ),
-              // Item total
-              Text('Rs. ${totalPrice.toStringAsFixed(2)}',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.purple)),
-            ],
-          ),
-          SizedBox(height: 8),
-          // Item-specific instructions
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Special instructions for this item...',
-              hintStyle: TextStyle(fontSize: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              isDense: true,
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: EatoTheme.primaryColor),
+                SizedBox(width: 12),
+                Text('Confirm Order'),
+              ],
             ),
-            style: TextStyle(fontSize: 12),
-            maxLines: 2,
-            onChanged: (value) async {
-              _cartItems[index]['specialInstructions'] = value;
-              await CartService.updateCartItems(_cartItems);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ... (Keep all your other build methods - they should work fine now)
-
-  Widget _buildSpecialInstructions() {
-    return TextField(
-      decoration: InputDecoration(
-        labelText: 'Special Instructions for Order',
-        hintText: 'Any specific requests for your order...',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        prefixIcon: Icon(Icons.note_add),
-      ),
-      maxLines: 2,
-      onChanged: (value) => setState(() => _specialInstructions = value),
-    );
-  }
-
-  Widget _buildScheduleOrder() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Schedule Order',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(_scheduledTime == null
-                    ? 'Order now'
-                    : 'Scheduled for ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}'),
-              ),
-              TextButton.icon(
-                onPressed: _selectScheduleTime,
-                icon: Icon(Icons.schedule, size: 16),
-                label: Text('Change', style: TextStyle(fontSize: 12)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethod() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Payment Method',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: _paymentMethod,
-            decoration: InputDecoration(
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              isDense: true,
-            ),
-            items: _paymentMethods
-                .map((method) => DropdownMenuItem(
-                      value: method,
-                      child: Text(method, style: TextStyle(fontSize: 14)),
-                    ))
-                .toList(),
-            onChanged: (value) => setState(() => _paymentMethod = value!),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderSummary() {
-    final deliveryFee = _deliveryOption == 'Delivery' ? 100.0 : 0.0;
-    final serviceFee = _totalCartValue * 0.05;
-    final totalAmount = _totalCartValue + deliveryFee + serviceFee;
-
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.purple[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Order Summary',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          SizedBox(height: 12),
-          _buildSummaryRow(
-              'Subtotal ($_totalCartItems items)', _totalCartValue),
-          if (_deliveryOption == 'Delivery')
-            _buildSummaryRow('Delivery Fee', deliveryFee),
-          _buildSummaryRow('Service Fee (5%)', serviceFee),
-          Divider(),
-          _buildSummaryRow('Total', totalAmount, isTotal: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(
-                fontSize: isTotal ? 16 : 14,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              )),
-          Text('Rs. ${amount.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: isTotal ? 16 : 14,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-                color: isTotal ? Colors.purple : Colors.black87,
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceOrderButton() {
-    final totalAmount = _calculateTotalAmount();
-
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total: Rs. ${totalAmount.toStringAsFixed(2)}',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text('${_getUniqueShopCount()} restaurants',
-                  style: TextStyle(color: Colors.grey[600])),
-            ],
-          ),
-          SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _placeOrderWithBackend,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 2,
-              ),
-              child: Text('Place Orders',
-                  style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Add the missing delivery options method
-  Widget _buildDeliveryOptionsWithLocation() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Delivery Option',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: RadioListTile<String>(
-                  title: Text('Delivery', style: TextStyle(fontSize: 14)),
-                  subtitle:
-                      Text('To your location', style: TextStyle(fontSize: 12)),
-                  value: 'Delivery',
-                  groupValue: _deliveryOption,
-                  onChanged: (value) =>
-                      setState(() => _deliveryOption = value!),
-                  dense: true,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You are about to place orders with ${_getUniqueShopCount()} restaurants.',
+                  style: TextStyle(fontSize: 16),
                 ),
-              ),
-              Expanded(
-                child: RadioListTile<String>(
-                  title: Text('Pickup', style: TextStyle(fontSize: 14)),
-                  subtitle:
-                      Text('From restaurant', style: TextStyle(fontSize: 12)),
-                  value: 'Pickup',
-                  groupValue: _deliveryOption,
-                  onChanged: (value) =>
-                      setState(() => _deliveryOption = value!),
-                  dense: true,
-                ),
-              ),
-            ],
-          ),
-          if (_deliveryOption == 'Delivery') ...[
-            SizedBox(height: 12),
-            // ENHANCED: Location picker button
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.white,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.backgroundColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.location_on, color: Colors.purple, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _locationDisplayText.isNotEmpty
-                              ? _locationDisplayText
-                              : _deliveryAddress.isNotEmpty
-                                  ? _deliveryAddress
-                                  : 'Select delivery location',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: (_locationDisplayText.isNotEmpty ||
-                                    _deliveryAddress.isNotEmpty)
-                                ? Colors.black87
-                                : Colors.grey[600],
-                          ),
-                        ),
+                      Text(
+                        'Order Details:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      TextButton(
-                        onPressed: _selectDeliveryLocation,
-                        child: Text(
-                          (_locationDisplayText.isNotEmpty ||
-                                  _deliveryAddress.isNotEmpty)
-                              ? 'Change'
-                              : 'Select',
-                          style: TextStyle(color: Colors.purple),
-                        ),
-                      ),
+                      SizedBox(height: 8),
+                      Text(
+                          'Total: Rs. ${calculation.totalAmount.toStringAsFixed(2)}'),
+                      Text('Payment: ${_paymentMethod.displayName}'),
+                      Text('Method: ${_deliveryOption.displayName}'),
+                      if (_deliveryOption == DeliveryType.delivery)
+                        Text(
+                            'Address: ${_locationDisplayText.isNotEmpty ? _locationDisplayText : _deliveryAddress}'),
+                      if (_scheduledTime != null)
+                        Text(
+                            'Scheduled: ${_scheduledTime!.hour}:${_scheduledTime!.minute.toString().padLeft(2, '0')}'),
                     ],
                   ),
-                  if (_deliveryLocation != null) ...[
-                    SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.gps_fixed, color: Colors.green, size: 16),
-                        SizedBox(width: 8),
-                        Text(
-                          'GPS: ${_deliveryLocation!.latitude.toStringAsFixed(4)}, ${_deliveryLocation!.longitude.toStringAsFixed(4)}',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            SizedBox(height: 8),
-            // Fallback text input for address (backup option)
-            ExpansionTile(
-              title: Text('Or enter address manually',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Delivery Address',
-                    hintText: 'Enter your delivery address...',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    prefixIcon: Icon(Icons.edit_location),
-                    isDense: true,
-                  ),
-                  onChanged: (value) =>
-                      setState(() => _deliveryAddress = value),
-                  controller: TextEditingController(text: _deliveryAddress),
                 ),
               ],
             ),
-          ], // Add this button temporarily to your orders page
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              EatoComponents.primaryButton(
+                text: 'Confirm',
+                onPressed: () => Navigator.pop(context, true),
+                height: 40,
+                width: 100,
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  void _showLoadingDialog(String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: EatoTheme.primaryColor),
+            SizedBox(height: 16),
+            Text(message),
+          ],
+        ),
       ),
     );
+  }
+
+  void _showOrderSuccessDialog(int orderCount) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check_circle, color: Colors.green, size: 48),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Orders Placed Successfully!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: EatoTheme.textPrimaryColor,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '✅ Placed $orderCount orders successfully',
+              style: TextStyle(color: EatoTheme.textSecondaryColor),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Your orders have been sent to the restaurants. You will receive notifications about order status.',
+              textAlign: TextAlign.center,
+              style:
+                  TextStyle(fontSize: 12, color: EatoTheme.textSecondaryColor),
+            ),
+            SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/activity');
+                    },
+                    child: Text('View Orders'),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: EatoComponents.primaryButton(
+                    text: 'Great!',
+                    onPressed: () => Navigator.pop(context),
+                    height: 40,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOrderFailureDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.error, color: Colors.red, size: 48),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Order Failed',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: EatoTheme.textPrimaryColor,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Failed to place orders: $error',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: EatoTheme.textSecondaryColor),
+            ),
+            SizedBox(height: 24),
+            EatoComponents.primaryButton(
+              text: 'Try Again',
+              onPressed: () => Navigator.pop(context),
+              height: 40,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================================
+  // SNACKBAR METHODS
+  // ===================================
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _showInfoSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.info, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 }
