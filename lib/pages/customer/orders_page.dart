@@ -1,6 +1,3 @@
-// File: lib/pages/customer/OrdersPage.dart
-// Professional UI with EatoComponents, store availability checking, and proper cart clearing
-
 import 'package:eato/Provider/CartProvider.dart';
 import 'package:eato/pages/location/location_picker_page.dart';
 import 'package:flutter/material.dart';

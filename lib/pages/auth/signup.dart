@@ -375,10 +375,13 @@ class _SignUpPageState extends State<SignUpPage>
     }
   }
 
+  // In your signup.dart build method, modify the Scaffold:
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
+      resizeToAvoidBottomInset: true, // Add this line
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -410,8 +413,7 @@ class _SignUpPageState extends State<SignUpPage>
                       decoration: BoxDecoration(
                         color: index <= _currentStep
                             ? EatoTheme.primaryColor
-                            : Colors.grey
-                                .shade300, // Replace EatoTheme.dividerColor
+                            : Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -420,18 +422,22 @@ class _SignUpPageState extends State<SignUpPage>
               ),
             ),
 
-            // Form content
+            // Form content - Wrap in Expanded and SingleChildScrollView
             Expanded(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: _buildCurrentStep(),
+              child: SingleChildScrollView(
+                // Add this
+                physics: const BouncingScrollPhysics(), // Add smooth scrolling
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: _buildCurrentStep(),
+                  ),
                 ),
               ),
             ),
 
-            // Navigation buttons
+            // Navigation buttons - Keep at bottom
             Container(
               padding: const EdgeInsets.all(20),
               child: Row(

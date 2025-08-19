@@ -1,6 +1,3 @@
-// FILE: lib/pages/customer/account_page.dart
-// Updated version with Edit Profile functionality and Logout confirmation
-
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';

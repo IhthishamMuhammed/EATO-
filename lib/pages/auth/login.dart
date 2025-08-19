@@ -1,11 +1,13 @@
+// SIMPLIFIED LOGIN.DART - Remove all biometric/fingerprint code
+
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ ADD: Import Firestore
-import 'package:local_auth/local_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // For email caching only
 
 import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
@@ -39,10 +41,8 @@ class _LoginPageState extends State<LoginPage>
   String? _emailErrorText;
   String? _passwordErrorText;
 
-  // Biometric authentication
-  final LocalAuthentication _localAuth = LocalAuthentication();
-  bool _canCheckBiometrics = false;
-  bool _hasBiometrics = false;
+  // Email caching (simple, no biometric)
+  bool _rememberEmail = false;
 
   // Animation controllers
   late AnimationController _animationController;
@@ -55,17 +55,15 @@ class _LoginPageState extends State<LoginPage>
     super.initState();
     _setupAnimations();
     _setupFocusListeners();
-    _checkBiometrics();
+    _loadSavedEmail(); // Load saved email only
   }
 
   void _setupAnimations() {
-    // Create animation controller
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
 
-    // Fade in animation
     _fadeInAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -74,7 +72,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     ));
 
-    // Slide animation
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.05),
       end: Offset.zero,
@@ -83,7 +80,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
     ));
 
-    // Scale animation
     _scaleAnimation = Tween<double>(
       begin: 0.95,
       end: 1.0,
@@ -92,7 +88,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
     ));
 
-    // Start the animation
     _animationController.forward();
   }
 
@@ -101,14 +96,36 @@ class _LoginPageState extends State<LoginPage>
     _passwordFocus.addListener(_onPasswordFocusChange);
   }
 
-  Future<void> _checkBiometrics() async {
+  // Simple email caching - no biometric
+  Future<void> _loadSavedEmail() async {
     try {
-      _canCheckBiometrics = await _localAuth.canCheckBiometrics;
-      final availableBiometrics = await _localAuth.getAvailableBiometrics();
-      _hasBiometrics = availableBiometrics.isNotEmpty;
-      setState(() {});
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('last_email');
+      final rememberEmail = prefs.getBool('remember_email') ?? false;
+
+      if (savedEmail != null && rememberEmail) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberEmail = true;
+        });
+      }
     } catch (e) {
-      debugPrint('Error checking biometrics: $e');
+      debugPrint('Error loading saved email: $e');
+    }
+  }
+
+  Future<void> _saveEmailIfRemembered() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberEmail) {
+        await prefs.setString('last_email', _emailController.text.trim());
+        await prefs.setBool('remember_email', true);
+      } else {
+        await prefs.remove('last_email');
+        await prefs.setBool('remember_email', false);
+      }
+    } catch (e) {
+      debugPrint('Error saving email: $e');
     }
   }
 
@@ -123,7 +140,6 @@ class _LoginPageState extends State<LoginPage>
   }
 
   void _onEmailFocusChange() {
-    // Clear error when field gets focus
     if (_emailFocus.hasFocus && _emailHasError) {
       setState(() {
         _emailHasError = false;
@@ -133,7 +149,6 @@ class _LoginPageState extends State<LoginPage>
   }
 
   void _onPasswordFocusChange() {
-    // Clear error when field gets focus
     if (_passwordFocus.hasFocus && _passwordHasError) {
       setState(() {
         _passwordHasError = false;
@@ -161,9 +176,8 @@ class _LoginPageState extends State<LoginPage>
     return null;
   }
 
-  // ✅ ENHANCED: Authentication methods with email verification
+  // Enhanced authentication with email verification
   Future<void> _loginWithCredentials(BuildContext context) async {
-    // Validate form first
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -175,7 +189,6 @@ class _LoginPageState extends State<LoginPage>
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-      // Login using Firebase Authentication
       UserCredential userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -185,12 +198,11 @@ class _LoginPageState extends State<LoginPage>
       User? user = userCredential.user;
 
       if (user != null) {
-        // ✅ CHECK EMAIL VERIFICATION
-        await user.reload(); // Refresh user data
-        user = FirebaseAuth.instance.currentUser; // Get updated user
+        // Check email verification
+        await user.reload();
+        user = FirebaseAuth.instance.currentUser;
 
         if (!user!.emailVerified) {
-          // Show email verification dialog
           setState(() {
             _isLoading = false;
           });
@@ -198,17 +210,17 @@ class _LoginPageState extends State<LoginPage>
           return;
         }
 
-        // Email is verified, proceed with normal flow
+        // Save email if remember is checked
+        await _saveEmailIfRemembered();
+
         await userProvider.fetchUser(user.uid);
 
-        // Verify role matches
         if (!_verifyRoleMatches(
             userProvider.currentUser?.userType, widget.role)) {
           throw Exception(
               "This account doesn't match your selected role. Please use a ${widget.role} account.");
         }
 
-        // Navigate to appropriate screen
         _handleSuccessfulLogin(userProvider.currentUser, context);
       }
     } catch (e) {
@@ -216,7 +228,7 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
-  // ✅ NEW: Show email not verified dialog
+  // Email verification dialog
   Future<void> _showEmailNotVerifiedDialog(User user) async {
     return showDialog(
       context: context,
@@ -280,7 +292,6 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  // ✅ NEW: Resend verification email
   Future<void> _resendVerificationEmail(User user) async {
     try {
       await user.sendEmailVerification();
@@ -310,14 +321,12 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
-  // ✅ NEW: Check email verification and proceed
   Future<void> _checkEmailAndProceed(User user) async {
     try {
       await user.reload();
       user = FirebaseAuth.instance.currentUser!;
 
       if (user.emailVerified) {
-        // Update Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -325,9 +334,8 @@ class _LoginPageState extends State<LoginPage>
           'emailVerified': true,
         });
 
-        Navigator.of(context).pop(); // Close dialog
+        Navigator.of(context).pop();
 
-        // Continue with login
         setState(() {
           _isLoading = true;
         });
@@ -365,51 +373,18 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
-  Future<void> _authenticateWithBiometrics() async {
-    try {
-      final bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'Please authenticate to log in',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
-      );
-
-      if (authenticated) {
-        // Handle last logged in user authentication or show email field
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Biometric authentication successful'),
-            backgroundColor: EatoTheme.successColor,
-          ),
-        );
-
-        // In a real app, you might retrieve saved credentials here
-        // For demo purposes, we'll just prompt the user to enter credentials
-        setState(() {
-          _emailController.text = 'demo@example.com'; // Example only
-        });
-      }
-    } catch (e) {
-      debugPrint('Biometric authentication error: $e');
-    }
-  }
-
   bool _verifyRoleMatches(String? userRole, String expectedRole) {
     if (userRole == null) return false;
 
     final dbRole = userRole.toLowerCase().trim();
     final expectedRoleLower = expectedRole.toLowerCase().trim();
 
-    print(
-        '🔍 Role Debug: DB="$dbRole", Expected="$expectedRoleLower"'); // Debug
+    print('🔍 Role Debug: DB="$dbRole", Expected="$expectedRoleLower"');
 
-    // Direct match
     if (dbRole == expectedRoleLower) {
       return true;
     }
 
-    // Enhanced meal provider variations
     if (expectedRoleLower == 'mealprovider' ||
         expectedRoleLower == 'meal provider') {
       return dbRole == 'mealprovider' ||
@@ -418,7 +393,6 @@ class _LoginPageState extends State<LoginPage>
           dbRole == 'meal_provider';
     }
 
-    // Enhanced customer variations
     if (expectedRoleLower == 'customer') {
       return dbRole == 'customer' || dbRole == 'user' || dbRole == 'client';
     }
@@ -435,7 +409,6 @@ class _LoginPageState extends State<LoginPage>
     }
 
     if (user.phoneNumber == null || user.phoneNumber!.isEmpty) {
-      // Navigate to phone verification if needed
       if (!mounted) return;
 
       Navigator.push(
@@ -450,7 +423,6 @@ class _LoginPageState extends State<LoginPage>
         ),
       );
     } else {
-      // Navigate to appropriate home page
       if (!mounted) return;
 
       if (widget.role.toLowerCase() == 'customer') {
@@ -521,7 +493,6 @@ class _LoginPageState extends State<LoginPage>
           : errorMessage;
     }
 
-    // Show error message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -564,7 +535,6 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    // Show a password reset confirmation dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -632,7 +602,6 @@ class _LoginPageState extends State<LoginPage>
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
     final bool isSmallScreen = screenSize.width < 360;
-    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
@@ -695,35 +664,15 @@ class _LoginPageState extends State<LoginPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Login header with role-specific image
                       _buildLoginHeader(screenSize, isSmallScreen),
-
-                      // Title and welcome message
                       _buildWelcomeSection(isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.03),
-
-                      // Login form
                       _buildLoginForm(screenSize, isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.04),
-
-                      // Login button
                       _buildLoginButton(isSmallScreen),
-
-                      SizedBox(height: screenSize.height * 0.02),
-
-                      // Biometric login
-                      if (_hasBiometrics) _buildBiometricLogin(),
-
                       SizedBox(height: screenSize.height * 0.03),
-
-                      // Sign up option
                       _buildSignupOption(isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.04),
-
-                      // Footer text
                       _buildFooterText(isSmallScreen),
                     ],
                   ),
@@ -745,7 +694,6 @@ class _LoginPageState extends State<LoginPage>
     return Center(
       child: Column(
         children: [
-          // Role indicator badge
           Container(
             padding: EdgeInsets.symmetric(
               horizontal: 16,
@@ -779,10 +727,7 @@ class _LoginPageState extends State<LoginPage>
               ],
             ),
           ),
-
           SizedBox(height: screenSize.height * 0.03),
-
-          // Logo or illustration
           Hero(
             tag: 'role_image',
             child: Container(
@@ -870,32 +815,47 @@ class _LoginPageState extends State<LoginPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Email field
           _buildEmailField(isSmallScreen),
           SizedBox(height: 20),
-
-          // Password field
           _buildPasswordField(isSmallScreen),
 
-          // Forgot password
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _handleForgotPassword,
-              style: TextButton.styleFrom(
-                foregroundColor: EatoTheme.primaryColor,
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 0),
-                minimumSize: Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          // Remember email checkbox and forgot password
+          Row(
+            children: [
+              Checkbox(
+                value: _rememberEmail,
+                onChanged: (value) {
+                  setState(() {
+                    _rememberEmail = value ?? false;
+                  });
+                },
+                activeColor: EatoTheme.primaryColor,
               ),
-              child: Text(
-                "Forgot Password?",
+              Text(
+                'Remember email',
                 style: TextStyle(
                   fontSize: isSmallScreen ? 13 : 14,
-                  fontWeight: FontWeight.w500,
+                  color: EatoTheme.textSecondaryColor,
                 ),
               ),
-            ),
+              Spacer(),
+              TextButton(
+                onPressed: _handleForgotPassword,
+                style: TextButton.styleFrom(
+                  foregroundColor: EatoTheme.primaryColor,
+                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+                  minimumSize: Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  "Forgot Password?",
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 13 : 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1160,41 +1120,6 @@ class _LoginPageState extends State<LoginPage>
                   ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBiometricLogin() {
-    return Center(
-      child: Column(
-        children: [
-          TextButton.icon(
-            onPressed: _isLoading ? null : _authenticateWithBiometrics,
-            icon: Icon(
-              Icons.fingerprint,
-              color: EatoTheme.primaryColor,
-              size: 22,
-            ),
-            label: Text(
-              "Use Fingerprint",
-              style: TextStyle(
-                color: EatoTheme.primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            style: TextButton.styleFrom(
-              foregroundColor: EatoTheme.primaryColor,
-              backgroundColor: EatoTheme.primaryColor.withOpacity(0.05),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: EdgeInsets.symmetric(
-                vertical: 10,
-                horizontal: 16,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

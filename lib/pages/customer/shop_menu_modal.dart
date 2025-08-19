@@ -1,10 +1,6 @@
-// FILE: lib/pages/customer/shop_menu_modal.dart
-// Fixed version with cart confirmation modal instead of direct additions
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/services/CartService.dart';
 import 'package:eato/services/firebase_subscription_service.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
