@@ -3,6 +3,7 @@ import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ ADD: Import Firestore
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 
@@ -160,7 +161,7 @@ class _LoginPageState extends State<LoginPage>
     return null;
   }
 
-  // Authentication methods
+  // ✅ ENHANCED: Authentication methods with email verification
   Future<void> _loginWithCredentials(BuildContext context) async {
     // Validate form first
     if (!_formKey.currentState!.validate()) {
@@ -181,20 +182,186 @@ class _LoginPageState extends State<LoginPage>
         password: _passwordController.text.trim(),
       );
 
-      // Fetch user data
-      await userProvider.fetchUser(userCredential.user!.uid);
+      User? user = userCredential.user;
 
-      // Verify role matches
-      if (!_verifyRoleMatches(
-          userProvider.currentUser?.userType, widget.role)) {
-        throw Exception(
-            "This account doesn't match your selected role. Please use a ${widget.role} account.");
+      if (user != null) {
+        // ✅ CHECK EMAIL VERIFICATION
+        await user.reload(); // Refresh user data
+        user = FirebaseAuth.instance.currentUser; // Get updated user
+
+        if (!user!.emailVerified) {
+          // Show email verification dialog
+          setState(() {
+            _isLoading = false;
+          });
+          await _showEmailNotVerifiedDialog(user);
+          return;
+        }
+
+        // Email is verified, proceed with normal flow
+        await userProvider.fetchUser(user.uid);
+
+        // Verify role matches
+        if (!_verifyRoleMatches(
+            userProvider.currentUser?.userType, widget.role)) {
+          throw Exception(
+              "This account doesn't match your selected role. Please use a ${widget.role} account.");
+        }
+
+        // Navigate to appropriate screen
+        _handleSuccessfulLogin(userProvider.currentUser, context);
       }
-
-      // Navigate to appropriate screen
-      _handleSuccessfulLogin(userProvider.currentUser, context);
     } catch (e) {
       _handleLoginError(e, context);
+    }
+  }
+
+  // ✅ NEW: Show email not verified dialog
+  Future<void> _showEmailNotVerifiedDialog(User user) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.email_outlined, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Email Not Verified'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Your email address has not been verified. Please check your inbox for a verification email.',
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: EatoTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                user.email ?? '',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: EatoTheme.primaryColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _resendVerificationEmail(user);
+            },
+            child: Text('Resend Email'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _checkEmailAndProceed(user);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor),
+            child:
+                Text('I\'ve Verified', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NEW: Resend verification email
+  Future<void> _resendVerificationEmail(User user) async {
+    try {
+      await user.sendEmailVerification();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Verification email sent!'),
+            ],
+          ),
+          backgroundColor: EatoTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending email: $e'),
+          backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // ✅ NEW: Check email verification and proceed
+  Future<void> _checkEmailAndProceed(User user) async {
+    try {
+      await user.reload();
+      user = FirebaseAuth.instance.currentUser!;
+
+      if (user.emailVerified) {
+        // Update Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'emailVerified': true,
+        });
+
+        Navigator.of(context).pop(); // Close dialog
+
+        // Continue with login
+        setState(() {
+          _isLoading = true;
+        });
+
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        await userProvider.fetchUser(user.uid);
+
+        if (_verifyRoleMatches(
+            userProvider.currentUser?.userType, widget.role)) {
+          _handleSuccessfulLogin(userProvider.currentUser, context);
+        } else {
+          throw Exception("This account doesn't match your selected role.");
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Email not yet verified. Please check your inbox.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -331,6 +498,15 @@ class _LoginPageState extends State<LoginPage>
         case 'too-many-requests':
           errorMessage = 'Too many attempts. Please try again later';
           break;
+        case 'invalid-credential':
+          setState(() {
+            _emailHasError = true;
+            _passwordHasError = true;
+            _emailErrorText = 'Invalid credentials';
+            _passwordErrorText = 'Invalid credentials';
+          });
+          errorMessage = 'Invalid email or password';
+          break;
         default:
           errorMessage = error.message ?? errorMessage;
       }
@@ -387,6 +563,7 @@ class _LoginPageState extends State<LoginPage>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Reset Password'),
         content: Text(
             'We will send a password reset link to ${_emailController.text}. Would you like to proceed?'),
@@ -403,7 +580,7 @@ class _LoginPageState extends State<LoginPage>
             style: ElevatedButton.styleFrom(
               backgroundColor: EatoTheme.primaryColor,
             ),
-            child: Text('Send Link'),
+            child: Text('Send Link', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

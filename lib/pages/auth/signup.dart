@@ -1,6 +1,8 @@
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'phoneVerification.dart';
 import 'dart:async';
 
@@ -43,96 +45,60 @@ class _SignUpPageState extends State<SignUpPage>
   bool _isConfirmPasswordVisible = false;
   Timer? _debounceTimer;
 
-  // Animation controllers
+  // Animation controller
   late AnimationController _animationController;
-  late Animation<double> _fadeInAnimation;
+  late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _setupAnimations();
-    _setupFocusListeners();
   }
 
   void _setupAnimations() {
-    // Create animation controller
     _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
       vsync: this,
-      duration: const Duration(milliseconds: 800),
     );
 
-    // Fade in animation
-    _fadeInAnimation = Tween<double>(
+    _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      curve: Curves.easeInOut,
     ));
 
-    // Slide animation
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
+      begin: const Offset(1.0, 0.0),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
+      curve: Curves.easeInOut,
     ));
 
-    // Scale animation
-    _scaleAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
-    ));
-
-    // Start the animation
     _animationController.forward();
-  }
-
-  void _setupFocusListeners() {
-    // Add focus listeners for visual feedback
-    _nameFocus.addListener(() => setState(() {}));
-    _emailFocus.addListener(() => setState(() {}));
-    _phoneFocus.addListener(() => setState(() {}));
-    _passwordFocus.addListener(() => setState(() {}));
-    _confirmPasswordFocus.addListener(() => setState(() {}));
-
-    // Add listener to password field for strength indicator updates
-    _passwordController.addListener(_onPasswordChanged);
-  }
-
-  void _onPasswordChanged() {
-    // Debounce to avoid too many rebuilds during typing
-    if (_debounceTimer?.isActive ?? false) _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-      setState(() {});
-    });
   }
 
   @override
   void dispose() {
-    // Clean up controllers
+    _animationController.dispose();
+    _debounceTimer?.cancel();
+
+    // Dispose controllers
     _nameController.dispose();
     _emailController.dispose();
     _phoneNumberController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
 
-    // Clean up focus nodes
+    // Dispose focus nodes
     _nameFocus.dispose();
     _emailFocus.dispose();
     _phoneFocus.dispose();
     _passwordFocus.dispose();
     _confirmPasswordFocus.dispose();
-
-    // Clean up animations and timers
-    _animationController.dispose();
-    _debounceTimer?.cancel();
 
     super.dispose();
   }
@@ -169,12 +135,14 @@ class _SignUpPageState extends State<SignUpPage>
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Password is required';
-    } else if (value.length < 6) {
-      return 'Password must be at least 6 characters';
+    } else if (value.length < 8) {
+      return 'Password must be at least 8 characters';
     } else if (!RegExp(r'(?=.*?[A-Z])').hasMatch(value)) {
       return 'Include at least one uppercase letter';
     } else if (!RegExp(r'(?=.*?[0-9])').hasMatch(value)) {
       return 'Include at least one number';
+    } else if (!RegExp(r'(?=.*?[!@#\$&*~])').hasMatch(value)) {
+      return 'Include at least one special character';
     }
     return null;
   }
@@ -190,7 +158,6 @@ class _SignUpPageState extends State<SignUpPage>
 
   // Navigation methods
   void _goToNextStep() {
-    // Validate current step
     if (_currentStep == 0) {
       if (!(_formKeyStep1.currentState?.validate() ?? false)) {
         return;
@@ -201,16 +168,15 @@ class _SignUpPageState extends State<SignUpPage>
       }
     }
 
-    // If we're on the last step, proceed to phone verification
-    if (_currentStep == _totalSteps - 1) {
-      _proceedToPhoneVerification();
-      return;
+    if (_currentStep < _totalSteps - 1) {
+      setState(() {
+        _currentStep++;
+      });
+      _animationController.reset();
+      _animationController.forward();
+    } else {
+      _createAccount();
     }
-
-    // Otherwise, go to the next step
-    setState(() {
-      _currentStep++;
-    });
   }
 
   void _goToPreviousStep() {
@@ -218,1110 +184,475 @@ class _SignUpPageState extends State<SignUpPage>
       setState(() {
         _currentStep--;
       });
+      _animationController.reset();
+      _animationController.forward();
     }
   }
 
-  void _proceedToPhoneVerification() {
+  // ✅ ENHANCED: Account creation with email verification
+  Future<void> _createAccount() async {
+    if (!_formKeyStep2.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
     });
 
-    // Add a slight delay to show loading state
-    Future.delayed(const Duration(milliseconds: 500), () {
-      // Prefix with country code (e.g., +94 for Sri Lanka)
-      final String countryCode = '+94';
-      final String fullPhoneNumber =
-          '$countryCode${_phoneNumberController.text.trim()}';
-
-      final userData = {
-        'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'password': _passwordController.text,
-      };
-
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              PhoneVerificationPage(
-            phoneNumber: fullPhoneNumber,
-            userType: widget.role,
-            isSignUp: true,
-            userData: userData,
-          ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            var begin = const Offset(1.0, 0.0);
-            var end = Offset.zero;
-            var curve = Curves.easeOutCubic;
-
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
-
-            return SlideTransition(
-              position: animation.drive(tween),
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
+    try {
+      // Create Firebase Auth user
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
+      User? user = userCredential.user;
+
+      if (user != null) {
+        // ✅ SEND EMAIL VERIFICATION
+        await user.sendEmailVerification();
+
+        // Create user document in Firestore (but mark email as unverified)
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phoneNumber': _phoneNumberController.text.trim(),
+          'userType': widget.role,
+          'profileImageUrl': '',
+          'emailVerified': false, // Track email verification status
+          'phoneVerified': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        // Show verification dialog
+        _showEmailVerificationDialog();
+      }
+    } catch (e) {
+      _handleSignupError(e);
+    } finally {
       setState(() {
         _isLoading = false;
       });
-    });
+    }
+  }
+
+  void _handleSignupError(dynamic error) {
+    String errorMessage = "Account creation failed. Please try again.";
+
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'email-already-in-use':
+          errorMessage = 'An account with this email already exists';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'weak-password':
+          errorMessage = 'Password is too weak';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Account creation is currently disabled';
+          break;
+        default:
+          errorMessage = error.message ?? errorMessage;
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMessage),
+        backgroundColor: EatoTheme.errorColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // ✅ NEW: Email verification dialog
+  void _showEmailVerificationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('Verify Your Email'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.email_outlined, size: 48, color: EatoTheme.primaryColor),
+            SizedBox(height: 16),
+            Text(
+              'We\'ve sent a verification email to ${_emailController.text.trim()}. Please check your inbox and click the verification link.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: _resendVerificationEmail,
+            child: Text('Resend Email'),
+          ),
+          ElevatedButton(
+            onPressed: _checkEmailVerification,
+            child: Text('I\'ve Verified'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NEW: Resend verification email
+  Future<void> _resendVerificationEmail() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Verification email sent!'),
+            backgroundColor: EatoTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending email: $e'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  // ✅ NEW: Check email verification and proceed
+  Future<void> _checkEmailVerification() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.reload(); // Refresh user data
+        user = FirebaseAuth.instance.currentUser; // Get updated user
+
+        if (user!.emailVerified) {
+          // Update Firestore
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .update({
+            'emailVerified': true,
+          });
+
+          Navigator.of(context).pop(); // Close dialog
+
+          // Proceed to phone verification
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PhoneVerificationPage(
+                phoneNumber: _phoneNumberController.text.trim(),
+                userType: widget.role,
+                isSignUp: true,
+                userData: {
+                  'name': _nameController.text.trim(),
+                  'email': _emailController.text.trim(),
+                  'password': _passwordController.text.trim(),
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Email not yet verified. Please check your inbox.'),
+              backgroundColor: Colors.orange, // Replace EatoTheme.warningColor
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error checking verification: $e'),
+          backgroundColor: EatoTheme.errorColor,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Size screenSize = MediaQuery.of(context).size;
-    final bool isSmallScreen = screenSize.width < 360;
-
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(
-              _currentStep == 0
-                  ? Icons.arrow_back_ios_rounded
-                  : Icons.arrow_back_ios_rounded,
-              size: 16,
-              color: EatoTheme.primaryColor,
-            ),
+          icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Create ${widget.role} Account',
+          style: TextStyle(
+            color: EatoTheme.textPrimaryColor,
+            fontWeight: FontWeight.bold,
           ),
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            if (_currentStep == 0) {
-              Navigator.pop(context);
-            } else {
-              _goToPreviousStep();
-            }
-          },
         ),
       ),
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return FadeTransition(
-                opacity: _fadeInAnimation,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Progress indicator
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: List.generate(_totalSteps, (index) {
+                  return Expanded(
+                    child: Container(
+                      margin: EdgeInsets.only(
+                          right: index < _totalSteps - 1 ? 8 : 0),
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: index <= _currentStep
+                            ? EatoTheme.primaryColor
+                            : Colors.grey
+                                .shade300, // Replace EatoTheme.dividerColor
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // Form content
+            Expanded(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
                 child: SlideTransition(
                   position: _slideAnimation,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: child,
-                  ),
-                ),
-              );
-            },
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: screenSize.width * 0.06,
-                  vertical: screenSize.height * 0.01,
-                ),
-                child: Column(
-                  children: [
-                    // Header with role badge
-                    _buildSignupHeader(screenSize, isSmallScreen),
-
-                    SizedBox(height: screenSize.height * 0.02),
-
-                    // Form steps progress indicator
-                    _buildStepIndicator(screenSize),
-
-                    SizedBox(height: screenSize.height * 0.025),
-
-                    // Current form step
-                    _buildCurrentStep(screenSize, isSmallScreen),
-
-                    SizedBox(height: screenSize.height * 0.025),
-
-                    // Terms and conditions
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        "By signing up, you agree to our Terms of Service and Privacy Policy",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(height: screenSize.height * 0.02),
-                  ],
+                  child: _buildCurrentStep(),
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildSignupHeader(Size screenSize, bool isSmallScreen) {
-    final bool isCustomer = widget.role.toLowerCase() == 'customer';
-    final String roleText = isCustomer ? 'Customer' : 'Food Provider';
-    final Color roleColor =
-        isCustomer ? EatoTheme.primaryColor : EatoTheme.accentColor;
-
-    return Container(
-      height: screenSize.height * 0.15,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Background decoration
-          Positioned(
-            top: -20,
-            right: -10,
-            child: Container(
-              width: screenSize.width * 0.3,
-              height: screenSize.width * 0.3,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: EatoTheme.primaryColor.withOpacity(0.05),
-              ),
-            ),
-          ),
-
-          Row(
-            children: [
-              // Role image
-              Hero(
-                tag: 'role_image',
-                child: Container(
-                  width: screenSize.width * 0.18,
-                  height: screenSize.width * 0.18,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        roleColor.withOpacity(0.2),
-                        roleColor.withOpacity(0.1),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: roleColor.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                    border: Border.all(
-                      color: roleColor.withOpacity(0.5),
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      isCustomer ? Icons.person : Icons.restaurant,
-                      size: screenSize.width * 0.08,
-                      color: roleColor,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              // Title and role badge
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShaderMask(
-                      shaderCallback: (bounds) =>
-                          EatoTheme.primaryGradient.createShader(bounds),
-                      child: Text(
-                        "EATO",
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 28 : 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: roleColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: roleColor.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        "$roleText Signup",
-                        style: TextStyle(
-                          color: roleColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepIndicator(Size screenSize) {
-    return Column(
-      children: [
-        Row(
-          children: List.generate(_totalSteps, (index) {
-            final bool isActive = index <= _currentStep;
-            final bool isCurrent = index == _currentStep;
-
-            return Expanded(
-              child: Container(
-                height: 4,
-                margin: EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color:
-                      isActive ? EatoTheme.primaryColor : Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: isCurrent ? _buildProgressAnimation() : null,
-              ),
-            );
-          }),
-        ),
-        SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Step ${_currentStep + 1} of $_totalSteps",
-                style: TextStyle(
-                  color: EatoTheme.textSecondaryColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                _currentStep == 0 ? "Personal Info" : "Security",
-                style: TextStyle(
-                  color: EatoTheme.primaryColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressAnimation() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          width: constraints.maxWidth,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                EatoTheme.primaryColor.withOpacity(0.3),
-                EatoTheme.primaryColor,
-              ],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCurrentStep(Size screenSize, bool isSmallScreen) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: Offset(_currentStep == 0 ? -1.0 : 1.0, 0.0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
-            child: child,
-          ),
-        );
-      },
-      child: _currentStep == 0
-          ? _buildPersonalInfoStep(screenSize, isSmallScreen)
-          : _buildSecurityStep(screenSize, isSmallScreen),
-    );
-  }
-
-  Widget _buildPersonalInfoStep(Size screenSize, bool isSmallScreen) {
-    return Container(
-      key: ValueKey<String>('personal_info'),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKeyStep1,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Step title
-              ShaderMask(
-                shaderCallback: (bounds) =>
-                    EatoTheme.primaryGradient.createShader(bounds),
-                child: Text(
-                  "Create Your Account",
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 22 : 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                "First, let's get to know you",
-                style: TextStyle(
-                  fontSize: isSmallScreen ? 14 : 16,
-                  color: EatoTheme.textSecondaryColor,
-                ),
-              ),
-              SizedBox(height: 24),
-
-              // Name field
-              _buildInputField(
-                label: "Full Name",
-                hint: "Enter your full name",
-                controller: _nameController,
-                focusNode: _nameFocus,
-                validator: _validateName,
-                textInputAction: TextInputAction.next,
-                keyboardType: TextInputType.name,
-                textCapitalization: TextCapitalization.words,
-                prefixIcon: Icons.person_outline,
-                onFieldSubmitted: () =>
-                    FocusScope.of(context).requestFocus(_emailFocus),
-              ),
-              SizedBox(height: 20),
-
-              // Email field
-              _buildInputField(
-                label: "Email Address",
-                hint: "Enter your email address",
-                controller: _emailController,
-                focusNode: _emailFocus,
-                validator: _validateEmail,
-                textInputAction: TextInputAction.next,
-                keyboardType: TextInputType.emailAddress,
-                prefixIcon: Icons.email_outlined,
-                onFieldSubmitted: () =>
-                    FocusScope.of(context).requestFocus(_phoneFocus),
-              ),
-              SizedBox(height: 20),
-
-              // Phone field
-              _buildPhoneField(isSmallScreen),
-
-              SizedBox(height: 32),
-
-              // Next button
-              _buildActionButton(
-                text: "Continue",
-                onPressed: _goToNextStep,
-                showArrow: true,
-              ),
-
-              SizedBox(height: 20),
-
-              // Login link
-              _buildLoginLink(isSmallScreen),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSecurityStep(Size screenSize, bool isSmallScreen) {
-    return Container(
-      key: ValueKey<String>('security'),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKeyStep2,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Step title
-              ShaderMask(
-                shaderCallback: (bounds) =>
-                    EatoTheme.primaryGradient.createShader(bounds),
-                child: Text(
-                  "Secure Your Account",
-                  style: TextStyle(
-                    fontSize: isSmallScreen ? 22 : 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                "Create a strong password to protect your account",
-                style: TextStyle(
-                  fontSize: isSmallScreen ? 14 : 16,
-                  color: EatoTheme.textSecondaryColor,
-                ),
-              ),
-              SizedBox(height: 24),
-
-              // Password field
-              _buildPasswordField(isSmallScreen),
-              SizedBox(height: 20),
-
-              // Confirm password field
-              _buildConfirmPasswordField(isSmallScreen),
-
-              SizedBox(height: 20),
-
-              // Password strength indicator
-              _buildPasswordStrengthIndicator(),
-
-              SizedBox(height: 32),
-
-              // Row with Back and Sign Up buttons
-              Row(
+            // Navigation buttons
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
                 children: [
-                  Expanded(
-                    flex: 1,
-                    child: OutlinedButton(
-                      onPressed: _goToPreviousStep,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: EatoTheme.primaryColor,
-                        side: BorderSide(
-                            color: EatoTheme.primaryColor, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                  if (_currentStep > 0)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _goToPreviousStep,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: EatoTheme.primaryColor),
                         ),
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        "Back",
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 14 : 16,
-                          fontWeight: FontWeight.w500,
+                        child: Text(
+                          'Previous',
+                          style: TextStyle(color: EatoTheme.primaryColor),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 16),
+                  if (_currentStep > 0) const SizedBox(width: 16),
                   Expanded(
-                    flex: 2,
-                    child: _buildActionButton(
-                      text: "Sign Up",
-                      onPressed: _goToNextStep,
-                      isLoading: _isLoading,
-                      showArrow: true,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _goToNextStep,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: EatoTheme.primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              _currentStep < _totalSteps - 1
+                                  ? 'Next'
+                                  : 'Create Account',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputField({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required String? Function(String?) validator,
-    required TextInputAction textInputAction,
-    required IconData prefixIcon,
-    TextInputType? keyboardType,
-    TextCapitalization textCapitalization = TextCapitalization.none,
-    Function()? onFieldSubmitted,
-    bool obscureText = false,
-    Widget? suffixIcon,
-  }) {
-    final bool hasFocus = focusNode.hasFocus;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 15,
-            color:
-                hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          focusNode: focusNode,
-          textInputAction: textInputAction,
-          textCapitalization: textCapitalization,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          style: TextStyle(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: 15,
             ),
-            prefixIcon: Icon(
-              prefixIcon,
-              color: hasFocus ? EatoTheme.primaryColor : Colors.grey.shade500,
-              size: 20,
-            ),
-            suffixIcon: suffixIcon,
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: EatoTheme.primaryColor,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: EatoTheme.errorColor,
-                width: 1.5,
-              ),
-            ),
-          ),
-          validator: validator,
-          onFieldSubmitted: (_) => onFieldSubmitted?.call(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhoneField(bool isSmallScreen) {
-    final bool hasFocus = _phoneFocus.hasFocus;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Phone Number",
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 15,
-            color:
-                hasFocus ? EatoTheme.primaryColor : EatoTheme.textPrimaryColor,
-          ),
-        ),
-        SizedBox(height: 8),
-        TextFormField(
-          controller: _phoneNumberController,
-          focusNode: _phoneFocus,
-          keyboardType: TextInputType.phone,
-          textInputAction: TextInputAction.next,
-          style: TextStyle(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: "Enter your phone number",
-            hintStyle: TextStyle(
-              color: Colors.grey.shade400,
-              fontSize: 15,
-            ),
-            // Modified prefix implementation for better input handling
-            prefix: Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Text(
-                "+94 ",
-                style: TextStyle(
-                  color: EatoTheme.textPrimaryColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: EatoTheme.primaryColor,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: EatoTheme.errorColor,
-                width: 1.5,
-              ),
-            ),
-          ),
-          validator: _validatePhone,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(10),
           ],
         ),
-        SizedBox(height: 6),
-        Text(
-          "Enter numbers only, without country code",
-          style: TextStyle(
-            color: EatoTheme.textSecondaryColor,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField(bool isSmallScreen) {
-    return _buildInputField(
-      label: "Password",
-      hint: "Create a strong password",
-      controller: _passwordController,
-      focusNode: _passwordFocus,
-      validator: _validatePassword,
-      textInputAction: TextInputAction.next,
-      prefixIcon: Icons.lock_outline,
-      obscureText: !_isPasswordVisible,
-      suffixIcon: IconButton(
-        icon: Icon(
-          _isPasswordVisible
-              ? Icons.visibility_off_outlined
-              : Icons.visibility_outlined,
-          color: _passwordFocus.hasFocus
-              ? EatoTheme.primaryColor
-              : Colors.grey.shade500,
-          size: 20,
-        ),
-        onPressed: () {
-          setState(() {
-            _isPasswordVisible = !_isPasswordVisible;
-          });
-        },
-      ),
-      onFieldSubmitted: () =>
-          FocusScope.of(context).requestFocus(_confirmPasswordFocus),
-    );
-  }
-
-  Widget _buildConfirmPasswordField(bool isSmallScreen) {
-    return _buildInputField(
-      label: "Confirm Password",
-      hint: "Confirm your password",
-      controller: _confirmPasswordController,
-      focusNode: _confirmPasswordFocus,
-      validator: _validateConfirmPassword,
-      textInputAction: TextInputAction.done,
-      prefixIcon: Icons.lock_clock_outlined,
-      obscureText: !_isConfirmPasswordVisible,
-      suffixIcon: IconButton(
-        icon: Icon(
-          _isConfirmPasswordVisible
-              ? Icons.visibility_off_outlined
-              : Icons.visibility_outlined,
-          color: _confirmPasswordFocus.hasFocus
-              ? EatoTheme.primaryColor
-              : Colors.grey.shade500,
-          size: 20,
-        ),
-        onPressed: () {
-          setState(() {
-            _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-          });
-        },
       ),
     );
   }
 
-  Widget _buildPasswordStrengthIndicator() {
-    // Only show if there's some password text
-    if (_passwordController.text.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // Calculate password strength
-    int strength = 0;
-    String strengthText = "Weak";
-    Color strengthColor = EatoTheme.errorColor;
-
-    if (_passwordController.text.length >= 6) strength++;
-    if (_passwordController.text.length >= 8) strength++;
-    if (RegExp(r'(?=.*?[A-Z])').hasMatch(_passwordController.text)) strength++;
-    if (RegExp(r'(?=.*?[0-9])').hasMatch(_passwordController.text)) strength++;
-    if (RegExp(r'(?=.*?[!@#$%^&*(),.?":{}|<>])')
-        .hasMatch(_passwordController.text)) strength++;
-
-    switch (strength) {
+  Widget _buildCurrentStep() {
+    switch (_currentStep) {
       case 0:
+        return _buildStep1();
       case 1:
-        strengthText = "Weak";
-        strengthColor = EatoTheme.errorColor;
-        break;
-      case 2:
-      case 3:
-        strengthText = "Medium";
-        strengthColor = EatoTheme.warningColor;
-        break;
-      case 4:
-      case 5:
-        strengthText = "Strong";
-        strengthColor = EatoTheme.successColor;
-        break;
+        return _buildStep2();
+      default:
+        return _buildStep1();
     }
-
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        color: strengthColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: strengthColor.withOpacity(0.3)),
-      ),
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                strength > 3
-                    ? Icons.verified
-                    : strength > 1
-                        ? Icons.shield
-                        : Icons.shield_outlined,
-                color: strengthColor,
-                size: 18,
-              ),
-              SizedBox(width: 8),
-              Text(
-                "Password Strength: ",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: EatoTheme.textPrimaryColor,
-                ),
-              ),
-              Text(
-                strengthText,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: strengthColor,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: strength / 5,
-              backgroundColor: Colors.grey.shade200,
-              valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
-              minHeight: 8,
-            ),
-          ),
-
-          SizedBox(height: 12),
-
-          // Requirements
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
-              _buildPasswordRequirement(
-                "6+ characters",
-                _passwordController.text.length >= 6,
-              ),
-              _buildPasswordRequirement(
-                "Uppercase",
-                RegExp(r'(?=.*?[A-Z])').hasMatch(_passwordController.text),
-              ),
-              _buildPasswordRequirement(
-                "Number",
-                RegExp(r'(?=.*?[0-9])').hasMatch(_passwordController.text),
-              ),
-              _buildPasswordRequirement(
-                "Special character",
-                RegExp(r'(?=.*?[!@#$%^&*(),.?":{}|<>])')
-                    .hasMatch(_passwordController.text),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
-  Widget _buildPasswordRequirement(String text, bool isMet) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedContainer(
-          duration: Duration(milliseconds: 300),
-          height: 18,
-          width: 18,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isMet ? EatoTheme.successColor : Colors.transparent,
-            border: Border.all(
-              color: isMet ? EatoTheme.successColor : Colors.grey.shade400,
-              width: 1.5,
-            ),
-          ),
-          child: isMet
-              ? Icon(
-                  Icons.check,
-                  size: 12,
-                  color: Colors.white,
-                )
-              : null,
-        ),
-        SizedBox(width: 8),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 13,
-            color: isMet ? EatoTheme.successColor : Colors.grey.shade600,
-            fontWeight: isMet ? FontWeight.w500 : FontWeight.normal,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton({
-    required String text,
-    required VoidCallback onPressed,
-    bool isLoading = false,
-    bool showArrow = false,
-  }) {
-    return Container(
-      width: double.infinity,
-      height: 55,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isLoading
-            ? []
-            : [
-                BoxShadow(
-                  color: EatoTheme.primaryColor.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-      ),
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white.withOpacity(0.6),
-          disabledBackgroundColor: Colors.transparent,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.zero,
-        ),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: isLoading
-                ? LinearGradient(
-                    colors: [
-                      Colors.grey.shade400,
-                      Colors.grey.shade500,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : EatoTheme.primaryGradient,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            alignment: Alignment.center,
-            child: isLoading
-                ? SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        text,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      if (showArrow) ...[
-                        SizedBox(width: 10),
-                        Container(
-                          padding: EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.arrow_forward_ios,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                        ),
-                      ],
-                    ],
+  Widget _buildStep1() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKeyStep1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Personal Information',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: EatoTheme.textPrimaryColor,
                   ),
-          ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please provide your basic information',
+              style: TextStyle(color: EatoTheme.textSecondaryColor),
+            ),
+            const SizedBox(height: 32),
+
+            // Name field
+            TextFormField(
+              controller: _nameController,
+              focusNode: _nameFocus,
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_emailFocus),
+              validator: _validateName,
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                prefixIcon: Icon(Icons.person_outline),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Email field
+            TextFormField(
+              controller: _emailController,
+              focusNode: _emailFocus,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              validator: _validateEmail,
+              decoration: InputDecoration(
+                labelText: 'Email Address',
+                prefixIcon: Icon(Icons.email_outlined),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildLoginLink(bool isSmallScreen) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Already have an account?",
-          style: TextStyle(
-            fontSize: isSmallScreen ? 13 : 14,
-            color: EatoTheme.textSecondaryColor,
-          ),
-        ),
-        TextButton(
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            Navigator.pop(context);
-          },
-          style: TextButton.styleFrom(
-            foregroundColor: EatoTheme.primaryColor,
-            padding: const EdgeInsets.only(left: 5),
-            minimumSize: const Size(0, 0),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            "Log In",
-            style: TextStyle(
-              fontSize: isSmallScreen ? 13 : 14,
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
+  Widget _buildStep2() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKeyStep2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Account Security',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: EatoTheme.textPrimaryColor,
+                  ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Set up your phone number and password',
+              style: TextStyle(color: EatoTheme.textSecondaryColor),
+            ),
+            const SizedBox(height: 32),
+
+            // Phone field
+            TextFormField(
+              controller: _phoneNumberController,
+              focusNode: _phoneFocus,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_passwordFocus),
+              validator: _validatePhone,
+              decoration: InputDecoration(
+                labelText: 'Phone Number',
+                prefixIcon: Icon(Icons.phone_outlined),
+                prefixText: '+94 ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Password field
+            TextFormField(
+              controller: _passwordController,
+              focusNode: _passwordFocus,
+              obscureText: !_isPasswordVisible,
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_confirmPasswordFocus),
+              validator: _validatePassword,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_isPasswordVisible
+                      ? Icons.visibility_off
+                      : Icons.visibility),
+                  onPressed: () =>
+                      setState(() => _isPasswordVisible = !_isPasswordVisible),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Confirm password field
+            TextFormField(
+              controller: _confirmPasswordController,
+              focusNode: _confirmPasswordFocus,
+              obscureText: !_isConfirmPasswordVisible,
+              textInputAction: TextInputAction.done,
+              validator: _validateConfirmPassword,
+              decoration: InputDecoration(
+                labelText: 'Confirm Password',
+                prefixIcon: Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_isConfirmPasswordVisible
+                      ? Icons.visibility_off
+                      : Icons.visibility),
+                  onPressed: () => setState(() =>
+                      _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

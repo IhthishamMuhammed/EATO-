@@ -15,6 +15,10 @@ class EatoTheme {
   static const Color errorColor = Color(0xFFE53935); // Red 600
   static const Color infoColor = Color(0xFF1E88E5); // Blue 600
 
+  static const Color dividerColor = Color(0xFFE0E0E0); // Grey 300
+  static const Color borderColor = Color(0xFFBDBDBD); // Grey 400
+  static const Color shadowColor = Color(0xFF000000);
+
   // Text colors
   static const Color textPrimaryColor = Color(0xFF212121); // Grey 900
   static const Color textSecondaryColor = Color(0xFF757575); // Grey 600
@@ -36,93 +40,93 @@ class EatoTheme {
 
   // Text styles
   static TextStyle get headingLarge => const TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.bold,
-    color: textPrimaryColor,
-    height: 1.2,
-  );
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: textPrimaryColor,
+        height: 1.2,
+      );
 
   static TextStyle get headingMedium => const TextStyle(
-    fontSize: 22,
-    fontWeight: FontWeight.bold,
-    color: textPrimaryColor,
-    height: 1.3,
-  );
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: textPrimaryColor,
+        height: 1.3,
+      );
 
   static TextStyle get headingSmall => const TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: textPrimaryColor,
-    height: 1.3,
-  );
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: textPrimaryColor,
+        height: 1.3,
+      );
 
   static TextStyle get bodyLarge => const TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    color: textPrimaryColor,
-    height: 1.5,
-  );
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: textPrimaryColor,
+        height: 1.5,
+      );
 
   static TextStyle get bodyMedium => const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: textPrimaryColor,
-    height: 1.5,
-  );
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: textPrimaryColor,
+        height: 1.5,
+      );
 
   static TextStyle get bodySmall => const TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: textSecondaryColor,
-    height: 1.4,
-  );
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: textSecondaryColor,
+        height: 1.4,
+      );
 
   static TextStyle get labelLarge => const TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: textPrimaryColor,
-    height: 1.4,
-  );
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: textPrimaryColor,
+        height: 1.4,
+      );
 
   static TextStyle get labelMedium => const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: textPrimaryColor,
-    height: 1.4,
-  );
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: textPrimaryColor,
+        height: 1.4,
+      );
 
   static TextStyle get labelSmall => const TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    color: textSecondaryColor,
-    height: 1.4,
-  );
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: textSecondaryColor,
+        height: 1.4,
+      );
 
   // Reusable component styles
   static BoxDecoration get cardDecoration => BoxDecoration(
-    color: surfaceColor,
-    borderRadius: BorderRadius.circular(16),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.05),
-        blurRadius: 10,
-        offset: const Offset(0, 2),
-      ),
-    ],
-  );
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      );
 
   static BoxDecoration get highlightedCardDecoration => BoxDecoration(
-    color: surfaceColor,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
-    boxShadow: [
-      BoxShadow(
-        color: primaryColor.withOpacity(0.1),
-        blurRadius: 10,
-        offset: const Offset(0, 2),
-      ),
-    ],
-  );
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      );
 
   // AppBar definition
   static PreferredSizeWidget appBar({
@@ -147,9 +151,9 @@ class EatoTheme {
       centerTitle: centerTitle,
       leading: showBackButton && Navigator.canPop(context)
           ? IconButton(
-        icon: const Icon(Icons.arrow_back, color: textPrimaryColor),
-        onPressed: () => Navigator.pop(context),
-      )
+              icon: const Icon(Icons.arrow_back, color: textPrimaryColor),
+              onPressed: () => Navigator.pop(context),
+            )
           : null,
       actions: actions,
       bottom: bottom,
@@ -158,33 +162,33 @@ class EatoTheme {
 
   // Button styles
   static ButtonStyle get primaryButtonStyle => ElevatedButton.styleFrom(
-    backgroundColor: primaryColor,
-    foregroundColor: Colors.white,
-    elevation: 2,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-    minimumSize: const Size(100, 48),
-  );
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        minimumSize: const Size(100, 48),
+      );
 
   static ButtonStyle get outlinedButtonStyle => OutlinedButton.styleFrom(
-    foregroundColor: primaryColor,
-    side: const BorderSide(color: primaryColor, width: 1.5),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-    minimumSize: const Size(100, 48),
-  );
+        foregroundColor: primaryColor,
+        side: const BorderSide(color: primaryColor, width: 1.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        minimumSize: const Size(100, 48),
+      );
 
   static ButtonStyle get textButtonStyle => TextButton.styleFrom(
-    foregroundColor: primaryColor,
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-    ),
-  );
+        foregroundColor: primaryColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      );
   static PageRouteBuilder slideTransition({
     required Widget page,
     Duration duration = const Duration(milliseconds: 500),
@@ -208,6 +212,7 @@ class EatoTheme {
       transitionDuration: duration,
     );
   }
+
   static PageRouteBuilder fadeTransition({
     required Widget page,
     Duration duration = const Duration(milliseconds: 400),
@@ -220,12 +225,13 @@ class EatoTheme {
       transitionDuration: duration,
     );
   }
+
   static Widget buildPageIndicators(int totalPages, int currentPage) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(
         totalPages,
-            (index) => Container(
+        (index) => Container(
           width: index == currentPage ? 24 : 10,
           height: 8,
           margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -239,6 +245,7 @@ class EatoTheme {
       ),
     );
   }
+
   // Input decoration
   static InputDecoration inputDecoration({
     required String hintText,
@@ -287,6 +294,4 @@ class EatoTheme {
   static const double spacing32 = 32.0;
   static const double spacing40 = 40.0;
   static const double spacing48 = 48.0;
-
-  
 }
