@@ -51,14 +51,14 @@ class _AddFoodPageState extends State<AddFoodPage> {
     'Full': TextEditingController(),
     'Half': TextEditingController(),
     'Mini': TextEditingController(),
-  };
+  };  // //select the food type
   final Map<String, bool> _selectedPortions = {
     'Full': false,
     'Half': false,
     'Mini': false,
   };
 
-  // ✅ UPDATED: Combined food hierarchy for all meal times
+  //Combined food hierarchy for all meal times
   final Map<String, List<String>> _foodHierarchy = {
     'Rice and Curry': [
       'Vegetarian',
@@ -114,7 +114,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
   void initState() {
     super.initState();
 
-    // ✅ UPDATED: Initialize with pre-selected meal time if provided
+    //Initialize with pre-selected meal time if provided
     if (widget.preSelectedMealTime != null) {
       final preSelected = widget.preSelectedMealTime!.toLowerCase();
       if (_selectedMealTimes.containsKey(preSelected)) {
@@ -143,7 +143,7 @@ class _AddFoodPageState extends State<AddFoodPage> {
     super.dispose();
   }
 
-  // ✅ NEW: Multi-select meal times widget
+  //Multi-select meal times widget
   Widget _buildMealTimeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
