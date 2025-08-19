@@ -1,8 +1,9 @@
-// FIXED CustomerHomePage with robust image loading
-// Multiple fallback URLs for reliable image loading
+// FILE: lib/pages/customer/homepage/customer_home.dart
+// Complete Customer Home Page with Search & Notification functionality integrated
 
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/homepage/meal_category_page.dart';
+import 'package:eato/services/order_notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';
@@ -15,6 +16,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
+import 'package:eato/services/notification_helper.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({Key? key}) : super(key: key);
@@ -31,6 +35,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   // ✅ PREVENT USERPROVIDER REBUILDS: Store user state locally
   bool _userLoaded = false;
   bool _userLoading = false;
+
+  // 🔔 NOTIFICATION FUNCTIONALITY
+  List<Map<String, dynamic>> _notifications = [];
+  int _unreadNotifications = 0;
+  StreamSubscription<List<Map<String, dynamic>>>? _notificationSubscription;
 
   // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal
   final Map<String, List<String>> _mealImageOptions = {
@@ -69,6 +78,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+
+    // 🔔 INITIALIZE NOTIFICATIONS
+    _loadNotifications();
+    _setupNotificationStream();
 
     _initializeAppInBackground();
     _animationController.forward();
@@ -124,6 +137,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     print("🗑️ CustomerHomePage: dispose called");
     _isDisposed = true;
     _animationController.dispose();
+
+    // 🔔 DISPOSE NOTIFICATIONS
+    _notificationSubscription?.cancel();
+
     super.dispose();
   }
 
@@ -160,6 +177,252 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       ),
     );
   }
+
+  // ===================================================================
+  // 🔔 NOTIFICATION FUNCTIONALITY
+  // ===================================================================
+
+  Future<void> _loadNotifications() async {
+    try {
+      final notifications = await NotificationHelper.getUserNotifications();
+      final unreadCount = await NotificationHelper.getUnreadNotificationCount();
+
+      setState(() {
+        _notifications = notifications;
+        _unreadNotifications = unreadCount;
+      });
+    } catch (e) {
+      print('Error loading notifications: $e');
+    }
+  }
+
+  void _setupNotificationStream() {
+    _notificationSubscription =
+        NotificationHelper.getNotificationStream().listen((notifications) {
+      setState(() {
+        _notifications = notifications;
+        _unreadNotifications = notifications.where((n) => !n['isRead']).length;
+      });
+    });
+  }
+
+  void _showNotifications() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildNotificationSheet(),
+    );
+  }
+
+  Widget _buildNotificationSheet() {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.notifications, color: Colors.purple),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_unreadNotifications > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$_unreadNotifications',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (_unreadNotifications > 0)
+                  TextButton(
+                    onPressed: _markAllAsRead,
+                    child: const Text('Mark all read'),
+                  ),
+              ],
+            ),
+          ),
+
+          // Notifications list
+          Expanded(
+            child: _notifications.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.notifications_none,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No notifications yet',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'We\'ll notify you about order updates and special offers',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadNotifications,
+                    child: ListView.builder(
+                      itemCount: _notifications.length,
+                      itemBuilder: (context, index) {
+                        final notification = _notifications[index];
+                        return _buildNotificationItem(notification);
+                      },
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final isRead = notification['isRead'] as bool;
+    final timestamp = notification['timestamp'] as Timestamp?;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isRead ? Colors.white : Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isRead ? Colors.grey.shade200 : Colors.blue.shade200,
+        ),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: notification['color'].withOpacity(0.1),
+          child: Icon(
+            notification['icon'],
+            color: notification['color'],
+            size: 20,
+          ),
+        ),
+        title: Text(
+          notification['title'],
+          style: TextStyle(
+            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              notification['message'],
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatNotificationTime(timestamp),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        trailing: !isRead
+            ? Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
+              )
+            : null,
+        onTap: () => _markAsRead(notification['id']),
+      ),
+    );
+  }
+
+  String _formatNotificationTime(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+
+    final dateTime = timestamp.toDate();
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+
+  Future<void> _markAsRead(String notificationId) async {
+    await NotificationHelper.markNotificationAsRead(notificationId);
+  }
+
+  Future<void> _markAllAsRead() async {
+    await NotificationHelper.markAllNotificationsAsRead();
+  }
+
+  // ===================================================================
+  // 🏗️ BUILD METHODS
+  // ===================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -212,6 +475,29 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   Widget _buildHomeContent() {
     print("🏠 Building home content widget");
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            print('🧪 Testing notification for user: ${user.uid}');
+
+            await OrderNotificationService.sendTestNotification(
+                user.uid, 'Hello from Eato! 🍕 Testing notifications...');
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('🧪 Test notification sent! Check bell icon.')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('❌ Please log in first')),
+            );
+          }
+        },
+        icon: Icon(Icons.bug_report),
+        label: Text('Test 🧪'),
+        backgroundColor: Colors.purple,
+      ),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
@@ -229,17 +515,40 @@ class _CustomerHomePageState extends State<CustomerHomePage>
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.black),
-            onPressed: () {
-              // Handle notifications
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black),
-            onPressed: () {
-              // Handle search
-            },
+          // 🔔 Notification icon with badge
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined,
+                    color: Colors.black),
+                onPressed: _showNotifications,
+              ),
+              if (_unreadNotifications > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '$_unreadNotifications',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),

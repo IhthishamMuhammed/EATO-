@@ -1,5 +1,5 @@
 // FILE: lib/pages/customer/account_page.dart
-// Corrected version - ONLY user account management, no order history
+// Updated version with Edit Profile functionality and Logout confirmation
 
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
@@ -27,6 +27,12 @@ class _AccountPageState extends State<AccountPage> {
   bool _newPasswordVisible = false;
   bool _confirmPasswordVisible = false;
 
+  // Edit Profile Controllers
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final GlobalKey<FormState> _editProfileFormKey = GlobalKey<FormState>();
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +42,14 @@ class _AccountPageState extends State<AccountPage> {
             .fetchUser(authUser!.uid);
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 
   // Change password using Firebase Auth directly
@@ -80,6 +94,58 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
+  // Show logout confirmation dialog
+  void _showLogoutConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.logout,
+                color: Colors.red.shade600,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text('Logout'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to logout from your account?',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _logout(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Logout method
   Future<void> _logout(BuildContext context) async {
     try {
@@ -118,21 +184,23 @@ class _AccountPageState extends State<AccountPage> {
 
       try {
         File imageFile = File(image.path);
-        await userProvider.uploadProfilePicture(authUser!.uid, imageFile);
+        String? newImageUrl =
+            await userProvider.uploadProfilePicture(authUser!.uid, imageFile);
 
-        if (mounted) {
+        if (mounted && newImageUrl != null) {
           await userProvider.fetchUser(authUser!.uid);
-        }
 
-        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Profile picture updated successfully!'),
               backgroundColor: Colors.green,
             ),
           );
+        } else {
+          throw Exception('Failed to upload image');
         }
       } catch (e) {
+        print('Error updating profile picture: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -147,6 +215,337 @@ class _AccountPageState extends State<AccountPage> {
             isLoading = false;
           });
         }
+      }
+    }
+  }
+
+  // Clean up broken profile image URL
+  Future<void> _cleanupBrokenImageUrl(UserProvider userProvider) async {
+    if (authUser != null &&
+        userProvider.currentUser?.profileImageUrl?.isNotEmpty == true) {
+      try {
+        // Clear the broken URL from the database
+        await userProvider.updateUserField(
+            authUser!.uid, 'profileImageUrl', '');
+        await userProvider.fetchUser(authUser!.uid);
+        print('Cleaned up broken profile image URL');
+      } catch (e) {
+        print('Error cleaning up broken image URL: $e');
+      }
+    }
+  }
+
+  // Show edit profile dialog
+  void _showEditProfileDialog(UserProvider userProvider) {
+    final user = userProvider.currentUser!;
+
+    // Initialize controllers with current data
+    _nameController.text = user.name;
+    _phoneController.text = user.phoneNumber ?? '';
+    _addressController.text = user.address ?? '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Form(
+                  key: _editProfileFormKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.edit,
+                            color: Colors.purple,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Edit Profile',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Profile Picture Section
+                      Center(
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 40,
+                              backgroundColor: Colors.purple.shade200,
+                              child: user.profileImageUrl?.isNotEmpty == true
+                                  ? ClipOval(
+                                      child: Image.network(
+                                        user.profileImageUrl!,
+                                        width: 80,
+                                        height: 80,
+                                        fit: BoxFit.cover,
+                                        loadingBuilder:
+                                            (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Center(
+                                            child: CircularProgressIndicator(
+                                              value: loadingProgress
+                                                          .expectedTotalBytes !=
+                                                      null
+                                                  ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                  : null,
+                                              strokeWidth: 2,
+                                              color: Colors.purple,
+                                            ),
+                                          );
+                                        },
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          print(
+                                              'Error loading profile image in dialog: $error');
+                                          // Clean up broken URL in background
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                            _cleanupBrokenImageUrl(
+                                                userProvider);
+                                          });
+                                          return Icon(
+                                            Icons.person,
+                                            size: 40,
+                                            color: Colors.purple.shade700,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.person,
+                                      size: 40,
+                                      color: Colors.purple.shade700,
+                                    ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+                                  await _changeProfilePicture(userProvider);
+                                  _showEditProfileDialog(userProvider);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.purple,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Name Field
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: const Icon(Icons.person_outline),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.purple),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter your name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Email Field (Read-only)
+                      TextFormField(
+                        initialValue: user.email,
+                        enabled: false,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Phone Field
+                      TextFormField(
+                        controller: _phoneController,
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          prefixIcon: const Icon(Icons.phone_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.purple),
+                          ),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Address Field
+                      TextFormField(
+                        controller: _addressController,
+                        decoration: InputDecoration(
+                          labelText: 'Address',
+                          prefixIcon: const Icon(Icons.location_on_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Colors.purple),
+                          ),
+                        ),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Action Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.grey.shade600,
+                                side: BorderSide(color: Colors.grey.shade300),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _saveProfileChanges(userProvider),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.purple,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text('Save Changes'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Save profile changes
+  Future<void> _saveProfileChanges(UserProvider userProvider) async {
+    if (!_editProfileFormKey.currentState!.validate()) {
+      return;
+    }
+
+    if (authUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not authenticated'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading state
+      setState(() {
+        isLoading = true;
+      });
+
+      // Update user profile using UserProvider method
+      final success = await userProvider.updateUserProfile(
+        authUser!.uid,
+        _nameController.text.trim(),
+        _phoneController.text.trim(),
+        _addressController.text.trim(),
+      );
+
+      Navigator.of(context).pop(); // Close dialog
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to update profile');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
       }
     }
   }
@@ -369,17 +768,54 @@ class _AccountPageState extends State<AccountPage> {
                           CircleAvatar(
                             radius: 50,
                             backgroundColor: Colors.purple.shade200,
-                            backgroundImage:
-                                user.profileImageUrl?.isNotEmpty == true
-                                    ? NetworkImage(user.profileImageUrl!)
-                                    : null,
-                            child: user.profileImageUrl?.isEmpty ?? true
-                                ? Icon(
+                            child: user.profileImageUrl?.isNotEmpty == true
+                                ? ClipOval(
+                                    child: Image.network(
+                                      user.profileImageUrl!,
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            value: loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                        .cumulativeBytesLoaded /
+                                                    loadingProgress
+                                                        .expectedTotalBytes!
+                                                : null,
+                                            strokeWidth: 2,
+                                            color: Colors.purple,
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        print(
+                                            'Error loading profile image: $error');
+                                        // Clean up broken URL in background
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          _cleanupBrokenImageUrl(userProvider);
+                                        });
+                                        return Icon(
+                                          Icons.person,
+                                          size: 50,
+                                          color: Colors.purple.shade700,
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Icon(
                                     Icons.person,
                                     size: 50,
                                     color: Colors.purple.shade700,
-                                  )
-                                : null,
+                                  ),
                           ),
                           if (isLoading)
                             const Positioned.fill(
@@ -439,30 +875,34 @@ class _AccountPageState extends State<AccountPage> {
                           ),
                         ),
                       ],
+                      if (user.address?.isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          user.address!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
-                // Account Actions - ✅ ONLY USER ACCOUNT RELATED OPTIONS
+                // Account Actions
                 Column(
                   children: [
-                    // Edit Profile
+                    // Edit Profile - Now Functional
                     _buildActionButton(
                       'Edit Profile',
                       'Update your personal information',
                       Icons.edit_outlined,
                       Colors.blue.shade100,
                       Colors.blue.shade700,
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Edit Profile feature coming soon!'),
-                            backgroundColor: Colors.blue,
-                          ),
-                        );
-                      },
+                      () => _showEditProfileDialog(userProvider),
                     ),
 
                     const SizedBox(height: 12),
@@ -477,93 +917,16 @@ class _AccountPageState extends State<AccountPage> {
                       _showChangePasswordDialog,
                     ),
 
-                    const SizedBox(height: 12),
-
-                    // Notification Preferences
-                    _buildActionButton(
-                      'Notifications',
-                      'Manage notification preferences',
-                      Icons.notifications_outlined,
-                      Colors.indigo.shade100,
-                      Colors.indigo.shade700,
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Notification settings coming soon!'),
-                            backgroundColor: Colors.indigo,
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Privacy & Security
-                    _buildActionButton(
-                      'Privacy & Security',
-                      'Manage your privacy settings',
-                      Icons.security,
-                      Colors.teal.shade100,
-                      Colors.teal.shade700,
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Privacy settings coming soon!'),
-                            backgroundColor: Colors.teal,
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Settings
-                    _buildActionButton(
-                      'Settings',
-                      'App preferences and settings',
-                      Icons.settings_outlined,
-                      Colors.grey.shade100,
-                      Colors.grey.shade700,
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Settings feature coming soon!'),
-                            backgroundColor: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Help & Support
-                    _buildActionButton(
-                      'Help & Support',
-                      'Get help and contact support',
-                      Icons.help_outline,
-                      Colors.orange.shade100,
-                      Colors.orange.shade700,
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Help & Support feature coming soon!'),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                      },
-                    ),
-
                     const SizedBox(height: 24),
 
-                    // Logout Button
+                    // Logout Button with Confirmation
                     _buildActionButton(
                       'Logout',
                       'Sign out from your account',
                       Icons.logout,
                       Colors.red.shade100,
                       Colors.red.shade700,
-                      () => _logout(context),
+                      _showLogoutConfirmationDialog,
                     ),
                   ],
                 ),
@@ -608,9 +971,9 @@ class _AccountPageState extends State<AccountPage> {
         }
       });
     } else {
-      // ✅ ADD THIS: In embedded mode, don't navigate - let parent handle it
+      // In embedded mode, don't navigate - let parent handle it
       print(
-          "🔄 Account page embedded mode - ignoring navigation to index $index");
+          "📄 Account page embedded mode - ignoring navigation to index $index");
       // The CustomerHomePage will handle the tab switching via PageController
     }
   }

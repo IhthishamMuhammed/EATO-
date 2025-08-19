@@ -1,19 +1,20 @@
 // FILE: lib/services/order_notification_service.dart
-// Modern Firebase implementation with Cloud Functions approach
+// Fixed version that matches your OrderProvider method calls
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:convert';
-import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:eato/services/notification_helper.dart';
 
 class OrderNotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Your Firebase project ID
-  static const String _projectId = 'food-delivery-around-faculty';
+  // ===================================================================
+  // 🔔 METHODS CALLED BY YOUR ORDERPROVIDER
+  // ===================================================================
 
-  /// Send notification when order is placed
-  static Future<void> sendOrderPlacedNotification({
+  /// ✅ Method called by OrderProvider.placeOrdersWithNotifications()
+  static Future<bool> sendOrderPlacedNotification({
     required String orderId,
     required String customerId,
     required String providerId,
@@ -23,89 +24,122 @@ class OrderNotificationService {
     required List<Map<String, dynamic>> items,
   }) async {
     try {
-      // Notify provider
-      await _sendToUser(
+      print('🍕 [OrderNotificationService] Sending order placed notifications');
+      print('   Order ID: $orderId');
+      print('   Customer: $customerId');
+      print('   Provider: $providerId');
+      print('   Store: $storeName');
+
+      // Step 1: Create notifications in Firestore for UI display
+      await NotificationHelper.createOrderNotification(
+        orderId: orderId,
+        customerId: customerId,
+        providerId: providerId,
+        status: 'placed',
+        customerName: customerName,
+        storeName: storeName,
+        totalAmount: totalAmount,
+      );
+
+      // Step 2: Send push notifications
+
+      // Customer notification
+      bool customerPushSent = await _sendPushNotification(
+        userId: customerId,
+        title: '📋 Order Placed Successfully',
+        body:
+            'Your order from $storeName has been placed and is being processed',
+        data: {
+          'type': 'order_update',
+          'orderId': orderId,
+          'status': 'placed',
+          'storeName': storeName,
+        },
+      );
+
+      // Provider notification
+      bool providerPushSent = await _sendPushNotification(
         userId: providerId,
-        title: '📋 New Order Received!',
+        title: '🔔 New Order Received!',
         body:
             'New order from $customerName - ₹${totalAmount.toStringAsFixed(2)}',
         data: {
           'type': 'new_order',
-          'order_id': orderId,
-          'customer_name': customerName,
+          'orderId': orderId,
+          'customerName': customerName,
+          'totalAmount': totalAmount.toString(),
         },
       );
 
-      print('✅ Order placed notifications sent successfully');
+      print('✅ [OrderNotificationService] Order placed notifications complete');
+      print(
+          '   Customer push: $customerPushSent, Provider push: $providerPushSent');
+      return true;
     } catch (e) {
-      print('❌ Error sending order placed notifications: $e');
+      print(
+          '❌ [OrderNotificationService] Error sending order placed notification: $e');
+      return false;
     }
   }
 
-  /// Send notification when order status changes
-  static Future<void> sendOrderStatusUpdate({
+  /// ✅ Method called by OrderProvider.updateOrderStatusWithNotifications()
+  static Future<bool> sendOrderStatusUpdate({
     required String orderId,
     required String customerId,
     required String newStatus,
     required String storeName,
     String? estimatedTime,
+    String? providerId,
+    String? customerName,
+    double? totalAmount,
   }) async {
     try {
-      String title = '';
-      String body = '';
+      print(
+          '🔄 [OrderNotificationService] Sending order status update: $newStatus');
+      print('   Order ID: $orderId');
+      print('   Customer: $customerId');
+      print('   Store: $storeName');
 
-      switch (newStatus.toLowerCase()) {
-        case 'confirmed':
-          title = '✅ Order Confirmed';
-          body = '$storeName confirmed your order';
-          break;
-        case 'preparing':
-          title = '👨‍🍳 Order Being Prepared';
-          body = '$storeName is preparing your delicious meal';
-          if (estimatedTime != null) {
-            body += ' • Ready in $estimatedTime';
-          }
-          break;
-        case 'ready':
-          title = '🍽️ Order Ready!';
-          body = 'Your order from $storeName is ready for pickup/delivery';
-          break;
-        case 'ontheway':
-          title = '🛵 Out for Delivery';
-          body = 'Your order is on the way! Get ready to enjoy your meal';
-          break;
-        case 'delivered':
-          title = '🎉 Order Delivered!';
-          body = 'Enjoy your meal from $storeName! Don\'t forget to rate us';
-          break;
-        case 'cancelled':
-          title = '❌ Order Cancelled';
-          body = 'Your order from $storeName has been cancelled';
-          break;
-        default:
-          title = '📱 Order Update';
-          body = 'Your order status has been updated';
-      }
+      // Step 1: Create notification in Firestore for UI display
+      await NotificationHelper.createOrderNotification(
+        orderId: orderId,
+        customerId: customerId,
+        providerId: providerId ?? '',
+        status: newStatus,
+        customerName: customerName ?? 'Customer',
+        storeName: storeName,
+        totalAmount: totalAmount,
+        estimatedTime: estimatedTime,
+      );
 
-      await _sendToUser(
+      // Step 2: Send push notification
+      String title = _getNotificationTitle(newStatus);
+      String body = _getNotificationBody(newStatus, storeName, estimatedTime);
+
+      bool pushSent = await _sendPushNotification(
         userId: customerId,
         title: title,
         body: body,
         data: {
           'type': 'order_update',
-          'order_id': orderId,
+          'orderId': orderId,
           'status': newStatus,
+          'storeName': storeName,
         },
       );
 
-      print('✅ Order status update notification sent: $newStatus');
+      print(
+          '✅ [OrderNotificationService] Order status update complete - Push: $pushSent');
+      return true;
     } catch (e) {
-      print('❌ Error sending order status update: $e');
+      print(
+          '❌ [OrderNotificationService] Error sending order status update: $e');
+      return false;
     }
   }
 
-  /// Send payment confirmation notification
-  static Future<void> sendPaymentConfirmation({
+  /// ✅ Method called by OrderProvider.sendPaymentConfirmation()
+  static Future<bool> sendPaymentConfirmation({
     required String orderId,
     required String customerId,
     required double amount,
@@ -113,126 +147,200 @@ class OrderNotificationService {
     required String storeName,
   }) async {
     try {
-      await _sendToUser(
+      print('💳 [OrderNotificationService] Sending payment confirmation');
+
+      // Step 1: Create notification in Firestore for UI display
+      await NotificationHelper.createGeneralNotification(
         userId: customerId,
-        title: '💳 Payment Successful',
+        title: '✅ Payment Confirmed',
+        message:
+            'Payment of ₹${amount.toStringAsFixed(2)} confirmed for your order from $storeName',
+        type: 'payment_success',
+        data: {
+          'orderId': orderId,
+          'amount': amount,
+          'paymentMethod': paymentMethod,
+          'storeName': storeName,
+        },
+      );
+
+      // Step 2: Send push notification
+      bool pushSent = await _sendPushNotification(
+        userId: customerId,
+        title: '✅ Payment Confirmed',
         body:
-            'Payment of ₹${amount.toStringAsFixed(2)} confirmed for your $storeName order',
+            'Payment of ₹${amount.toStringAsFixed(2)} confirmed for your order from $storeName',
         data: {
           'type': 'payment_success',
-          'order_id': orderId,
+          'orderId': orderId,
           'amount': amount.toString(),
         },
       );
 
-      print('✅ Payment confirmation notification sent');
+      print(
+          '✅ [OrderNotificationService] Payment confirmation complete - Push: $pushSent');
+      return pushSent;
     } catch (e) {
-      print('❌ Error sending payment confirmation: $e');
+      print(
+          '❌ [OrderNotificationService] Error sending payment confirmation: $e');
+      return false;
     }
   }
 
-  /// Send promotional notifications
-  static Future<void> sendPromotionalNotification({
+  /// ✅ Method called by OrderProvider.sendPromotionToCustomers()
+  static Future<int> sendPromotionalNotification({
     required List<String> userIds,
     required String title,
     required String body,
     String? imageUrl,
-    Map<String, dynamic>? data,
   }) async {
     try {
+      print(
+          '🎉 [OrderNotificationService] Sending promotional notification to ${userIds.length} users');
+
       int successCount = 0;
       for (String userId in userIds) {
-        // Check user's notification preferences
-        final userDoc = await _firestore.collection('users').doc(userId).get();
-        if (userDoc.exists) {
-          final userData = userDoc.data() as Map<String, dynamic>;
-          final prefs =
-              userData['notificationPreferences'] as Map<String, dynamic>?;
+        // Step 1: Create notification in Firestore for UI display
+        await NotificationHelper.createGeneralNotification(
+          userId: userId,
+          title: title,
+          message: body,
+          type: 'promotion',
+          data: {
+            'imageUrl': imageUrl,
+          },
+        );
 
-          // Skip if user disabled promotional notifications
-          if (prefs != null && prefs['promotions'] == false) {
-            continue;
-          }
-        }
-
-        final success = await _sendToUser(
+        // Step 2: Send push notification
+        bool pushSent = await _sendPushNotification(
           userId: userId,
           title: title,
           body: body,
           data: {
             'type': 'promotion',
-            'imageUrl': imageUrl,
-            ...?data,
+            'imageUrl': imageUrl ?? '',
           },
         );
 
-        if (success) successCount++;
+        if (pushSent) successCount++;
       }
 
       print(
-          '✅ Promotional notifications sent to $successCount/${userIds.length} users');
+          '✅ [OrderNotificationService] Promotional notifications sent: $successCount/${userIds.length}');
+      return successCount;
     } catch (e) {
-      print('❌ Error sending promotional notifications: $e');
+      print(
+          '❌ [OrderNotificationService] Error sending promotional notification: $e');
+      return 0;
     }
   }
 
-  /// Send notification for new restaurant
-  static Future<void> sendNewRestaurantNotification({
+  /// ✅ Method called by OrderProvider.notifyAboutNewRestaurant()
+  static Future<int> sendNewRestaurantNotification({
     required List<String> userIds,
     required String restaurantName,
     required String description,
     String? imageUrl,
   }) async {
     try {
+      print(
+          '🏪 [OrderNotificationService] Sending new restaurant notification to ${userIds.length} users');
+
       int successCount = 0;
       for (String userId in userIds) {
-        // Check user's notification preferences
-        final userDoc = await _firestore.collection('users').doc(userId).get();
-        if (userDoc.exists) {
-          final userData = userDoc.data() as Map<String, dynamic>;
-          final prefs =
-              userData['notificationPreferences'] as Map<String, dynamic>?;
-
-          // Skip if user disabled new restaurant notifications
-          if (prefs != null && prefs['newRestaurants'] == false) {
-            continue;
-          }
-        }
-
-        final success = await _sendToUser(
+        // Step 1: Create notification in Firestore for UI display
+        await NotificationHelper.createGeneralNotification(
           userId: userId,
-          title: '🍽️ New Restaurant Available!',
-          body: 'Check out $restaurantName - $description',
+          title: '🎉 New Restaurant: $restaurantName',
+          message: description,
+          type: 'new_restaurant',
           data: {
-            'type': 'new_restaurant',
-            'restaurant_name': restaurantName,
+            'restaurantName': restaurantName,
             'imageUrl': imageUrl,
           },
         );
 
-        if (success) successCount++;
+        // Step 2: Send push notification
+        bool pushSent = await _sendPushNotification(
+          userId: userId,
+          title: '🎉 New Restaurant: $restaurantName',
+          body: description,
+          data: {
+            'type': 'new_restaurant',
+            'restaurantName': restaurantName,
+            'imageUrl': imageUrl ?? '',
+          },
+        );
+
+        if (pushSent) successCount++;
       }
 
       print(
-          '✅ New restaurant notifications sent to $successCount/${userIds.length} users');
+          '✅ [OrderNotificationService] New restaurant notifications sent: $successCount/${userIds.length}');
+      return successCount;
     } catch (e) {
-      print('❌ Error sending new restaurant notifications: $e');
+      print(
+          '❌ [OrderNotificationService] Error sending new restaurant notification: $e');
+      return 0;
     }
   }
 
-  // ✅ FIXED: Private method using Firestore document approach
-  static Future<bool> _sendToUser({
+  // ===================================================================
+  // 🧪 TESTING METHODS (keep existing ones)
+  // ===================================================================
+
+  /// Send test notification (existing method)
+  static Future<bool> sendTestNotification(
+    String userId,
+    String message,
+  ) async {
+    try {
+      print(
+          '🧪 [OrderNotificationService] Sending test notification to: $userId');
+
+      // Step 1: Create notification in Firestore for UI display
+      await NotificationHelper.createGeneralNotification(
+        userId: userId,
+        title: '🧪 Test Notification',
+        message: message,
+        type: 'test',
+        data: {'isTest': true},
+      );
+
+      // Step 2: Send push notification
+      bool pushSent = await _sendPushNotification(
+        userId: userId,
+        title: '🧪 Test Notification',
+        body: message,
+        data: {'type': 'test'},
+      );
+
+      print(
+          '✅ [OrderNotificationService] Test notification complete - Push: $pushSent');
+      return pushSent;
+    } catch (e) {
+      print('❌ [OrderNotificationService] Error sending test notification: $e');
+      return false;
+    }
+  }
+
+  // ===================================================================
+  // 🚀 PUSH NOTIFICATION SENDING (via Cloud Functions)
+  // ===================================================================
+
+  /// Send push notification via Cloud Function
+  static Future<bool> _sendPushNotification({
     required String userId,
     required String title,
     required String body,
-    Map<String, dynamic>? data,
+    required Map<String, dynamic> data,
   }) async {
     try {
       // Get user's FCM token
       final userDoc = await _firestore.collection('users').doc(userId).get();
 
       if (!userDoc.exists) {
-        print('❌ User document not found: $userId');
+        print('❌ [OrderNotificationService] User document not found: $userId');
         return false;
       }
 
@@ -240,43 +348,25 @@ class OrderNotificationService {
       final fcmToken = userData['fcmToken'] as String?;
 
       if (fcmToken == null || fcmToken.isEmpty) {
-        print('❌ No FCM token found for user: $userId');
+        print(
+            '⚠️ [OrderNotificationService] No FCM token found for user: $userId');
         return false;
       }
 
-      // ✅ FIXED: Use Cloud Function approach
-      return await _createNotificationDocument(
-        token: fcmToken,
-        title: title,
-        body: body,
-        data: data ?? {},
-      );
-    } catch (e) {
-      print('❌ Error sending notification to user $userId: $e');
-      return false;
-    }
-  }
+      print(
+          '📤 [OrderNotificationService] Sending push notification via Cloud Function');
 
-  // ✅ FIXED: Create notification document for Cloud Function to process
-  // ✅ ENHANCED: Configurable TTL
-  static Future<bool> _createNotificationDocument({
-    required String token,
-    required String title,
-    required String body,
-    required Map<String, dynamic> data,
-    Duration ttlDuration = const Duration(days: 7), // Default 7 days
-  }) async {
-    try {
+      // Create notification document for Cloud Function to process
       await _firestore.collection('notifications_to_send').add({
-        'token': token,
+        'token': fcmToken,
         'title': title,
         'body': body,
         'data': data,
         'timestamp': FieldValue.serverTimestamp(),
         'processed': false,
 
-        // ✅ Configurable TTL
-        'ttl': DateTime.now().add(ttlDuration),
+        // TTL: Auto-delete after 7 days
+        'ttl': DateTime.now().add(Duration(days: 7)),
 
         'android': {
           'channel_id': data['type'] == 'order_update'
@@ -293,88 +383,68 @@ class OrderNotificationService {
       });
 
       print(
-          '✅ Notification document created with ${ttlDuration.inDays} day TTL');
+          '✅ [OrderNotificationService] Push notification queued for Cloud Function');
       return true;
     } catch (e) {
-      print('❌ Error creating notification document: $e');
+      print('❌ [OrderNotificationService] Error sending push notification: $e');
       return false;
     }
   }
 
-  /// Check TTL configuration status
-  static Future<void> checkTTLStatus() async {
-    try {
-      // Create a test document to verify TTL
-      final testDoc = await _firestore.collection('notifications_to_send').add({
-        'test': true,
-        'ttl': DateTime.now().add(Duration(minutes: 1)), // 1 minute for testing
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+  // ===================================================================
+  // 🎨 HELPER METHODS
+  // ===================================================================
 
-      print('✅ TTL test document created: ${testDoc.id}');
-      print('📅 Should be deleted automatically after 1 minute');
+  /// Get notification title based on order status
+  static String _getNotificationTitle(String status) {
+    switch (status.toLowerCase()) {
+      case 'placed':
+        return '📋 Order Placed Successfully';
+      case 'confirmed':
+        return '✅ Order Confirmed';
+      case 'preparing':
+        return '👨‍🍳 Order Being Prepared';
+      case 'ready':
+        return '🍽️ Order Ready!';
+      case 'delivered':
+        return '🎉 Order Delivered!';
+      case 'cancelled':
+        return '❌ Order Cancelled';
+      default:
+        return '📦 Order Update';
+    }
+  }
 
-      // Check if document exists after 2 minutes
-      Timer(Duration(minutes: 2), () async {
-        final doc = await testDoc.get();
-        if (doc.exists) {
-          print(
-              '⚠️ TTL might not be configured correctly - document still exists');
-        } else {
-          print('✅ TTL working correctly - document auto-deleted');
+  /// Get notification body based on order status
+  static String _getNotificationBody(
+      String status, String storeName, String? estimatedTime) {
+    switch (status.toLowerCase()) {
+      case 'placed':
+        return 'Your order from $storeName has been placed and is being processed';
+      case 'confirmed':
+        return '$storeName has confirmed your order and will start preparing it soon';
+      case 'preparing':
+        String body = '$storeName is now preparing your delicious meal';
+        if (estimatedTime != null) {
+          body += ' • Ready in $estimatedTime';
         }
-      });
-    } catch (e) {
-      print('❌ Error testing TTL: $e');
+        return body;
+      case 'ready':
+        return 'Your order from $storeName is ready for pickup/delivery';
+      case 'delivered':
+        return 'Enjoy your meal from $storeName! Please rate your experience';
+      case 'cancelled':
+        return 'Your order from $storeName has been cancelled';
+      default:
+        return 'Your order from $storeName has been updated';
     }
   }
 
-  // ✅ FIXED: Simple notification for testing
-  // ✅ UPDATED: Test notification with TTL
-  static Future<bool> sendTestNotification(
-      String userId, String message) async {
-    try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) return false;
+  // ===================================================================
+  // 🔧 ADMIN & DEBUGGING METHODS
+  // ===================================================================
 
-      final userData = userDoc.data() as Map<String, dynamic>;
-      final fcmToken = userData['fcmToken'] as String?;
-
-      if (fcmToken == null) return false;
-
-      // Create notification document for Cloud Function
-      await _firestore.collection('notifications_to_send').add({
-        'token': fcmToken,
-        'title': '🔔 Test Notification',
-        'body': message,
-        'data': {'type': 'test'},
-        'timestamp': FieldValue.serverTimestamp(),
-        'processed': false,
-
-        // ✅ ADD TTL: Auto-delete after 7 days
-        'ttl': DateTime.now().add(Duration(days: 7)),
-
-        'android': {
-          'channel_id': 'eato_notifications',
-          'color': '#6A1B9A',
-          'priority': 'high',
-          'sound': 'default',
-        },
-        'ios': {
-          'sound': 'default',
-          'badge': 1,
-        },
-      });
-
-      print('✅ Test notification with TTL queued successfully');
-      return true;
-    } catch (e) {
-      print('❌ Error sending test notification: $e');
-      return false;
-    }
-  }
-
-  // ✅ BONUS: Method to check notification status
+  /// Get pending notifications (for debugging)
   static Future<List<Map<String, dynamic>>> getPendingNotifications() async {
     try {
       final snapshot = await _firestore
@@ -391,12 +461,13 @@ class OrderNotificationService {
         };
       }).toList();
     } catch (e) {
-      print('❌ Error getting pending notifications: $e');
+      print(
+          '❌ [OrderNotificationService] Error getting pending notifications: $e');
       return [];
     }
   }
 
-  // ✅ BONUS: Method to mark notifications as processed
+  /// Mark notification as processed (for debugging)
   static Future<void> markNotificationAsProcessed(String notificationId) async {
     try {
       await _firestore
@@ -407,7 +478,45 @@ class OrderNotificationService {
         'processedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('❌ Error marking notification as processed: $e');
+      print(
+          '❌ [OrderNotificationService] Error marking notification as processed: $e');
+    }
+  }
+
+  /// Send notification to specific user (general purpose)
+  static Future<bool> sendNotificationToUser({
+    required String userId,
+    required String title,
+    required String message,
+    String type = 'general',
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      // Step 1: Create notification in Firestore for UI display
+      await NotificationHelper.createGeneralNotification(
+        userId: userId,
+        title: title,
+        message: message,
+        type: type,
+        data: data,
+      );
+
+      // Step 2: Send push notification
+      bool pushSent = await _sendPushNotification(
+        userId: userId,
+        title: title,
+        body: message,
+        data: {
+          'type': type,
+          ...data ?? {},
+        },
+      );
+
+      return pushSent;
+    } catch (e) {
+      print(
+          '❌ [OrderNotificationService] Error sending notification to user: $e');
+      return false;
     }
   }
 }
