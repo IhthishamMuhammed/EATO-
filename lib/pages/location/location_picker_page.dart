@@ -5,8 +5,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:permission_handler/permission_handler.dart';
-
+import 'package:permission_handler/permission_handler.dart';  // import packages 
+//location data class
 class LocationData {
   final GeoPoint geoPoint;
   final String formattedAddress;
@@ -22,7 +22,7 @@ class LocationData {
     this.postalCode,
   });
 }
-
+//add location picker page
 class LocationPickerPage extends StatefulWidget {
   final GeoPoint? initialLocation;
   final String? initialAddress;
