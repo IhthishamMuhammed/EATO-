@@ -398,24 +398,29 @@ class _LoginPageState extends State<LoginPage>
   bool _verifyRoleMatches(String? userRole, String expectedRole) {
     if (userRole == null) return false;
 
-    final dbRole = userRole.toLowerCase();
-    final expectedRoleLower = expectedRole.toLowerCase();
+    final dbRole = userRole.toLowerCase().trim();
+    final expectedRoleLower = expectedRole.toLowerCase().trim();
+
+    print(
+        '🔍 Role Debug: DB="$dbRole", Expected="$expectedRoleLower"'); // Debug
 
     // Direct match
     if (dbRole == expectedRoleLower) {
       return true;
     }
-    // Meal provider variations
-    else if (expectedRoleLower == 'mealprovider' &&
-        (dbRole == 'provider' ||
-            dbRole == 'meal provider' ||
-            dbRole == 'meal_provider')) {
-      return true;
+
+    // Enhanced meal provider variations
+    if (expectedRoleLower == 'mealprovider' ||
+        expectedRoleLower == 'meal provider') {
+      return dbRole == 'mealprovider' ||
+          dbRole == 'meal provider' ||
+          dbRole == 'provider' ||
+          dbRole == 'meal_provider';
     }
-    // Customer variations
-    else if (expectedRoleLower == 'customer' &&
-        (dbRole == 'user' || dbRole == 'client')) {
-      return true;
+
+    // Enhanced customer variations
+    if (expectedRoleLower == 'customer') {
+      return dbRole == 'customer' || dbRole == 'user' || dbRole == 'client';
     }
 
     return false;
