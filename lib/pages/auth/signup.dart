@@ -320,7 +320,8 @@ class _SignUpPageState extends State<SignUpPage>
         if (user!.emailVerified) {
           Navigator.of(context).pop(); // Close dialog
 
-          // Go to phone verification WITHOUT creating Firestore user yet
+          // Proceed to phone verification page
+          // User can choose to verify phone OR skip (which completes signup)
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -354,7 +355,6 @@ class _SignUpPageState extends State<SignUpPage>
       );
     }
   }
-
   // In your signup.dart build method, modify the Scaffold:
 
   @override

@@ -408,41 +408,26 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    if (user.phoneNumber == null || user.phoneNumber!.isEmpty) {
-      if (!mounted) return;
+    // Navigate directly to home - phone verification not required for login
+    if (!mounted) return;
 
-      Navigator.push(
+    if (widget.role.toLowerCase() == 'customer') {
+      Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (context) => PhoneVerificationPage(
-            phoneNumber: '',
-            userType: widget.role,
-            isSignUp: false,
-            userData: null,
-          ),
-        ),
+        MaterialPageRoute(builder: (context) => CustomerHomePage()),
+        (route) => false,
       );
     } else {
-      if (!mounted) return;
-
-      if (widget.role.toLowerCase() == 'customer') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => CustomerHomePage()),
-          (route) => false,
-        );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProviderMainNavigation(
-              currentUser: user,
-              initialIndex: 0, // Start with Orders tab
-            ),
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProviderMainNavigation(
+            currentUser: user,
+            initialIndex: 0,
           ),
-          (route) => false,
-        );
-      }
+        ),
+        (route) => false,
+      );
     }
   }
 

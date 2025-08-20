@@ -10,6 +10,7 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
 import '../theme/eato_theme.dart';
+import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 
 class PhoneVerificationPage extends StatefulWidget {
   final String phoneNumber;
@@ -549,21 +550,24 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
   void _navigateToHome(CustomUser? user) {
     if (user == null) return;
 
+    _debugLog("Navigating to home for user type: ${user.userType}");
+
     if (widget.userType.toLowerCase() == 'customer') {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => CustomerHomePage()),
-        (route) => false, // Clear all previous routes
+        (route) => false,
       );
     } else {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) => ProviderHomePage(
+          builder: (context) => ProviderMainNavigation(
             currentUser: user,
+            initialIndex: 0,
           ),
         ),
-        (route) => false, // Clear all previous routes
+        (route) => false,
       );
     }
   }
@@ -634,79 +638,87 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
     _signInWithCredential(credential);
   }
 
+  // In phoneVerification.dart - Modified _skipPhoneVerification method
   void _skipPhoneVerification() async {
     try {
       setState(() {
         _isVerifying = true;
       });
 
-      _debugLog("Skipping phone verification");
+      _debugLog("Skipping phone verification - completing account creation");
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
       if (widget.isSignUp) {
-        // For sign up process - create new user without phone verification
-        _debugLog("Creating new user account without phone verification");
+        // For signup: Create complete user account with email verification only
+        _debugLog("Completing signup with email verification only");
 
-        // User was already created in signup.dart, just update Firestore
         User? user = _auth.currentUser;
         if (user != null) {
+          // Create user document in Firestore (email already verified from signup.dart)
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .set({
             'name': widget.userData?['name'] ?? '',
             'email': widget.userData?['email'] ?? user.email,
-            'phoneNumber': widget.phoneNumber,
+            'phoneNumber':
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
             'userType': widget.userType,
             'profileImageUrl': '',
-            'emailVerified': true, // Already verified
+            'emailVerified': true, // Already verified in signup flow
             'phoneVerified': false, // Skipped
             'createdAt': FieldValue.serverTimestamp(),
           });
 
-          // Get user data and set in provider
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
+          // Set user in provider
+          final customUser = CustomUser(
+            id: user.uid,
+            name: widget.userData?['name'] ?? '',
+            email: widget.userData?['email'] ?? user.email ?? '',
+            phoneNumber:
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
+            userType: widget.userType,
+            profileImageUrl: '',
+          );
 
-          if (userDoc.exists) {
-            Map<String, dynamic> userData =
-                userDoc.data() as Map<String, dynamic>;
-
-            final customUser = CustomUser(
-              id: user.uid,
-              name: userData['name'] ?? '',
-              email: userData['email'] ?? '',
-              phoneNumber: widget.phoneNumber,
-              userType: userData['userType'] ?? widget.userType,
-              profileImageUrl: userData['profileImageUrl'] ?? '',
-            );
-
-            userProvider.setCurrentUser(customUser);
-          }
+          userProvider.setCurrentUser(customUser);
 
           if (!mounted) return;
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Account created successfully!'),
+                ],
+              ),
+              backgroundColor: EatoTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
 
           _navigateToHome(userProvider.currentUser);
         }
       } else {
-        // For login process - simply proceed
-        _debugLog("Login flow - proceeding without phone verification");
+        // For login: Update user without phone verification
+        _debugLog("Login flow - updating user without phone verification");
         final user = _auth.currentUser;
         if (user != null) {
-          // Update the phone number in Firestore, but mark as unverified
-          _debugLog("Updating phone number in Firestore (unverified)");
+          // Update phone number in Firestore as unverified
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .update({
-            'phoneNumber': widget.phoneNumber,
+            'phoneNumber':
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
             'phoneVerified': false,
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
-          // Get user data
+          // Get updated user data
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -716,12 +728,12 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
             Map<String, dynamic> userData =
                 userDoc.data() as Map<String, dynamic>;
 
-            // Update user in provider
             CustomUser updatedUser = CustomUser(
               id: user.uid,
               name: userData['name'] ?? '',
               email: userData['email'] ?? '',
-              phoneNumber: widget.phoneNumber,
+              phoneNumber:
+                  widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
               userType: userData['userType'] ?? widget.userType,
               profileImageUrl: userData['profileImageUrl'] ?? '',
             );
@@ -730,7 +742,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
           }
 
           if (!mounted) return;
-
           _navigateToHome(userProvider.currentUser);
         }
       }
@@ -739,7 +750,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       setState(() {
         _isVerifying = false;
       });
-      _showErrorMessage("Error: $e");
+      _showErrorMessage("Error completing signup: $e");
     }
   }
 
