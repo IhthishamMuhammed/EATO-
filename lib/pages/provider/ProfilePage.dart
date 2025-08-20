@@ -1,5 +1,5 @@
 // File: lib/pages/provider/ProfilePage.dart
-// Complete version without bottom navigation bar
+// Enhanced version with password change and logout confirmation - UPPER PART
 
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -16,7 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io' as io;
 
 import '../../Model/Food&Store.dart';
-import 'package:eato/pages/location/location_picker_page.dart'; // Import your location picker
+import 'package:eato/pages/location/location_picker_page.dart';
 
 // Main ProfilePage Class
 class ProfilePage extends StatefulWidget {
@@ -36,6 +36,11 @@ class _ProfilePageState extends State<ProfilePage> {
   XFile? _pickedShopImage;
   Uint8List? _webProfileImageData;
   Uint8List? _webShopImageData;
+
+  // Password visibility toggles
+  bool _currentPasswordVisible = false;
+  bool _newPasswordVisible = false;
+  bool _confirmPasswordVisible = false;
 
   // Controllers for editing
   late TextEditingController _nameController;
@@ -134,6 +139,337 @@ class _ProfilePageState extends State<ProfilePage> {
     _shopContactController.dispose();
     _shopLocationController.dispose();
     super.dispose();
+  }
+
+  // Password Change Dialog
+  void _showChangePasswordDialog() {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: EatoTheme.primaryColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.lock_outline,
+                      color: EatoTheme.primaryColor,
+                      size: 24,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Change Password',
+                    style: EatoTheme.headingSmall,
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Current Password
+                      TextFormField(
+                        controller: currentPasswordController,
+                        obscureText: !_currentPasswordVisible,
+                        decoration: EatoTheme.inputDecoration(
+                          labelText: 'Current Password',
+                          hintText: 'Enter your current password',
+                          prefixIcon: Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(_currentPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off),
+                            onPressed: () {
+                              setDialogState(() {
+                                _currentPasswordVisible =
+                                    !_currentPasswordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your current password';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+
+                      // New Password
+                      TextFormField(
+                        controller: newPasswordController,
+                        obscureText: !_newPasswordVisible,
+                        decoration: EatoTheme.inputDecoration(
+                          labelText: 'New Password',
+                          hintText: 'Enter new password',
+                          prefixIcon: Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(_newPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off),
+                            onPressed: () {
+                              setDialogState(() {
+                                _newPasswordVisible = !_newPasswordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a new password';
+                          }
+                          if (value.length < 6) {
+                            return 'Password must be at least 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 16),
+
+                      // Confirm Password
+                      TextFormField(
+                        controller: confirmPasswordController,
+                        obscureText: !_confirmPasswordVisible,
+                        decoration: EatoTheme.inputDecoration(
+                          labelText: 'Confirm Password',
+                          hintText: 'Confirm new password',
+                          prefixIcon: Icon(Icons.lock_reset),
+                          suffixIcon: IconButton(
+                            icon: Icon(_confirmPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off),
+                            onPressed: () {
+                              setDialogState(() {
+                                _confirmPasswordVisible =
+                                    !_confirmPasswordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please confirm your password';
+                          }
+                          if (value != newPasswordController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  style: EatoTheme.textButtonStyle,
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (formKey.currentState!.validate()) {
+                      try {
+                        Navigator.of(dialogContext).pop();
+                        setState(() {
+                          _isLoading = true;
+                        });
+
+                        await _changePassword(
+                          currentPasswordController.text,
+                          newPasswordController.text,
+                        );
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Text('Password changed successfully'),
+                                ],
+                              ),
+                              backgroundColor: EatoTheme.successColor,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.error, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                      child: Text(e
+                                          .toString()
+                                          .replaceFirst('Exception: ', ''))),
+                                ],
+                              ),
+                              backgroundColor: EatoTheme.errorColor,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() {
+                            _isLoading = false;
+                          });
+                        }
+                      }
+                    }
+                  },
+                  style: EatoTheme.primaryButtonStyle,
+                  child: Text('Change Password'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Change password method
+  Future<void> _changePassword(
+      String currentPassword, String newPassword) async {
+    final User? authUser = FirebaseAuth.instance.currentUser;
+
+    if (authUser == null || authUser.email == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      // Re-authenticate user with current password
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: authUser.email!,
+        password: currentPassword,
+      );
+
+      await authUser.reauthenticateWithCredential(credential);
+
+      // Update password
+      await authUser.updatePassword(newPassword);
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'wrong-password':
+          errorMessage = 'Current password is incorrect';
+          break;
+        case 'weak-password':
+          errorMessage = 'New password is too weak';
+          break;
+        case 'requires-recent-login':
+          errorMessage =
+              'Please log out and log back in before changing password';
+          break;
+        default:
+          errorMessage = 'Failed to change password: ${e.message}';
+      }
+      throw Exception(errorMessage);
+    } catch (e) {
+      throw Exception('Failed to change password: $e');
+    }
+  }
+
+  // Logout Confirmation Dialog
+  void _showLogoutConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: EatoTheme.errorColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.logout,
+                  color: EatoTheme.errorColor,
+                  size: 24,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Confirm Logout',
+                style: EatoTheme.headingSmall,
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to logout?',
+                style: EatoTheme.bodyMedium,
+              ),
+              SizedBox(height: 8),
+              Text(
+                'You will need to login again to access your account.',
+                style: EatoTheme.bodySmall.copyWith(
+                  color: EatoTheme.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              style: EatoTheme.textButtonStyle,
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _handleLogout();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.errorColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _pickProfileImage() async {
@@ -280,15 +616,29 @@ class _ProfilePageState extends State<ProfilePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Profile updated successfully'),
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Profile updated successfully'),
+            ],
+          ),
           backgroundColor: EatoTheme.successColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update profile: $e'),
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Failed to update profile: $e'),
+            ],
+          ),
           backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
@@ -380,8 +730,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Shop details updated successfully'),
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Shop details updated successfully'),
+            ],
+          ),
           backgroundColor: EatoTheme.successColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
@@ -389,8 +746,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update shop details: $e'),
+          content: Row(
+            children: [
+              Icon(Icons.error, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Failed to update shop details: $e'),
+            ],
+          ),
           backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
@@ -438,6 +802,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Delivery Mode Selector Widget
   Widget _buildDeliveryModeSelector(Store? store) {
+    // Get current delivery mode from provider or default to pickup
+    final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+    final currentStore = storeProvider.userStore ?? store;
+    final currentDeliveryMode =
+        currentStore?.deliveryMode ?? DeliveryMode.pickup;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -458,18 +828,19 @@ class _ProfilePageState extends State<ProfilePage> {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    if (store != null) {
-                      final updatedStore = store.copyWith(
-                        deliveryMode: DeliveryMode.pickup,
-                      );
-                      Provider.of<StoreProvider>(context, listen: false)
-                          .setStore(updatedStore);
-                    }
+                    setState(() {
+                      if (currentStore != null) {
+                        final updatedStore = currentStore.copyWith(
+                          deliveryMode: DeliveryMode.pickup,
+                        );
+                        storeProvider.setStore(updatedStore);
+                      }
+                    });
                   },
                   child: Container(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: store?.deliveryMode == DeliveryMode.pickup
+                      color: currentDeliveryMode == DeliveryMode.pickup
                           ? EatoTheme.primaryColor
                           : Colors.transparent,
                       borderRadius: BorderRadius.horizontal(
@@ -480,7 +851,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Text(
                         'Pickup',
                         style: TextStyle(
-                          color: store?.deliveryMode == DeliveryMode.pickup
+                          color: currentDeliveryMode == DeliveryMode.pickup
                               ? Colors.white
                               : Colors.black,
                           fontWeight: FontWeight.w500,
@@ -496,18 +867,19 @@ class _ProfilePageState extends State<ProfilePage> {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    if (store != null) {
-                      final updatedStore = store.copyWith(
-                        deliveryMode: DeliveryMode.delivery,
-                      );
-                      Provider.of<StoreProvider>(context, listen: false)
-                          .setStore(updatedStore);
-                    }
+                    setState(() {
+                      if (currentStore != null) {
+                        final updatedStore = currentStore.copyWith(
+                          deliveryMode: DeliveryMode.delivery,
+                        );
+                        storeProvider.setStore(updatedStore);
+                      }
+                    });
                   },
                   child: Container(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: store?.deliveryMode == DeliveryMode.delivery
+                      color: currentDeliveryMode == DeliveryMode.delivery
                           ? EatoTheme.primaryColor
                           : Colors.transparent,
                     ),
@@ -515,7 +887,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Text(
                         'Delivery',
                         style: TextStyle(
-                          color: store?.deliveryMode == DeliveryMode.delivery
+                          color: currentDeliveryMode == DeliveryMode.delivery
                               ? Colors.white
                               : Colors.black,
                           fontWeight: FontWeight.w500,
@@ -531,18 +903,19 @@ class _ProfilePageState extends State<ProfilePage> {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    if (store != null) {
-                      final updatedStore = store.copyWith(
-                        deliveryMode: DeliveryMode.both,
-                      );
-                      Provider.of<StoreProvider>(context, listen: false)
-                          .setStore(updatedStore);
-                    }
+                    setState(() {
+                      if (currentStore != null) {
+                        final updatedStore = currentStore.copyWith(
+                          deliveryMode: DeliveryMode.both,
+                        );
+                        storeProvider.setStore(updatedStore);
+                      }
+                    });
                   },
                   child: Container(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: store?.deliveryMode == DeliveryMode.both
+                      color: currentDeliveryMode == DeliveryMode.both
                           ? EatoTheme.primaryColor
                           : Colors.transparent,
                       borderRadius: BorderRadius.horizontal(
@@ -553,7 +926,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Text(
                         'Both',
                         style: TextStyle(
-                          color: store?.deliveryMode == DeliveryMode.both
+                          color: currentDeliveryMode == DeliveryMode.both
                               ? Colors.white
                               : Colors.black,
                           fontWeight: FontWeight.w500,
@@ -701,7 +1074,16 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     // Profile Header with Image
                     Container(
-                      color: EatoTheme.primaryColor.withOpacity(0.05),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            EatoTheme.primaryColor.withOpacity(0.1),
+                            EatoTheme.accentColor.withOpacity(0.05),
+                          ],
+                        ),
+                      ),
                       padding: EdgeInsets.all(24),
                       child: Column(
                         children: [
@@ -716,11 +1098,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                   height: 120,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color:
-                                        EatoTheme.primaryColor.withOpacity(0.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: EatoTheme.primaryColor
+                                            .withOpacity(0.2),
+                                        blurRadius: 12,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
                                     border: Border.all(
                                       color: EatoTheme.primaryColor,
-                                      width: 2,
+                                      width: 3,
                                     ),
                                   ),
                                   child: ClipOval(
@@ -733,6 +1121,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                     decoration: BoxDecoration(
                                       color: EatoTheme.primaryColor,
                                       shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
                                     ),
                                     child: Icon(
                                       Icons.camera_alt,
@@ -748,23 +1143,39 @@ class _ProfilePageState extends State<ProfilePage> {
                           // User Name
                           Text(
                             user.name,
-                            style: EatoTheme.headingMedium,
+                            style: EatoTheme.headingMedium.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          SizedBox(height: 4),
+                          SizedBox(height: 8),
 
                           // User Role
                           Container(
                             padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
+                                horizontal: 16, vertical: 6),
                             decoration: BoxDecoration(
-                              color: EatoTheme.primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                colors: [
+                                  EatoTheme.primaryColor,
+                                  EatoTheme.accentColor,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      EatoTheme.primaryColor.withOpacity(0.3),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Text(
                               user.userType,
                               style: TextStyle(
-                                color: EatoTheme.primaryColor,
-                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
                               ),
                             ),
                           ),
@@ -786,18 +1197,29 @@ class _ProfilePageState extends State<ProfilePage> {
                             children: [
                               Text(
                                 'Personal Details',
-                                style: EatoTheme.headingSmall,
+                                style: EatoTheme.headingSmall.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               if (!_isEditingProfile && !_isEditingShop)
-                                TextButton.icon(
-                                  onPressed: () {
-                                    setState(() {
-                                      _isEditingProfile = true;
-                                    });
-                                  },
-                                  icon: Icon(Icons.edit, size: 18),
-                                  label: Text('Edit'),
-                                  style: EatoTheme.textButtonStyle,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _isEditingProfile = true;
+                                      });
+                                    },
+                                    icon: Icon(Icons.edit, size: 18),
+                                    label: Text('Edit'),
+                                    style: EatoTheme.textButtonStyle,
+                                  ),
                                 ),
                             ],
                           ),
@@ -807,6 +1229,41 @@ class _ProfilePageState extends State<ProfilePage> {
                           _isEditingProfile
                               ? _buildProfileEditForm(user)
                               : _buildProfileViewDetails(user),
+
+                          // Password Change Section
+                          if (!_isEditingProfile && !_isEditingShop) ...[
+                            SizedBox(height: 24),
+                            Divider(height: 32, thickness: 1),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Security',
+                                  style: EatoTheme.headingSmall.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            Container(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _showChangePasswordDialog,
+                                icon: Icon(Icons.lock_outline),
+                                label: Text('Change Password'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  side:
+                                      BorderSide(color: EatoTheme.primaryColor),
+                                  foregroundColor: EatoTheme.primaryColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
 
                           SizedBox(height: 24),
 
@@ -821,18 +1278,29 @@ class _ProfilePageState extends State<ProfilePage> {
                               children: [
                                 Text(
                                   'Shop Details',
-                                  style: EatoTheme.headingSmall,
+                                  style: EatoTheme.headingSmall.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 if (!_isEditingProfile && !_isEditingShop)
-                                  TextButton.icon(
-                                    onPressed: () {
-                                      setState(() {
-                                        _isEditingShop = true;
-                                      });
-                                    },
-                                    icon: Icon(Icons.edit, size: 18),
-                                    label: Text('Edit'),
-                                    style: EatoTheme.textButtonStyle,
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: EatoTheme.primaryColor
+                                            .withOpacity(0.3),
+                                      ),
+                                    ),
+                                    child: TextButton.icon(
+                                      onPressed: () {
+                                        setState(() {
+                                          _isEditingShop = true;
+                                        });
+                                      },
+                                      icon: Icon(Icons.edit, size: 18),
+                                      label: Text('Edit'),
+                                      style: EatoTheme.textButtonStyle,
+                                    ),
                                   ),
                               ],
                             ),
@@ -848,10 +1316,21 @@ class _ProfilePageState extends State<ProfilePage> {
 
                           // Logout Button
                           if (!_isEditingProfile && !_isEditingShop)
-                            SizedBox(
+                            Container(
                               width: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        EatoTheme.errorColor.withOpacity(0.3),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 3),
+                                  ),
+                                ],
+                              ),
                               child: ElevatedButton.icon(
-                                onPressed: _handleLogout,
+                                onPressed: _showLogoutConfirmationDialog,
                                 icon: Icon(Icons.logout),
                                 label: Text('Logout'),
                                 style: ElevatedButton.styleFrom(
@@ -925,10 +1404,20 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     } else {
       // Show placeholder
-      return Icon(
-        Icons.person,
-        size: 60,
-        color: EatoTheme.primaryColor,
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              EatoTheme.primaryColor.withOpacity(0.1),
+              EatoTheme.accentColor.withOpacity(0.1),
+            ],
+          ),
+        ),
+        child: Icon(
+          Icons.person,
+          size: 60,
+          color: EatoTheme.primaryColor,
+        ),
       );
     }
   }
@@ -981,10 +1470,20 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     } else {
       // Show placeholder
-      return Icon(
-        Icons.store,
-        size: 40,
-        color: EatoTheme.primaryColor,
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              EatoTheme.primaryColor.withOpacity(0.1),
+              EatoTheme.accentColor.withOpacity(0.1),
+            ],
+          ),
+        ),
+        child: Icon(
+          Icons.store,
+          size: 40,
+          color: EatoTheme.primaryColor,
+        ),
       );
     }
   }

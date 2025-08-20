@@ -208,22 +208,10 @@ class _SignUpPageState extends State<SignUpPage>
       User? user = userCredential.user;
 
       if (user != null) {
-        // ✅ SEND EMAIL VERIFICATION
+        // Send email verification
         await user.sendEmailVerification();
 
-        // Create user document in Firestore (but mark email as unverified)
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'name': _nameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'phoneNumber': _phoneNumberController.text.trim(),
-          'userType': widget.role,
-          'profileImageUrl': '',
-          'emailVerified': false, // Track email verification status
-          'phoneVerified': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        // Show verification dialog
+        // DON'T create Firestore document yet - wait for verification
         _showEmailVerificationDialog();
       }
     } catch (e) {
@@ -326,21 +314,13 @@ class _SignUpPageState extends State<SignUpPage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await user.reload(); // Refresh user data
-        user = FirebaseAuth.instance.currentUser; // Get updated user
+        await user.reload();
+        user = FirebaseAuth.instance.currentUser;
 
         if (user!.emailVerified) {
-          // Update Firestore
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .update({
-            'emailVerified': true,
-          });
-
           Navigator.of(context).pop(); // Close dialog
 
-          // Proceed to phone verification
+          // Go to phone verification WITHOUT creating Firestore user yet
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -351,7 +331,7 @@ class _SignUpPageState extends State<SignUpPage>
                 userData: {
                   'name': _nameController.text.trim(),
                   'email': _emailController.text.trim(),
-                  'password': _passwordController.text.trim(),
+                  'phone': _phoneNumberController.text.trim(),
                 },
               ),
             ),
@@ -360,7 +340,7 @@ class _SignUpPageState extends State<SignUpPage>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Email not yet verified. Please check your inbox.'),
-              backgroundColor: Colors.orange, // Replace EatoTheme.warningColor
+              backgroundColor: Colors.orange,
             ),
           );
         }

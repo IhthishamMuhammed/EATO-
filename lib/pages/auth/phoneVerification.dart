@@ -438,42 +438,33 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
 
   Future<void> _handleSignup(
       PhoneAuthCredential credential, UserProvider userProvider) async {
-    _debugLog("Creating new user account");
+    _debugLog("Creating user after both email and phone verification");
 
-    // Note: User was already created in signup.dart with email/password
-    // We just need to update the phone number
     User? user = _auth.currentUser;
 
     if (user != null) {
-      _debugLog("User already exists with ID: ${user.uid}");
-
       try {
-        _debugLog("Updating phone number");
+        // Update phone number
         await user.updatePhoneNumber(credential);
       } catch (e) {
-        _debugLog("Error updating phone directly: $e");
-        // If unable to update phone directly, try linking method
-        try {
-          _debugLog("Attempting to link credential instead");
-          await user.linkWithCredential(credential);
-        } catch (linkError) {
-          _debugLog("Error linking credential: $linkError");
-          // Continue anyway, as we'll update in Firestore
-        }
+        _debugLog("Error updating phone: $e");
+        // Continue anyway, we'll save to Firestore
       }
 
-      // Update user document in Firestore
-      _debugLog("Updating user document in Firestore");
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'phoneNumber': widget.phoneNumber,
-        'phoneVerified': true,
-        'updatedAt': FieldValue.serverTimestamp(),
+      // NOW create user document in Firestore (both verifications complete)
+      _debugLog("Creating user document in Firestore");
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'name': widget.userData?['name'] ?? '',
+        'email': widget.userData?['email'] ?? user.email,
+        'phoneNumber': widget.userData?['phone'] ?? widget.phoneNumber,
+        'userType': widget.userType,
+        'profileImageUrl': '',
+        'emailVerified': true, // Already verified
+        'phoneVerified': true, // Just verified
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Get updated user data
+      // Get user data and set in provider
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -482,7 +473,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
-        // Create and store user in provider
         final customUser = CustomUser(
           id: user.uid,
           name: userData['name'] ?? '',
@@ -496,7 +486,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       }
 
       if (!mounted) return;
-
       _navigateToHome(userProvider.currentUser);
     }
   }
@@ -542,6 +531,18 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       if (!mounted) return;
 
       _navigateToHome(userProvider.currentUser);
+    }
+  }
+
+// Add to phoneVerification.dart
+  void _cleanupIncompleteSignup() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null && widget.isSignUp) {
+        await user.delete();
+      }
+    } catch (e) {
+      print('Cleanup error: $e');
     }
   }
 
@@ -652,10 +653,15 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
-              .update({
+              .set({
+            'name': widget.userData?['name'] ?? '',
+            'email': widget.userData?['email'] ?? user.email,
             'phoneNumber': widget.phoneNumber,
-            'phoneVerified': false, // Flag to indicate phone is not verified
-            'updatedAt': FieldValue.serverTimestamp(),
+            'userType': widget.userType,
+            'profileImageUrl': '',
+            'emailVerified': true, // Already verified
+            'phoneVerified': false, // Skipped
+            'createdAt': FieldValue.serverTimestamp(),
           });
 
           // Get user data and set in provider
