@@ -1,343 +1,22 @@
+// File: lib/pages/provider/ProfilePage.dart
+// Complete version without bottom navigation bar
+
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:location/location.dart' as location;
 import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io' as io;
 
-// Google Maps imports
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:permission_handler/permission_handler.dart';
-
 import '../../Model/Food&Store.dart';
-import 'OrderHomePage.dart';
-import 'RequestHome.dart';
-import 'ProviderHomePage.dart';
-
-// Location Result Class
-class LocationResult {
-  final String address;
-  final double latitude;
-  final double longitude;
-
-  LocationResult({
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-  });
-}
-
-// Google Maps Location Picker Page
-class LocationPickerPage extends StatefulWidget {
-  final double? initialLatitude;
-  final double? initialLongitude;
-  final String? initialAddress;
-
-  const LocationPickerPage({
-    Key? key,
-    this.initialLatitude,
-    this.initialLongitude,
-    this.initialAddress,
-  }) : super(key: key);
-
-  @override
-  _LocationPickerPageState createState() => _LocationPickerPageState();
-}
-
-class _LocationPickerPageState extends State<LocationPickerPage> {
-  GoogleMapController? _mapController;
-  LatLng? _selectedLocation;
-  String _selectedAddress = '';
-  bool _isLoading = false;
-  final Location _location = Location();
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeLocation();
-  }
-
-  Future<void> _initializeLocation() async {
-    if (widget.initialLatitude != null && widget.initialLongitude != null) {
-      _selectedLocation =
-          LatLng(widget.initialLatitude!, widget.initialLongitude!);
-      _selectedAddress = widget.initialAddress ?? '';
-    } else {
-      await _getCurrentLocation();
-    }
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Check location permission
-      final permission = await Permission.location.request();
-      if (permission != location.PermissionStatus.granted) {
-        throw Exception('Location permission denied');
-      }
-
-      // Check if location service is enabled
-      bool serviceEnabled = await _location.serviceEnabled();
-      if (!serviceEnabled) {
-        serviceEnabled = await _location.requestService();
-        if (!serviceEnabled) {
-          throw Exception('Location service disabled');
-        }
-      }
-
-      // Get current location
-      final locationData = await _location.getLocation();
-
-      if (locationData.latitude != null && locationData.longitude != null) {
-        final latLng = LatLng(locationData.latitude!, locationData.longitude!);
-        setState(() {
-          _selectedLocation = latLng;
-        });
-
-        await _getAddressFromLatLng(latLng);
-
-        if (_mapController != null) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLng(latLng),
-          );
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error getting location: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-
-      // Default to Colombo, Sri Lanka if location fails
-      const defaultLocation = LatLng(6.9271, 79.8612);
-      setState(() {
-        _selectedLocation = defaultLocation;
-        _selectedAddress = 'Colombo, Sri Lanka';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _getAddressFromLatLng(LatLng latLng) async {
-    try {
-      List<geocoding.Placemark> placemarks =
-          await geocoding.placemarkFromCoordinates(
-        latLng.latitude,
-        latLng.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        final placemark = placemarks.first;
-        setState(() {
-          _selectedAddress = _formatAddress(placemark);
-        });
-      }
-    } catch (e) {
-      print('Error getting address: $e');
-      setState(() {
-        _selectedAddress = 'Selected location';
-      });
-    }
-  }
-
-  String _formatAddress(geocoding.Placemark placemark) {
-    List<String> parts = [];
-
-    if (placemark.street?.isNotEmpty == true) parts.add(placemark.street!);
-    if (placemark.subLocality?.isNotEmpty == true)
-      parts.add(placemark.subLocality!);
-    if (placemark.locality?.isNotEmpty == true) parts.add(placemark.locality!);
-    if (placemark.administrativeArea?.isNotEmpty == true)
-      parts.add(placemark.administrativeArea!);
-
-    return parts.join(', ');
-  }
-
-  void _onMapTapped(LatLng latLng) {
-    setState(() {
-      _selectedLocation = latLng;
-      _isLoading = true;
-    });
-
-    _getAddressFromLatLng(latLng).then((_) {
-      setState(() {
-        _isLoading = false;
-      });
-    });
-  }
-
-  void _confirmLocation() {
-    if (_selectedLocation != null) {
-      final result = LocationResult(
-        address: _selectedAddress,
-        latitude: _selectedLocation!.latitude,
-        longitude: _selectedLocation!.longitude,
-      );
-      Navigator.of(context).pop(result);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Select Location'),
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.my_location),
-            onPressed: _getCurrentLocation,
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Google Map
-          _selectedLocation == null
-              ? Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                  ),
-                )
-              : GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _selectedLocation!,
-                    zoom: 15.0,
-                  ),
-                  onMapCreated: (GoogleMapController controller) {
-                    _mapController = controller;
-                  },
-                  onTap: _onMapTapped,
-                  markers: _selectedLocation != null
-                      ? {
-                          Marker(
-                            markerId: MarkerId('selected_location'),
-                            position: _selectedLocation!,
-                            infoWindow: InfoWindow(
-                              title: 'Selected Location',
-                              snippet: _selectedAddress,
-                            ),
-                          ),
-                        }
-                      : {},
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                ),
-
-          // Loading overlay
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                ),
-              ),
-            ),
-
-          // Address display and confirm button
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: Offset(0, -5),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Selected Location',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(
-                      _selectedAddress.isEmpty
-                          ? 'Tap on map to select location'
-                          : _selectedAddress,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _selectedAddress.isEmpty
-                            ? Colors.grey
-                            : Colors.black,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _selectedLocation != null &&
-                              _selectedAddress.isNotEmpty
-                          ? _confirmLocation
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Confirm Location',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+import 'package:eato/pages/location/location_picker_page.dart'; // Import your location picker
 
 // Main ProfilePage Class
 class ProfilePage extends StatefulWidget {
@@ -350,7 +29,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  int _currentIndex = 3; // Profile tab is selected by default
   bool _isLoading = false;
   bool _isEditingProfile = false;
   bool _isEditingShop = false;
@@ -456,46 +134,6 @@ class _ProfilePageState extends State<ProfilePage> {
     _shopContactController.dispose();
     _shopLocationController.dispose();
     super.dispose();
-  }
-
-  void _onTabTapped(int index) {
-    if (index == _currentIndex) return;
-
-    setState(() {
-      _currentIndex = index;
-    });
-
-    switch (index) {
-      case 0: // Orders
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                OrderHomePage(currentUser: widget.currentUser),
-          ),
-        );
-        break;
-      case 1: // Requests
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RequestHome(currentUser: widget.currentUser),
-          ),
-        );
-        break;
-      case 2: // Menu
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                ProviderHomePage(currentUser: widget.currentUser),
-          ),
-        );
-        break;
-      case 3: // Profile - current page
-        // Already on this page
-        break;
-    }
   }
 
   Future<void> _pickProfileImage() async {
@@ -683,7 +321,7 @@ class _ProfilePageState extends State<ProfilePage> {
         print('🔄 [ProfilePage] Updating existing store: ${currentStore.id}');
 
         final Store updatedStore = Store(
-          id: currentStore.id, // ✅ Keep existing auto-generated ID
+          id: currentStore.id, // Keep existing auto-generated ID
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
           deliveryMode:
@@ -695,7 +333,7 @@ class _ProfilePageState extends State<ProfilePage> {
               : _shopLocationController.text.trim(),
           latitude: currentStore.latitude,
           longitude: currentStore.longitude,
-          ownerUid: widget.currentUser.id, // ✅ Ensure ownerUid is set
+          ownerUid: widget.currentUser.id, // Ensure ownerUid is set
           isActive: currentStore.isActive,
           isAvailable: currentStore.isAvailable,
           rating: currentStore.rating,
@@ -711,7 +349,7 @@ class _ProfilePageState extends State<ProfilePage> {
         print('🆕 [ProfilePage] Creating new store...');
 
         final Store newStore = Store(
-          id: '', // ✅ FIXED: Empty ID - let Firestore generate it
+          id: '', // Empty ID - let Firestore generate it
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
           deliveryMode: DeliveryMode.pickup, // Default value
@@ -720,7 +358,7 @@ class _ProfilePageState extends State<ProfilePage> {
           location: _shopLocationController.text.trim().isEmpty
               ? null
               : _shopLocationController.text.trim(),
-          ownerUid: widget.currentUser.id, // ✅ Link to user
+          ownerUid: widget.currentUser.id, // Link to user
           isActive: true,
           isAvailable: true,
           rating: null,
@@ -798,7 +436,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // NEW: Delivery Mode Selector Widget
+  // Delivery Mode Selector Widget
   Widget _buildDeliveryModeSelector(Store? store) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -933,7 +571,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // UPDATED: Location Picker Widget with FULL Google Maps Integration
+  // Location Picker Widget using your LocationPickerPage
   Widget _buildLocationPicker(Store? store) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,13 +584,15 @@ class _ProfilePageState extends State<ProfilePage> {
         GestureDetector(
           onTap: () async {
             try {
-              // ✅ FULL GOOGLE MAPS INTEGRATION - No longer commented out!
-              final result = await Navigator.push<LocationResult>(
+              // Use your LocationPickerPage
+              final result = await Navigator.push<LocationData>(
                 context,
                 MaterialPageRoute(
                   builder: (context) => LocationPickerPage(
-                    initialLatitude: store?.latitude,
-                    initialLongitude: store?.longitude,
+                    initialLocation:
+                        store?.latitude != null && store?.longitude != null
+                            ? GeoPoint(store!.latitude!, store.longitude!)
+                            : null,
                     initialAddress: store?.location,
                   ),
                 ),
@@ -961,15 +601,15 @@ class _ProfilePageState extends State<ProfilePage> {
               if (result != null) {
                 // Update the store with new location
                 setState(() {
-                  _shopLocationController.text = result.address;
+                  _shopLocationController.text = result.formattedAddress;
                 });
 
                 // Update store in provider
                 if (store != null) {
                   final updatedStore = store.copyWith(
-                    location: result.address,
-                    latitude: result.latitude,
-                    longitude: result.longitude,
+                    location: result.formattedAddress,
+                    latitude: result.geoPoint.latitude,
+                    longitude: result.geoPoint.longitude,
                   );
                   Provider.of<StoreProvider>(context, listen: false)
                       .setStore(updatedStore);
@@ -1233,7 +873,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -1524,11 +1163,11 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           SizedBox(height: 16),
 
-          // NEW: Location picker with FULL Google Maps
+          // Location picker with your LocationPickerPage
           _buildLocationPicker(store),
           SizedBox(height: 16),
 
-          // NEW: Delivery mode selector
+          // Delivery mode selector
           _buildDeliveryModeSelector(store),
           SizedBox(height: 24),
 
@@ -1756,38 +1395,6 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: _onTabTapped,
-      selectedItemColor: EatoTheme.primaryColor,
-      unselectedItemColor: EatoTheme.textLightColor,
-      type: BottomNavigationBarType.fixed,
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.receipt_outlined),
-          activeIcon: Icon(Icons.receipt),
-          label: 'Orders',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_outlined),
-          activeIcon: Icon(Icons.notifications),
-          label: 'Requests',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.restaurant_menu_outlined),
-          activeIcon: Icon(Icons.restaurant_menu),
-          label: 'Menu',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
   }
 }

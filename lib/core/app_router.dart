@@ -4,6 +4,7 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
+import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/account_page.dart';
@@ -25,9 +26,9 @@ class AppRouter {
   static const String activity = '/activity';
   static const String account = '/account';
 
-  // ✅ FIXED: Route generator with user type detection
+  // Route generator with user type detection
   static Route<dynamic> generateRoute(RouteSettings settings) {
-    print("🧭 Navigating to: ${settings.name}");
+    print("Navigating to: ${settings.name}");
 
     switch (settings.name) {
       case splash:
@@ -61,7 +62,7 @@ class AppRouter {
         );
 
       case home:
-        // ✅ FIXED: Dynamic home page based on user type
+        // Dynamic home page based on user type
         return MaterialPageRoute(
           builder: (context) => _buildHomePage(context),
           settings: settings,
@@ -92,7 +93,7 @@ class AppRouter {
         );
 
       default:
-        print("⚠️ Unknown route: ${settings.name}, redirecting to home");
+        print("Unknown route: ${settings.name}, redirecting to home");
         return MaterialPageRoute(
           builder: (context) => _buildHomePage(context),
           settings: RouteSettings(name: home),
@@ -100,14 +101,14 @@ class AppRouter {
     }
   }
 
-  // ✅ NEW: Dynamic home page builder based on user type
+  // Dynamic home page builder based on user type
   static Widget _buildHomePage(BuildContext context) {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         final user = userProvider.currentUser;
 
         if (user == null) {
-          print("❌ No user found, redirecting to role selection");
+          print("No user found, redirecting to role selection");
           // Navigate to role selection if no user
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Navigator.pushReplacementNamed(context, roleSelection);
@@ -116,17 +117,20 @@ class AppRouter {
         }
 
         final userType = user.userType.toLowerCase().trim();
-        print("🔍 User type detected: '$userType'");
+        print("User type detected: '$userType'");
 
-        // ✅ FIXED: Proper user type routing
+        // FIXED: Proper user type routing to ProviderMainNavigation
         if (userType == 'mealprovider' ||
             userType == 'provider' ||
             userType == 'meal provider' ||
             userType == 'meal_provider') {
-          print("🍽️ Navigating to ProviderHomePage");
-          return ProviderHomePage(currentUser: user);
+          print("Navigating to ProviderMainNavigation");
+          return ProviderMainNavigation(
+            currentUser: user,
+            initialIndex: 0, // Start with Orders tab
+          );
         } else {
-          print("🛒 Navigating to CustomerHomePage");
+          print("Navigating to CustomerHomePage");
           return const CustomerHomePage();
         }
       },
@@ -149,7 +153,7 @@ class AppRouter {
         );
       }
     } catch (e) {
-      print("❌ Navigation error: $e");
+      print("Navigation error: $e");
       // Fallback navigation
       Navigator.pushAndRemoveUntil(
         context,

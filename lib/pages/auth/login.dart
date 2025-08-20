@@ -1,6 +1,7 @@
 // SIMPLIFIED LOGIN.DART - Remove all biometric/fingerprint code
 
 import 'package:eato/Provider/userProvider.dart';
+import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,6 @@ import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
 import 'phoneVerification.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
-import 'package:eato/pages/provider/ProviderHomePage.dart';
 
 class LoginPage extends StatefulWidget {
   final String role;
@@ -435,7 +435,10 @@ class _LoginPageState extends State<LoginPage>
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: user),
+            builder: (context) => ProviderMainNavigation(
+              currentUser: user,
+              initialIndex: 0, // Start with Orders tab
+            ),
           ),
           (route) => false,
         );
