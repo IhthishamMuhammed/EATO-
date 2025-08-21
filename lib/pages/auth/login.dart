@@ -53,6 +53,7 @@ class _LoginPageState extends State<LoginPage>
   @override
   void initState() {
     super.initState();
+    print('Login page initialized with role: "${widget.role}"');
     _setupAnimations();
     _setupFocusListeners();
     _loadSavedEmail(); // Load saved email only
@@ -182,6 +183,9 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
+    // Check mounted before setState
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -203,6 +207,9 @@ class _LoginPageState extends State<LoginPage>
         user = FirebaseAuth.instance.currentUser;
 
         if (!user!.emailVerified) {
+          // Check mounted before setState
+          if (!mounted) return;
+
           setState(() {
             _isLoading = false;
           });
@@ -221,10 +228,16 @@ class _LoginPageState extends State<LoginPage>
               "This account doesn't match your selected role. Please use a ${widget.role} account.");
         }
 
+        // Check mounted before successful login navigation
+        if (!mounted) return;
+
         _handleSuccessfulLogin(userProvider.currentUser, context);
       }
     } catch (e) {
-      _handleLoginError(e, context);
+      // Only handle error if still mounted
+      if (mounted) {
+        _handleLoginError(e, context);
+      }
     }
   }
 
@@ -334,6 +347,9 @@ class _LoginPageState extends State<LoginPage>
           'emailVerified': true,
         });
 
+        // Check mounted before navigation
+        if (!mounted) return;
+
         Navigator.of(context).pop();
 
         setState(() {
@@ -343,6 +359,9 @@ class _LoginPageState extends State<LoginPage>
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         await userProvider.fetchUser(user.uid);
 
+        // Check mounted before proceeding
+        if (!mounted) return;
+
         if (_verifyRoleMatches(
             userProvider.currentUser?.userType, widget.role)) {
           _handleSuccessfulLogin(userProvider.currentUser, context);
@@ -350,26 +369,32 @@ class _LoginPageState extends State<LoginPage>
           throw Exception("This account doesn't match your selected role.");
         }
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Email not yet verified. Please check your inbox.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Email not yet verified. Please check your inbox.'),
-            backgroundColor: Colors.orange,
+            content: Text('Error: $e'),
+            backgroundColor: EatoTheme.errorColor,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: EatoTheme.errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -381,35 +406,39 @@ class _LoginPageState extends State<LoginPage>
 
     print('🔍 Role Debug: DB="$dbRole", Expected="$expectedRoleLower"');
 
-    if (dbRole == expectedRoleLower) {
-      return true;
-    }
+    bool result = false;
 
-    if (expectedRoleLower == 'mealprovider' ||
+    if (dbRole == expectedRoleLower) {
+      result = true;
+    } else if (expectedRoleLower == 'mealprovider' ||
         expectedRoleLower == 'meal provider') {
-      return dbRole == 'mealprovider' ||
+      result = dbRole == 'mealprovider' ||
           dbRole == 'meal provider' ||
           dbRole == 'provider' ||
           dbRole == 'meal_provider';
+    } else if (expectedRoleLower == 'customer') {
+      result = dbRole == 'customer' || dbRole == 'user' || dbRole == 'client';
     }
 
-    if (expectedRoleLower == 'customer') {
-      return dbRole == 'customer' || dbRole == 'user' || dbRole == 'client';
-    }
-
-    return false;
+    print('Role match result: $result');
+    return result;
   }
 
   void _handleSuccessfulLogin(CustomUser? user, BuildContext context) {
     if (user == null) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       return;
     }
 
-    // Navigate directly to home - phone verification not required for login
     if (!mounted) return;
+
+    // Add debug logging
+    print(
+        '🎯 Login success - User type: ${user.userType}, Expected role: ${widget.role}');
 
     if (widget.role.toLowerCase() == 'customer') {
       Navigator.pushAndRemoveUntil(
@@ -437,24 +466,30 @@ class _LoginPageState extends State<LoginPage>
     if (error is FirebaseAuthException) {
       switch (error.code) {
         case 'user-not-found':
-          setState(() {
-            _emailHasError = true;
-            _emailErrorText = 'No account found with this email';
-          });
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _emailErrorText = 'No account found with this email';
+            });
+          }
           errorMessage = 'No account found with this email';
           break;
         case 'wrong-password':
-          setState(() {
-            _passwordHasError = true;
-            _passwordErrorText = 'Incorrect password';
-          });
+          if (mounted) {
+            setState(() {
+              _passwordHasError = true;
+              _passwordErrorText = 'Incorrect password';
+            });
+          }
           errorMessage = 'Incorrect password';
           break;
         case 'invalid-email':
-          setState(() {
-            _emailHasError = true;
-            _emailErrorText = 'Invalid email format';
-          });
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _emailErrorText = 'Invalid email format';
+            });
+          }
           errorMessage = 'Invalid email format';
           break;
         case 'user-disabled':
@@ -464,12 +499,14 @@ class _LoginPageState extends State<LoginPage>
           errorMessage = 'Too many attempts. Please try again later';
           break;
         case 'invalid-credential':
-          setState(() {
-            _emailHasError = true;
-            _passwordHasError = true;
-            _emailErrorText = 'Invalid credentials';
-            _passwordErrorText = 'Invalid credentials';
-          });
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _passwordHasError = true;
+              _emailErrorText = 'Invalid credentials';
+              _passwordErrorText = 'Invalid credentials';
+            });
+          }
           errorMessage = 'Invalid email or password';
           break;
         default:
@@ -497,11 +534,11 @@ class _LoginPageState extends State<LoginPage>
           ),
         ),
       );
-    }
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   void _navigateToSignup(BuildContext context) {
@@ -552,6 +589,9 @@ class _LoginPageState extends State<LoginPage>
 
   Future<void> _sendPasswordResetEmail() async {
     try {
+      // Check mounted before setState
+      if (!mounted) return;
+
       setState(() {
         _isLoading = true;
       });
@@ -580,9 +620,11 @@ class _LoginPageState extends State<LoginPage>
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

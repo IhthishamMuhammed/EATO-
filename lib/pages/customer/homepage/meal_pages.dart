@@ -43,13 +43,15 @@ class _MealPageState extends State<MealPage> {
     super.initState();
 
     // ✅ FIXED: Choose the right loading method based on input
-    if (widget.categoryTitle != null) {
-      _loadMealItems(); // Load items for specific category
-    } else if (widget.mealType != null) {
-      _loadMealTimeItems(); // Load representative items for meal time
-    } else {
-      _loadAllMealItems(); // Load all available meals
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.categoryTitle != null) {
+        _loadMealItems();
+      } else if (widget.mealType != null) {
+        _loadMealTimeItems();
+      } else {
+        _loadAllMealItems();
+      }
+    });
   }
 
   // ✅ IMPROVED: Load meal items from FoodProvider based on specific category

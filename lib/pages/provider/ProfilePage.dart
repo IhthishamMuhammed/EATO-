@@ -72,10 +72,15 @@ class _ProfilePageState extends State<ProfilePage> {
     _shopLocationController = TextEditingController();
 
     // Load user and store data
-    _loadUserAndStoreData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserAndStoreData();
+    });
   }
 
   Future<void> _loadUserAndStoreData() async {
+    // ✅ FIX: Check if widget is still mounted before setState
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -89,29 +94,35 @@ class _ProfilePageState extends State<ProfilePage> {
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       await storeProvider.fetchUserStore(widget.currentUser);
 
-      // Update controllers with fetched data
-      final user = userProvider.currentUser;
-      final store = storeProvider.userStore;
+      // ✅ FIX: Check mounted before setState and batch updates
+      if (mounted) {
+        final user = userProvider.currentUser;
+        final store = storeProvider.userStore;
 
-      if (user != null) {
         setState(() {
-          _nameController.text = user.name;
-          _emailController.text = user.email;
-          _phoneController.text = user.phoneNumber ?? '';
-          _locationController.text = user.address ?? '';
-        });
-      }
+          // Update all controllers in a single setState
+          if (user != null) {
+            _nameController.text = user.name;
+            _emailController.text = user.email;
+            _phoneController.text = user.phoneNumber ?? '';
+            _locationController.text = user.address ?? '';
+          }
 
-      if (store != null) {
-        setState(() {
-          _shopNameController.text = store.name;
-          _shopContactController.text = store.contact;
-          _shopLocationController.text = store.location ?? '';
+          if (store != null) {
+            _shopNameController.text = store.name;
+            _shopContactController.text = store.contact;
+            _shopLocationController.text = store.location ?? '';
+          }
+
+          _isLoading = false; // Set loading to false in same setState
         });
       }
     } catch (e) {
       print('Error loading data: $e');
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load user data: $e'),
@@ -119,12 +130,6 @@ class _ProfilePageState extends State<ProfilePage> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
       }
     }
   }
@@ -651,6 +656,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _saveShopChanges() async {
     if (!_shopFormKey.currentState!.validate()) return;
 
+    // ✅ FIX: Check mounted before setState
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -665,17 +673,13 @@ class _ProfilePageState extends State<ProfilePage> {
         shopImageUrl = await _uploadShopImage();
       }
 
-      // Determine if we're creating a new store or updating existing
       if (currentStore != null) {
-        // UPDATING EXISTING STORE - Use existing ID
-        print('🔄 [ProfilePage] Updating existing store: ${currentStore.id}');
-
+        // UPDATING EXISTING STORE
         final Store updatedStore = Store(
-          id: currentStore.id, // Keep existing auto-generated ID
+          id: currentStore.id,
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
-          deliveryMode:
-              currentStore.deliveryMode, // Keep existing delivery mode
+          deliveryMode: currentStore.deliveryMode,
           imageUrl: shopImageUrl ?? currentStore.imageUrl,
           foods: currentStore.foods,
           location: _shopLocationController.text.trim().isEmpty
@@ -683,84 +687,80 @@ class _ProfilePageState extends State<ProfilePage> {
               : _shopLocationController.text.trim(),
           latitude: currentStore.latitude,
           longitude: currentStore.longitude,
-          ownerUid: widget.currentUser.id, // Ensure ownerUid is set
+          ownerUid: widget.currentUser.id,
           isActive: currentStore.isActive,
           isAvailable: currentStore.isAvailable,
           rating: currentStore.rating,
         );
 
-        // Update store in Firebase
         await storeProvider.createOrUpdateStore(
             updatedStore, widget.currentUser.id);
-
-        print('✅ [ProfilePage] Store updated successfully');
       } else {
-        // CREATING NEW STORE - Let Firestore auto-generate ID
-        print('🆕 [ProfilePage] Creating new store...');
-
+        // CREATING NEW STORE
         final Store newStore = Store(
-          id: '', // Empty ID - let Firestore generate it
+          id: '',
           name: _shopNameController.text.trim(),
           contact: _shopContactController.text.trim(),
-          deliveryMode: DeliveryMode.pickup, // Default value
+          deliveryMode: DeliveryMode.pickup,
           imageUrl: shopImageUrl ?? '',
           foods: [],
           location: _shopLocationController.text.trim().isEmpty
               ? null
               : _shopLocationController.text.trim(),
-          ownerUid: widget.currentUser.id, // Link to user
+          ownerUid: widget.currentUser.id,
           isActive: true,
           isAvailable: true,
           rating: null,
         );
 
-        // Create store in Firebase
         await storeProvider.createOrUpdateStore(
             newStore, widget.currentUser.id);
-
-        print('✅ [ProfilePage] New store created successfully');
       }
 
-      // Refresh store data after update
+      // ✅ FIX: Refresh data and update UI in sequence
       await storeProvider.fetchUserStore(widget.currentUser);
 
-      setState(() {
-        _isEditingShop = false;
-      });
+      // ✅ FIX: Check mounted before setState
+      if (mounted) {
+        setState(() {
+          _isEditingShop = false;
+          _isLoading = false; // Set both in same setState
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Shop details updated successfully'),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Shop details updated successfully'),
+              ],
+            ),
+            backgroundColor: EatoTheme.successColor,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: EatoTheme.successColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
     } catch (e) {
-      print('❌ [ProfilePage] Error saving shop changes: $e');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Failed to update shop details: $e'),
-            ],
+      print('Error saving shop changes: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Failed to update shop details: $e'),
+              ],
+            ),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: EatoTheme.errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+        );
+      }
     }
   }
 
@@ -802,145 +802,80 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Delivery Mode Selector Widget
   Widget _buildDeliveryModeSelector(Store? store) {
-    // Get current delivery mode from provider or default to pickup
-    final storeProvider = Provider.of<StoreProvider>(context, listen: false);
-    final currentStore = storeProvider.userStore ?? store;
-    final currentDeliveryMode =
-        currentStore?.deliveryMode ?? DeliveryMode.pickup;
+    return Consumer<StoreProvider>(
+      builder: (context, storeProvider, child) {
+        final currentStore = storeProvider.userStore ?? store;
+        final currentDeliveryMode =
+            currentStore?.deliveryMode ?? DeliveryMode.pickup;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Delivery Options',
-          style: EatoTheme.labelLarge,
-        ),
-        SizedBox(height: 8),
-        Container(
-          width: double.infinity,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Delivery Options', style: EatoTheme.labelLarge),
+            SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  _buildDeliveryOption('Pickup', DeliveryMode.pickup,
+                      currentDeliveryMode, currentStore, storeProvider),
+                  _buildDeliveryOption('Delivery', DeliveryMode.delivery,
+                      currentDeliveryMode, currentStore, storeProvider),
+                  _buildDeliveryOption('Both', DeliveryMode.both,
+                      currentDeliveryMode, currentStore, storeProvider),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDeliveryOption(
+      String title,
+      DeliveryMode mode,
+      DeliveryMode currentMode,
+      Store? currentStore,
+      StoreProvider storeProvider) {
+    final isSelected = currentMode == mode;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (currentStore != null) {
+            final updatedStore = currentStore.copyWith(deliveryMode: mode);
+            storeProvider.setStore(updatedStore);
+          }
+        },
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+            color: isSelected ? EatoTheme.primaryColor : Colors.transparent,
+            borderRadius: BorderRadius.horizontal(
+              left: mode == DeliveryMode.pickup
+                  ? Radius.circular(11)
+                  : Radius.zero,
+              right:
+                  mode == DeliveryMode.both ? Radius.circular(11) : Radius.zero,
+            ),
           ),
-          child: Row(
-            children: [
-              // Pickup Only
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (currentStore != null) {
-                        final updatedStore = currentStore.copyWith(
-                          deliveryMode: DeliveryMode.pickup,
-                        );
-                        storeProvider.setStore(updatedStore);
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: currentDeliveryMode == DeliveryMode.pickup
-                          ? EatoTheme.primaryColor
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.horizontal(
-                        left: Radius.circular(11),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Pickup',
-                        style: TextStyle(
-                          color: currentDeliveryMode == DeliveryMode.pickup
-                              ? Colors.white
-                              : Colors.black,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+          child: Center(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
               ),
-
-              // Delivery Only
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (currentStore != null) {
-                        final updatedStore = currentStore.copyWith(
-                          deliveryMode: DeliveryMode.delivery,
-                        );
-                        storeProvider.setStore(updatedStore);
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: currentDeliveryMode == DeliveryMode.delivery
-                          ? EatoTheme.primaryColor
-                          : Colors.transparent,
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Delivery',
-                        style: TextStyle(
-                          color: currentDeliveryMode == DeliveryMode.delivery
-                              ? Colors.white
-                              : Colors.black,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Both Options
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (currentStore != null) {
-                        final updatedStore = currentStore.copyWith(
-                          deliveryMode: DeliveryMode.both,
-                        );
-                        storeProvider.setStore(updatedStore);
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: currentDeliveryMode == DeliveryMode.both
-                          ? EatoTheme.primaryColor
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.horizontal(
-                        right: Radius.circular(11),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Both',
-                        style: TextStyle(
-                          color: currentDeliveryMode == DeliveryMode.both
-                              ? Colors.white
-                              : Colors.black,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 

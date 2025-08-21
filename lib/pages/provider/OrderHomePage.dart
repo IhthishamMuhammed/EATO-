@@ -1,5 +1,5 @@
 // File: lib/pages/provider/OrderHomePage.dart
-// Modified version without bottom navigation bar
+// Fixed version using notification methods
 
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:flutter/material.dart';
@@ -127,13 +127,19 @@ class _OrderHomePageState extends State<OrderHomePage>
     }
   }
 
-  // Order status update
+  // ✅ FIXED: Order status update with notifications
   Future<void> _updateOrderStatus(String orderId, OrderStatus newStatus) async {
     setState(() => _isUpdatingStatus = true);
 
     try {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-      await orderProvider.updateOrderStatus(orderId, newStatus);
+
+      // ✅ USE THE NOTIFICATION METHOD INSTEAD
+      await orderProvider.updateOrderStatusWithNotifications(
+        orderId: orderId,
+        newStatus: newStatus,
+        estimatedTime: _getEstimatedTime(newStatus),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,6 +164,20 @@ class _OrderHomePageState extends State<OrderHomePage>
       if (mounted) {
         setState(() => _isUpdatingStatus = false);
       }
+    }
+  }
+
+  // ✅ NEW: Helper method to get estimated time based on status
+  String? _getEstimatedTime(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.preparing:
+        return '20-30 mins';
+      case OrderStatus.ready:
+        return '5 mins';
+      case OrderStatus.onTheWay:
+        return '15-25 mins';
+      default:
+        return null;
     }
   }
 
@@ -509,7 +529,7 @@ class _OrderHomePageState extends State<OrderHomePage>
   }
 }
 
-// Order Details Page for Orders
+// ✅ FIXED: Order Details Page for Orders
 class OrderDetailsPage extends StatefulWidget {
   final CustomerOrder order;
   final CustomUser currentUser;
@@ -691,26 +711,61 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     );
   }
 
+  // ✅ FIXED: Update status method using notification method
   Future<void> _updateStatus(OrderStatus newStatus) async {
     setState(() => _isUpdatingStatus = true);
 
     try {
-      if (widget.onStatusUpdate != null) {
-        await widget.onStatusUpdate!(widget.order.id, newStatus);
-      }
+      // ✅ USE NOTIFICATION METHOD DIRECTLY
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      await orderProvider.updateOrderStatusWithNotifications(
+        orderId: widget.order.id,
+        newStatus: newStatus,
+        estimatedTime: _getEstimatedTime(newStatus),
+      );
 
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order status updated successfully'),
+            backgroundColor: EatoTheme.successColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
         if (newStatus == OrderStatus.delivered ||
             newStatus == OrderStatus.cancelled) {
           Navigator.pop(context);
         }
       }
     } catch (e) {
-      // Error handling is done in the parent callback
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update order status: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isUpdatingStatus = false);
       }
+    }
+  }
+
+  // ✅ NEW: Helper method to get estimated time
+  String? _getEstimatedTime(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.preparing:
+        return '20-30 mins';
+      case OrderStatus.ready:
+        return '5 mins';
+      case OrderStatus.onTheWay:
+        return '15-25 mins';
+      default:
+        return null;
     }
   }
 

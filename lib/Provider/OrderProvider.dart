@@ -235,51 +235,83 @@ class OrderProvider with ChangeNotifier {
       locationDisplayText: locationDisplayText,
     );
 
-    // Add notifications for each order
+    // ✅ ADD: Create order requests AND send notifications
     try {
-      // Replace the notification sending part with this:
-      try {
-        for (String orderId in orderIds) {
-          final orderDoc =
-              await _firestore.collection('orders').doc(orderId).get();
-          if (orderDoc.exists) {
-            final orderData = orderDoc.data() as Map<String, dynamic>;
-            final storeId = orderData['storeId'] ?? '';
-            final storeName = orderData['storeName'] ?? '';
-            final totalAmount = (orderData['totalAmount'] ?? 0.0) as double;
-            final items = orderData['items'] as List<dynamic>? ?? [];
+      for (String orderId in orderIds) {
+        final orderDoc =
+            await _firestore.collection('orders').doc(orderId).get();
+        if (orderDoc.exists) {
+          final orderData = orderDoc.data() as Map<String, dynamic>;
+          final storeId = orderData['storeId'] ?? '';
+          final storeName = orderData['storeName'] ?? '';
+          final totalAmount = (orderData['totalAmount'] ?? 0.0) as double;
+          final items = orderData['items'] as List<dynamic>? ?? [];
 
-            // ✅ GET PROVIDER ID FROM STORE DOCUMENT
-            String providerId = orderData['providerId'] ?? '';
-            if (providerId.isEmpty && storeId.isNotEmpty) {
-              providerId = await _getProviderIdFromStore(storeId);
-            }
+          // ✅ GET PROVIDER ID FROM STORE DOCUMENT
+          String providerId = orderData['providerId'] ?? '';
+          if (providerId.isEmpty && storeId.isNotEmpty) {
+            providerId = await _getProviderIdFromStore(storeId);
+          }
 
-            if (providerId.isNotEmpty) {
-              await OrderNotificationService.sendOrderPlacedNotification(
-                orderId: orderId,
-                customerId: customerId,
-                providerId: providerId,
-                customerName: customerName,
-                storeName: storeName,
-                totalAmount: totalAmount,
-                items: items.cast<Map<String, dynamic>>(),
-              );
-              print(
-                  '✅ Notification sent for order $orderId to provider $providerId');
-            } else {
-              print('⚠️ No provider ID found for store $storeId');
-            }
+          // ✅ CREATE ORDER REQUEST FOR THE REQUESTS TAB
+          await _createOrderRequest(
+            orderId: orderId,
+            customerId: customerId,
+            customerName: customerName,
+            storeId: storeId,
+            storeName: storeName,
+          );
+
+          // ✅ SEND NOTIFICATIONS
+          if (providerId.isNotEmpty) {
+            await OrderNotificationService.sendOrderPlacedNotification(
+              orderId: orderId,
+              customerId: customerId,
+              providerId: providerId,
+              customerName: customerName,
+              storeName: storeName,
+              totalAmount: totalAmount,
+              items: items.cast<Map<String, dynamic>>(),
+            );
+            print(
+                '✅ Notification sent for order $orderId to provider $providerId');
+          } else {
+            print('⚠️ No provider ID found for store $storeId');
           }
         }
-      } catch (e) {
-        print('❌ Error sending order notifications: $e');
       }
     } catch (e) {
-      print('❌ Error sending order notifications: $e');
+      print('❌ Error creating requests/notifications: $e');
     }
 
     return orderIds;
+  }
+
+  Future<void> _createOrderRequest({
+    required String orderId,
+    required String customerId,
+    required String customerName,
+    required String storeId,
+    required String storeName,
+  }) async {
+    try {
+      final request = OrderRequest(
+        id: '',
+        orderId: orderId,
+        customerId: customerId,
+        customerName: customerName,
+        storeId: storeId,
+        storeName: storeName,
+        status: OrderRequestStatus.pending,
+        requestTime: DateTime.now(),
+      );
+
+      await _firestore.collection('order_requests').add(request.toMap());
+      print('📋 [OrderProvider] Order request created for order $orderId');
+    } catch (e) {
+      print('❌ [OrderProvider] Error creating order request: $e');
+      throw Exception('Failed to create order request');
+    }
   }
 
   /// Get provider ID from store document

@@ -50,6 +50,19 @@ class _ShopsPageState extends State<ShopsPage>
     }
   }
 
+  String _getDeliveryModeText(Store shop) {
+    switch (shop.deliveryMode) {
+      case DeliveryMode.pickup:
+        return 'Pickup';
+      case DeliveryMode.delivery:
+        return 'Delivery';
+      case DeliveryMode.both:
+        return 'Both';
+      default:
+        return 'Pickup';
+    }
+  }
+
   Future<void> _loadData() async {
     if (_isDisposed) return;
     if (mounted && !_isDisposed) {
@@ -299,17 +312,26 @@ class _ShopsPageState extends State<ShopsPage>
     );
   }
 
-  void _viewShopMenu(Store shop) {
-    if (_isDisposed) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => ShopMenuModal(
-        shopId: shop.id,
-        shopName: shop.name,
-      ),
-    );
+  Future<void> _viewShopMenu(Store shop) async {
+    try {
+      // Show the shop menu modal directly
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => ShopMenuModal(
+          shopId: shop.id,
+          shopName: shop.name,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load menu: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onBottomNavTap(int index) {
@@ -542,9 +564,7 @@ class _ShopsPageState extends State<ShopsPage>
             id: shopData['shopId'] ?? '',
             name: shopData['shopName'] ?? 'Unknown Shop',
             contact: shopData['shopContact'] ?? '',
-            deliveryMode: (shopData['isPickup'] ?? true)
-                ? DeliveryMode.pickup
-                : DeliveryMode.delivery,
+            deliveryMode: _parseDeliveryMode(shopData),
             imageUrl: shopData['shopImage'] ?? '',
             foods: [],
             ownerUid: '',
@@ -557,6 +577,27 @@ class _ShopsPageState extends State<ShopsPage>
         },
       ),
     );
+  }
+
+  DeliveryMode _parseDeliveryMode(Map<String, dynamic> shopData) {
+    // Check if we have the new deliveryMode field
+    if (shopData.containsKey('deliveryMode')) {
+      final mode = shopData['deliveryMode'] as String?;
+      switch (mode?.toLowerCase()) {
+        case 'pickup':
+          return DeliveryMode.pickup;
+        case 'delivery':
+          return DeliveryMode.delivery;
+        case 'both':
+          return DeliveryMode.both;
+        default:
+          return DeliveryMode.pickup;
+      }
+    }
+
+    // Fallback to old boolean logic
+    final isPickup = shopData['isPickup'] as bool? ?? true;
+    return isPickup ? DeliveryMode.pickup : DeliveryMode.delivery;
   }
 
   Widget _buildShopCard(
@@ -731,7 +772,7 @@ class _ShopsPageState extends State<ShopsPage>
                                 ),
                                 SizedBox(width: 4),
                                 Text(
-                                  shop.isPickup ? 'Pickup' : 'Delivery',
+                                  _getDeliveryModeText(shop),
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,

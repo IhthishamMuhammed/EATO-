@@ -387,7 +387,16 @@ class _AddFoodPageState extends State<AddFoodPage> {
       );
       return;
     }
-
+    if (_selectedMainCategory == null || _selectedMainCategory!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select a main category'),
+          backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }

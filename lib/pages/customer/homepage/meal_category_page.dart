@@ -36,7 +36,6 @@ class _MealCategoryPageState extends State<MealCategoryPage>
   // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal type
   final Map<String, List<String>> _heroImageOptions = {
     'Breakfast': [
-      'https://images.unsplash.com/photo-1533089860892-a9b9ac6cd6b4?q=80&w=800',
       'https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=800',
       'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg?auto=compress&cs=tinysrgb&w=800',
       'https://cdn.pixabay.com/photo/2017/05/07/08/56/pancakes-2291908_960_720.jpg',
@@ -135,9 +134,10 @@ class _MealCategoryPageState extends State<MealCategoryPage>
     ));
 
     // ✅ FIX: Defer data loading to avoid setState during build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _loadData();
       _animationController.forward();
+      final foodProvider = Provider.of<FoodProvider>(context, listen: false);
     });
   }
 
@@ -164,6 +164,14 @@ class _MealCategoryPageState extends State<MealCategoryPage>
             .toList();
       }
     });
+  }
+
+  void _fixDatabase() async {
+    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+    await foodProvider.fixTimeValuesInDatabase();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Database fixed!')),
+    );
   }
 
   Future<void> _loadData() async {

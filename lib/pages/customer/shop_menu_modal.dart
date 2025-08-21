@@ -121,12 +121,14 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     try {
       print('🔍 [ShopMenuModal] Loading categories for $_selectedMealTime');
 
+      final mealTimeQuery = _selectedMealTime.toLowerCase();
+
       // Get all foods for this meal time first
       final foodsSnapshot = await _firestore
           .collection('stores')
           .doc(widget.shopId)
           .collection('foods')
-          .where('time', isEqualTo: _selectedMealTime)
+          .where('time', isEqualTo: mealTimeQuery) // Use lowercase
           .where('isAvailable', isEqualTo: true)
           .get();
 
@@ -177,13 +179,15 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     try {
       print(
           '🍽️ [ShopMenuModal] Loading foods for $_selectedCategory at $_selectedMealTime');
+      final mealTimeQuery =
+          _selectedMealTime.toLowerCase(); // Convert to lowercase
 
       final foodsSnapshot = await _firestore
           .collection('stores')
           .doc(widget.shopId)
           .collection('foods')
           .where('category', isEqualTo: _selectedCategory)
-          .where('time', isEqualTo: _selectedMealTime)
+          .where('time', isEqualTo: mealTimeQuery) // Use lowercase
           .where('isAvailable', isEqualTo: true)
           .get();
 
