@@ -8,7 +8,6 @@ import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
-import 'package:eato/widgets/OrderProgressIndicator.dart';
 import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -500,6 +499,28 @@ class _ActivityPageState extends State<ActivityPage>
                   ),
                 ),
                 SizedBox(width: 8),
+              ] else if (order.status == OrderStatus.confirmed ||
+                  order.status == OrderStatus.preparing ||
+                  order.status == OrderStatus.ready ||
+                  order.status == OrderStatus.onTheWay) ...[
+                Tooltip(
+                  message:
+                      'Cannot cancel - order already confirmed by restaurant',
+                  child: TextButton(
+                    onPressed: () =>
+                        _showCancelOrderDialog(order), // Shows info dialog
+                    child: Text(
+                      'Cannot Cancel',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: Size(80, 32),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
               ],
               ElevatedButton(
                 onPressed: () => _showOrderDetailsDialog(order),
@@ -579,33 +600,65 @@ class _ActivityPageState extends State<ActivityPage>
         status == OrderStatus.onTheWay;
   }
 
+  // ✅ UPDATED: Customer can only cancel BEFORE provider confirms (only pending orders)
   bool _canCancelOrder(CustomerOrder order) {
-    return order.status == OrderStatus.pending ||
-        order.status == OrderStatus.confirmed;
+    return order.status == OrderStatus.pending; // Only pending, NOT confirmed
   }
 
   Future<void> _showCancelOrderDialog(CustomerOrder order) async {
+    // Show different messages based on order status
+    String dialogContent;
+    bool canCancel = _canCancelOrder(order);
+
+    if (canCancel) {
+      dialogContent =
+          'Are you sure you want to cancel this order? This action cannot be undone.';
+    } else {
+      // Inform customer why they can't cancel
+      switch (order.status) {
+        case OrderStatus.confirmed:
+          dialogContent =
+              'This order has already been confirmed by the restaurant and cannot be cancelled. Please contact the restaurant directly if needed.';
+          break;
+        case OrderStatus.preparing:
+          dialogContent =
+              'This order is already being prepared and cannot be cancelled. Please contact the restaurant directly if needed.';
+          break;
+        case OrderStatus.ready:
+          dialogContent =
+              'This order is ready for pickup/delivery and cannot be cancelled.';
+          break;
+        case OrderStatus.onTheWay:
+          dialogContent = 'This order is on the way and cannot be cancelled.';
+          break;
+        default:
+          dialogContent = 'This order cannot be cancelled at this stage.';
+      }
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Cancel Order'),
-        content: Text('Are you sure you want to cancel this order?'),
+        title: Text(canCancel ? 'Cancel Order' : 'Cannot Cancel Order'),
+        content: Text(dialogContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Keep Order'),
+            child: Text(canCancel ? 'Keep Order' : 'OK'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('Cancel Order', style: TextStyle(color: Colors.white)),
-          ),
+          if (canCancel)
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child:
+                  Text('Cancel Order', style: TextStyle(color: Colors.white)),
+            ),
         ],
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && canCancel) {
       try {
         final orderProvider =
             Provider.of<OrderProvider>(context, listen: false);

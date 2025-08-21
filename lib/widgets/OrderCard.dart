@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/EatoComponents.dart';
 import 'package:intl/intl.dart';
 
 class OrderCard extends StatelessWidget {
@@ -9,6 +12,8 @@ class OrderCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Widget? actionButtons;
   final bool showProgress;
+  final bool
+      isProviderView; // New parameter to show customer contact for providers
 
   const OrderCard({
     Key? key,
@@ -16,6 +21,7 @@ class OrderCard extends StatelessWidget {
     this.onTap,
     this.actionButtons,
     this.showProgress = false,
+    this.isProviderView = false, // Default to customer view
   }) : super(key: key);
 
   @override
@@ -40,9 +46,15 @@ class OrderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Customer info
-                  _buildCustomerInfo(),
+                  // Customer info (enhanced for provider view)
+                  _buildCustomerInfo(context),
                   SizedBox(height: 16),
+
+                  // Customer contact card (only for provider view)
+                  if (isProviderView && order.customerPhone.isNotEmpty) ...[
+                    _buildCustomerContactCard(context),
+                    SizedBox(height: 16),
+                  ],
 
                   // Order items
                   _buildOrderItems(),
@@ -129,7 +141,7 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCustomerInfo() {
+  Widget _buildCustomerInfo(BuildContext context) {
     return Row(
       children: [
         CircleAvatar(
@@ -153,6 +165,7 @@ class OrderCard extends StatelessWidget {
                   fontSize: 16,
                 ),
               ),
+              // Show phone for provider view or just show it always as in original
               Text(
                 order.customerPhone,
                 style: TextStyle(
@@ -163,8 +176,90 @@ class OrderCard extends StatelessWidget {
             ],
           ),
         ),
+        // Call button for provider view
+        if (isProviderView && order.customerPhone.isNotEmpty) ...[
+          InkWell(
+            onTap: () =>
+                _callCustomer(context, order.customerPhone, order.customerName),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: EatoTheme.primaryColor,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                Icons.phone,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          SizedBox(width: 8),
+        ],
         OrderStatusWidget(status: order.status),
       ],
+    );
+  }
+
+  // Customer contact card for provider view
+  Widget _buildCustomerContactCard(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: EatoTheme.primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.phone, color: EatoTheme.primaryColor, size: 20),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Customer Contact',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: EatoTheme.primaryColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  order.customerPhone,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: EatoTheme.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 60,
+            height: 32,
+            child: ElevatedButton(
+              onPressed: () => _callCustomer(
+                  context, order.customerPhone, order.customerName),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size(60, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: Icon(Icons.call, size: 16),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -311,6 +406,39 @@ class OrderCard extends StatelessWidget {
 
   String _formatTime(DateTime time) {
     return DateFormat('h:mm a').format(time);
+  }
+
+  // Call functionality for provider view
+  Future<void> _callCustomer(
+      BuildContext context, String phoneNumber, String customerName) async {
+    try {
+      final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        // Fallback: Copy to clipboard
+        await Clipboard.setData(ClipboardData(text: phoneNumber));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Phone number copied: $phoneNumber'),
+            backgroundColor: EatoTheme.primaryColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error launching phone call: $e');
+      // Fallback: Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: phoneNumber));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Phone number copied: $phoneNumber'),
+          backgroundColor: EatoTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 }
 

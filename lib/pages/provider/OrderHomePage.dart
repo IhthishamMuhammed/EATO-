@@ -1,5 +1,5 @@
 // File: lib/pages/provider/OrderHomePage.dart
-// Fixed version using notification methods
+// Fixed version using notification methods with customer contact display
 
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderCard.dart';
 import 'package:eato/widgets/OrderProgressIndicator.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/EatoComponents.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
@@ -387,6 +388,8 @@ class _OrderHomePageState extends State<OrderHomePage>
           order: order,
           onTap: () => _viewOrderDetails(order),
           showProgress: true,
+          isProviderView:
+              true, // ✅ Enable provider view to show customer contact
           actionButtons: _buildOrderActionButtons(order),
         );
       },
@@ -415,7 +418,14 @@ class _OrderHomePageState extends State<OrderHomePage>
             child: OutlinedButton(
               onPressed: () => _viewOrderDetails(order),
               child: Text('View Details'),
-              style: EatoTheme.outlinedButtonStyle,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: EatoTheme.primaryColor,
+                side: BorderSide(color: EatoTheme.primaryColor),
+                padding: EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
           ),
         ],
@@ -529,7 +539,7 @@ class _OrderHomePageState extends State<OrderHomePage>
   }
 }
 
-// ✅ FIXED: Order Details Page for Orders
+// ✅ FIXED: Order Details Page for Orders with customer contact
 class OrderDetailsPage extends StatefulWidget {
   final CustomerOrder order;
   final CustomUser currentUser;
@@ -598,9 +608,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
                 SizedBox(height: 24),
 
-                // Order details using reusable card
+                // Order details using reusable card with provider view
                 OrderCard(
                   order: currentOrder,
+                  isProviderView:
+                      true, // ✅ Enable provider view for customer contact
                   actionButtons: _buildStatusActions(currentOrder),
                 ),
               ],

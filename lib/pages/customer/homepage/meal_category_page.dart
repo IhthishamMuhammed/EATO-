@@ -62,47 +62,54 @@ class _MealCategoryPageState extends State<MealCategoryPage>
 
   // ✅ ELEGANT: Get first letter with themed colors
   Map<String, dynamic> _getCategoryDisplay(String category) {
-    if (category.isEmpty) {
-      return {
-        'letter': '?',
-        'color': EatoTheme.textSecondaryColor,
-        'bgColor': EatoTheme.textSecondaryColor.withOpacity(0.1),
-      };
-    }
+    // Map categories to appropriate icons and colors
+    final categoryIcons = {
+      'Rice and Curry': Icons.rice_bowl,
+      'String Hoppers': Icons.ramen_dining,
+      'Roti': Icons.flatware,
+      'Egg Roti': Icons.breakfast_dining,
+      'Short Eats': Icons.fastfood,
+      'Hoppers': Icons.soup_kitchen,
+      'Kottu': Icons.restaurant,
+      'Fried Rice': Icons.rice_bowl,
+      'Noodles': Icons.ramen_dining,
+      'Sandwich': Icons.lunch_dining,
+      'Pizza': Icons.local_pizza,
+      'Burger': Icons.lunch_dining,
+      'Pasta': Icons.ramen_dining,
+      'Chicken': Icons.set_meal,
+      'Fish': Icons.set_meal,
+      'Vegetarian': Icons.eco,
+      'Desserts': Icons.cake,
+      'Beverages': Icons.local_cafe,
+      'Seafood': Icons.set_meal,
+      'BBQ': Icons.outdoor_grill,
+    };
 
-    String firstLetter = category[0].toUpperCase();
-
-    // ✅ EATO THEMED: Purple-based color palette
-    List<Color> colors = [
-      EatoTheme.primaryColor,
-      EatoTheme.primaryLightColor,
-      EatoTheme.accentColor,
-      EatoTheme.successColor,
-      EatoTheme.warningColor,
-      EatoTheme.infoColor,
+    final categoryColors = [
       Colors.deepPurple,
       Colors.indigo,
+      Colors.blue,
       Colors.teal,
+      Colors.green,
       Colors.orange,
+      Colors.red,
       Colors.pink,
+      Colors.purple,
       Colors.cyan,
+      EatoTheme.primaryColor,
+      EatoTheme.accentColor,
     ];
 
-    int colorIndex = firstLetter.codeUnitAt(0) % colors.length;
-    Color selectedColor = colors[colorIndex];
+    IconData icon = categoryIcons[category] ?? Icons.restaurant_menu;
+    int colorIndex = category.hashCode.abs() % categoryColors.length;
+    Color color = categoryColors[colorIndex];
 
     return {
-      'letter': firstLetter,
-      'color': selectedColor,
-      'bgColor': selectedColor.withOpacity(0.1),
-      'gradient': LinearGradient(
-        colors: [
-          selectedColor.withOpacity(0.1),
-          selectedColor.withOpacity(0.05)
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
+      'icon': icon,
+      'color': color,
+      'lightColor': color.withOpacity(0.1),
+      'mediumColor': color.withOpacity(0.2),
     };
   }
 
@@ -739,109 +746,118 @@ class _MealCategoryPageState extends State<MealCategoryPage>
 
   // ✅ ELEGANT CATEGORY CARD: Beautiful letter-based cards with theme colors
   Widget _buildCategoryItem(Map<String, dynamic> category) {
+    final display = _getCategoryDisplay(category['title']);
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: category['color'].withOpacity(0.2),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Material(
-        color: Colors.transparent,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: () => _selectCategory(category['title']),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: category['gradient'],
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: category['color'].withOpacity(0.2),
-                width: 1.5,
+                color: Colors.grey.withOpacity(0.1),
+                width: 1,
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // ✅ BEAUTIFUL LETTER ICON: Large, elegant letter with gradient background
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            category['color'].withOpacity(0.2),
-                            category['color'].withOpacity(0.1),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: category['color'].withOpacity(0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: category['color'].withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            category['letter'],
-                            style: TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              color: category['color'],
-                              shadows: [
-                                Shadow(
-                                  color: category['color'].withOpacity(0.3),
-                                  offset: const Offset(0, 2),
-                                  blurRadius: 4,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon container with gradient background
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        display['color'],
+                        display['color'].withOpacity(0.7),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: display['color'].withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
+                  child: Icon(
+                    display['icon'],
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
 
-                  const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
-                  // ✅ ELEGANT TITLE: Styled category name
-                  Expanded(
-                    flex: 1,
-                    child: Container(
-                      width: double.infinity,
-                      child: Text(
+                // Category title
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         category['title'],
-                        style: EatoTheme.bodyMedium.copyWith(
+                        style: EatoTheme.bodyLarge.copyWith(
                           fontWeight: FontWeight.w600,
                           color: EatoTheme.textPrimaryColor,
+                          height: 1.2,
                         ),
-                        textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+
+                      const SizedBox(height: 8),
+
+                      // Subtitle or description
+                      Text(
+                        'Explore options',
+                        style: EatoTheme.bodySmall.copyWith(
+                          color: EatoTheme.textSecondaryColor,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+
+                // Arrow indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Small dot indicator
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: display['color'].withOpacity(0.4),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 14,
+                      color: EatoTheme.textSecondaryColor,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

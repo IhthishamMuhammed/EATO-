@@ -214,29 +214,6 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   Widget _buildHomeContent() {
     print("🏠 Building home content widget");
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user != null) {
-            print('🧪 Testing notification for user: ${user.uid}');
-
-            await OrderNotificationService.sendTestNotification(
-                user.uid, 'Hello from Eato! 🍕 Testing notifications...');
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text('🧪 Test notification sent! Check bell icon.')),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('❌ Please log in first')),
-            );
-          }
-        },
-        icon: Icon(Icons.bug_report),
-        label: Text('Test 🧪'),
-        backgroundColor: EatoTheme.primaryColor,
-      ),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
