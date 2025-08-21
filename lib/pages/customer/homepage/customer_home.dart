@@ -35,14 +35,11 @@ class _CustomerHomePageState extends State<CustomerHomePage>
   // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal
   final Map<String, List<String>> _mealImageOptions = {
     'BREAKFAST': [
-      'https://images.unsplash.com/photo-1533089860892-a9b9ac6cd6b4?q=80&w=600',
       'https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=600',
       'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg?auto=compress&cs=tinysrgb&w=600',
       'https://cdn.pixabay.com/photo/2017/05/07/08/56/pancakes-2291908_960_720.jpg',
     ],
     'LUNCH': [
-      'https://images.unsplash.com/photo-1547592180-85f173990888?q=80&w=600',
-      'https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?q=80&w=600',
       'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600',
       'https://cdn.pixabay.com/photo/2017/12/09/08/18/pizza-3007395_960_720.jpg',
     ],
