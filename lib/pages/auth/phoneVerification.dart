@@ -8,7 +8,6 @@ import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
 
 import 'package:eato/pages/customer/homepage/customer_home.dart';
-import 'package:eato/pages/provider/ProviderHomePage.dart';
 import '../theme/eato_theme.dart';
 import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 

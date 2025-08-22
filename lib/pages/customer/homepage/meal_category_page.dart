@@ -144,7 +144,6 @@ class _MealCategoryPageState extends State<MealCategoryPage>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _loadData();
       _animationController.forward();
-      final foodProvider = Provider.of<FoodProvider>(context, listen: false);
     });
   }
 
@@ -171,14 +170,6 @@ class _MealCategoryPageState extends State<MealCategoryPage>
             .toList();
       }
     });
-  }
-
-  void _fixDatabase() async {
-    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
-    await foodProvider.fixTimeValuesInDatabase();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Database fixed!')),
-    );
   }
 
   Future<void> _loadData() async {

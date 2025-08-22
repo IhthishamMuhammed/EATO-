@@ -1,3 +1,4 @@
+import 'package:eato/EatoComponents.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -696,23 +697,10 @@ class _AccountPageState extends State<AccountPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        automaticallyImplyLeading: false,
-        title: Row(
-          children: [
-            Icon(Icons.person, color: Colors.purple, size: 24),
-            const SizedBox(width: 8),
-            const Text(
-              'Account',
-              style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+      appBar: EatoComponents.appBar(
+        context: context,
+        title: 'Account',
+        titleIcon: Icons.person,
       ),
       body: Consumer<UserProvider>(
         builder: (context, userProvider, child) {

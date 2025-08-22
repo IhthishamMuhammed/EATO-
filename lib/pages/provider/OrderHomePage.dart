@@ -1,6 +1,7 @@
 // File: lib/pages/provider/OrderHomePage.dart
-// Fixed version using notification methods with customer contact display
+// Fixed version with responsive design to prevent overflow on different devices
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/Model/coustomUser.dart';
@@ -10,7 +11,6 @@ import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderCard.dart';
 import 'package:eato/widgets/OrderProgressIndicator.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/EatoComponents.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
@@ -33,7 +33,9 @@ class _OrderHomePageState extends State<OrderHomePage>
   // Real-time update management
   Timer? _refreshTimer;
   bool _isInitialized = false;
-  bool _isUpdatingStatus = false;
+
+  // Track updating status per order ID instead of globally
+  final Set<String> _updatingOrderIds = {};
 
   @override
   void initState() {
@@ -128,14 +130,13 @@ class _OrderHomePageState extends State<OrderHomePage>
     }
   }
 
-  // ✅ FIXED: Order status update with notifications
+  // Order status update with notifications
   Future<void> _updateOrderStatus(String orderId, OrderStatus newStatus) async {
-    setState(() => _isUpdatingStatus = true);
+    setState(() => _updatingOrderIds.add(orderId));
 
     try {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-      // ✅ USE THE NOTIFICATION METHOD INSTEAD
       await orderProvider.updateOrderStatusWithNotifications(
         orderId: orderId,
         newStatus: newStatus,
@@ -163,12 +164,12 @@ class _OrderHomePageState extends State<OrderHomePage>
       }
     } finally {
       if (mounted) {
-        setState(() => _isUpdatingStatus = false);
+        setState(() => _updatingOrderIds.remove(orderId));
       }
     }
   }
 
-  // ✅ NEW: Helper method to get estimated time based on status
+  // Helper method to get estimated time based on status
   String? _getEstimatedTime(OrderStatus status) {
     switch (status) {
       case OrderStatus.preparing:
@@ -199,12 +200,29 @@ class _OrderHomePageState extends State<OrderHomePage>
     if (_searchQuery.isEmpty) return orders;
 
     return orders.where((order) {
-      return order.customerName
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
-          order.id.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          order.items.any((item) =>
-              item.foodName.toLowerCase().contains(_searchQuery.toLowerCase()));
+      final query = _searchQuery.toLowerCase();
+
+      // Search in customer name
+      if (order.customerName.toLowerCase().contains(query)) return true;
+
+      // Search in order ID
+      if (order.id.toLowerCase().contains(query)) return true;
+
+      // Search in food items
+      if (order.items
+          .any((item) => item.foodName.toLowerCase().contains(query)))
+        return true;
+
+      // Search in customer phone (if available)
+      if (order.customerPhone.toLowerCase().contains(query)) return true;
+
+      // Search in delivery address
+      if (order.deliveryAddress.toLowerCase().contains(query)) return true;
+
+      // Search in delivery option (delivery/pickup)
+      if (order.deliveryOption.toLowerCase().contains(query)) return true;
+
+      return false;
     }).toList();
   }
 
@@ -229,7 +247,7 @@ class _OrderHomePageState extends State<OrderHomePage>
         }
 
         return Scaffold(
-          appBar: _buildAppBar(),
+          appBar: _buildAppBar(orderProvider),
           body: orderProvider.isLoading
               ? Center(
                   child:
@@ -254,24 +272,36 @@ class _OrderHomePageState extends State<OrderHomePage>
             Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
             SizedBox(height: 16),
             Text('No Store Found',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                style: EatoTheme.getResponsiveHeadingSmall(context)),
             SizedBox(height: 8),
-            Text('Please set up your store first',
-                style: TextStyle(color: Colors.grey[600])),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: EatoTheme.getHorizontalPadding(context),
+              ),
+              child: Text(
+                'Please set up your store first',
+                style: EatoTheme.getResponsiveBodyMedium(context)
+                    .copyWith(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  AppBar _buildAppBar() {
+  AppBar _buildAppBar(OrderProvider orderProvider) {
     return AppBar(
       title: _showSearchBar
           ? TextField(
               controller: _searchController,
               autofocus: true,
               decoration: EatoTheme.inputDecoration(
-                hintText: 'Search orders...',
+                // ✅ FIXED: Responsive search hint based on screen size
+                hintText: EatoTheme.isSmallScreen(context)
+                    ? 'Search orders...'
+                    : 'Search orders, customers, items...',
                 prefixIcon:
                     Icon(Icons.search, color: EatoTheme.textSecondaryColor),
                 suffixIcon: IconButton(
@@ -283,14 +313,14 @@ class _OrderHomePageState extends State<OrderHomePage>
                     });
                   },
                 ),
+                context: context,
               ),
-              style: EatoTheme.bodyMedium,
+              style: EatoTheme.getResponsiveBodyMedium(context),
             )
           : Text(
               'Orders',
-              style: TextStyle(
+              style: EatoTheme.getResponsiveHeadingSmall(context).copyWith(
                 color: EatoTheme.textPrimaryColor,
-                fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -308,29 +338,172 @@ class _OrderHomePageState extends State<OrderHomePage>
                 )
               : null),
       actions: [
-        if (!_showSearchBar)
+        if (!_showSearchBar) ...[
           IconButton(
             icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
             onPressed: () => setState(() => _showSearchBar = true),
           ),
-        if (!_showSearchBar)
-          IconButton(
-            icon: Icon(Icons.refresh, color: EatoTheme.textPrimaryColor),
-            onPressed: _refreshOrders,
-          ),
+          // Clear completed orders button - only show if on completed tab and has completed orders
+          if (_tabController.index == 2 &&
+              orderProvider.completedOrders.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.delete_sweep, color: EatoTheme.textPrimaryColor),
+              onPressed: () => _showClearCompletedDialog(),
+            ),
+        ],
       ],
       bottom: TabBar(
         controller: _tabController,
         indicatorColor: EatoTheme.primaryColor,
         labelColor: EatoTheme.primaryColor,
         unselectedLabelColor: EatoTheme.textSecondaryColor,
+        labelStyle: EatoTheme.getResponsiveBodyMedium(context).copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: EatoTheme.getResponsiveBodyMedium(context),
         tabs: [
-          Tab(text: 'PENDING'),
-          Tab(text: 'ACTIVE'),
-          Tab(text: 'COMPLETED'),
+          _buildTabWithCount('PENDING', orderProvider.pendingOrders.length),
+          _buildTabWithCount('ACTIVE', orderProvider.activeOrders.length),
+          _buildTabWithCount('COMPLETED', orderProvider.completedOrders.length),
         ],
       ),
     );
+  }
+
+  void _showClearCompletedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Clear Completed Orders?',
+            style: EatoTheme.getResponsiveHeadingSmall(context)),
+        content: Text(
+          'This will remove all completed orders from your view. This action cannot be undone.',
+          style: EatoTheme.getResponsiveBodyMedium(context),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+            style: EatoTheme.textButtonStyle,
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _clearCompletedOrders();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EatoTheme.errorColor,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearCompletedOrders() async {
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+
+      if (storeProvider.userStore != null) {
+        final completedOrders = orderProvider.completedOrders;
+
+        // Delete completed orders from Firestore
+        final batch = FirebaseFirestore.instance.batch();
+
+        for (final order in completedOrders) {
+          batch.delete(
+              FirebaseFirestore.instance.collection('orders').doc(order.id));
+        }
+
+        await batch.commit();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('${completedOrders.length} completed orders cleared'),
+              backgroundColor: EatoTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear orders: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // ✅ FIXED: Responsive tab with count that prevents overflow
+  Widget _buildTabWithCount(String title, int count) {
+    return Tab(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Use abbreviated titles on very small screens
+          final displayTitle = EatoTheme.isSmallScreen(context)
+              ? _getAbbreviatedTitle(title)
+              : title;
+
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  displayTitle,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (count > 0) ...[
+                SizedBox(width: EatoTheme.isSmallScreen(context) ? 4 : 6),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: EatoTheme.isSmallScreen(context) ? 4 : 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: EatoTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: EatoTheme.isSmallScreen(context) ? 10 : 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Helper to get abbreviated tab titles for small screens
+  String _getAbbreviatedTitle(String title) {
+    switch (title) {
+      case 'PENDING':
+        return 'PEND';
+      case 'ACTIVE':
+        return 'ACTV';
+      case 'COMPLETED':
+        return 'DONE';
+      default:
+        return title;
+    }
   }
 
   Widget _buildOrdersContent(OrderProvider orderProvider) {
@@ -380,27 +553,34 @@ class _OrderHomePageState extends State<OrderHomePage>
     }
 
     return ListView.builder(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(
+        vertical: EatoTheme.getVerticalPadding(context),
+        horizontal: EatoTheme.getHorizontalPadding(context),
+      ),
       itemCount: orders.length,
       itemBuilder: (context, index) {
         final order = orders[index];
-        return OrderCard(
-          order: order,
-          onTap: () => _viewOrderDetails(order),
-          showProgress: true,
-          isProviderView:
-              true, // ✅ Enable provider view to show customer contact
-          actionButtons: _buildOrderActionButtons(order),
+        return Padding(
+          padding: EdgeInsets.only(bottom: EatoTheme.getCardSpacing(context)),
+          child: OrderCard(
+            order: order,
+            onTap: () => _viewOrderDetails(order),
+            showProgress: true,
+            isProviderView:
+                true, // Enable provider view to show customer contact
+            actionButtons: _buildOrderActionButtons(order),
+          ),
         );
       },
     );
   }
 
+  // ✅ FIXED: Responsive action buttons that prevent overflow
   Widget? _buildOrderActionButtons(CustomerOrder order) {
     if (_isOrderCompleted(order.status)) return null;
 
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(EatoTheme.getHorizontalPadding(context)),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.only(
@@ -408,33 +588,26 @@ class _OrderHomePageState extends State<OrderHomePage>
           bottomRight: Radius.circular(12),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildQuickStatusButton(order),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () => _viewOrderDetails(order),
-              child: Text('View Details'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: EatoTheme.primaryColor,
-                side: BorderSide(color: EatoTheme.primaryColor),
-                padding: EdgeInsets.symmetric(vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
+      child: EatoTheme.buildResponsiveButtonRow(
+        buttons: [
+          _buildQuickStatusButton(order),
+          OutlinedButton(
+            onPressed: () => _viewOrderDetails(order),
+            child: Text(
+              EatoTheme.isSmallScreen(context) ? 'Details' : 'View Details',
+              overflow: TextOverflow.ellipsis,
             ),
+            style: EatoTheme.getResponsiveOutlinedButtonStyle(context),
           ),
         ],
       ),
     );
   }
 
+  // ✅ FIXED: Responsive status button with dynamic text
   Widget _buildQuickStatusButton(CustomerOrder order) {
     String buttonText;
+    String shortButtonText; // For small screens
     IconData buttonIcon;
     Color buttonColor;
     OrderStatus nextStatus;
@@ -443,26 +616,28 @@ class _OrderHomePageState extends State<OrderHomePage>
       case OrderStatus.pending:
       case OrderStatus.confirmed:
         buttonText = 'Start Preparing';
+        shortButtonText = 'Start';
         buttonIcon = Icons.restaurant;
         buttonColor = EatoTheme.primaryColor;
         nextStatus = OrderStatus.preparing;
         break;
       case OrderStatus.preparing:
         buttonText = 'Mark Ready';
+        shortButtonText = 'Ready';
         buttonIcon = Icons.check_circle_outline;
         buttonColor = EatoTheme.infoColor;
         nextStatus = OrderStatus.ready;
         break;
       case OrderStatus.ready:
-        // For pickup orders, skip "On the Way" and go directly to "Delivered"
         if (order.deliveryOption == 'Pickup') {
           buttonText = 'Mark Picked Up';
+          shortButtonText = 'Picked Up';
           buttonIcon = Icons.check;
           buttonColor = EatoTheme.successColor;
           nextStatus = OrderStatus.delivered;
         } else {
-          // For delivery orders, go to "On the Way"
           buttonText = 'Out for Delivery';
+          shortButtonText = 'Deliver';
           buttonIcon = Icons.directions_bike;
           buttonColor = Colors.indigo;
           nextStatus = OrderStatus.onTheWay;
@@ -470,6 +645,7 @@ class _OrderHomePageState extends State<OrderHomePage>
         break;
       case OrderStatus.onTheWay:
         buttonText = 'Mark Delivered';
+        shortButtonText = 'Delivered';
         buttonIcon = Icons.check;
         buttonColor = EatoTheme.successColor;
         nextStatus = OrderStatus.delivered;
@@ -478,11 +654,19 @@ class _OrderHomePageState extends State<OrderHomePage>
         return SizedBox.shrink();
     }
 
+    // Check if THIS specific order is updating
+    final isThisOrderUpdating = _updatingOrderIds.contains(order.id);
+
+    // Choose text based on screen size and updating state
+    final displayText = isThisOrderUpdating
+        ? 'Updating...'
+        : (EatoTheme.isSmallScreen(context) ? shortButtonText : buttonText);
+
     return ElevatedButton.icon(
-      onPressed: _isUpdatingStatus
+      onPressed: isThisOrderUpdating
           ? null
           : () => _updateOrderStatus(order.id, nextStatus),
-      icon: _isUpdatingStatus
+      icon: isThisOrderUpdating
           ? SizedBox(
               width: 16,
               height: 16,
@@ -492,44 +676,48 @@ class _OrderHomePageState extends State<OrderHomePage>
               ),
             )
           : Icon(buttonIcon, size: 16),
-      label: Text(_isUpdatingStatus ? 'Updating...' : buttonText),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: buttonColor,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+      label: Text(
+        displayText,
+        overflow: TextOverflow.ellipsis,
+      ),
+      style: EatoTheme.getResponsivePrimaryButtonStyle(context).copyWith(
+        backgroundColor: MaterialStateProperty.all(buttonColor),
       ),
     );
   }
 
   Widget _buildEmptyOrdersView(String title, String subtitle) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-              color: EatoTheme.textSecondaryColor,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: EatoTheme.getHorizontalPadding(context),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.receipt_long_outlined,
+              size: EatoTheme.isMobile(context) ? 48 : 64,
+              color: Colors.grey[400],
             ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(color: EatoTheme.textSecondaryColor),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            SizedBox(height: 16),
+            Text(
+              title,
+              style: EatoTheme.getResponsiveHeadingSmall(context).copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: EatoTheme.getResponsiveBodyMedium(context).copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -541,7 +729,7 @@ class _OrderHomePageState extends State<OrderHomePage>
   }
 }
 
-// ✅ FIXED: Order Details Page for Orders with customer contact
+// ✅ FIXED: Responsive Order Details Page
 class OrderDetailsPage extends StatefulWidget {
   final CustomerOrder order;
   final CustomUser currentUser;
@@ -559,6 +747,7 @@ class OrderDetailsPage extends StatefulWidget {
 }
 
 class _OrderDetailsPageState extends State<OrderDetailsPage> {
+  // Track updating status for this specific order only
   bool _isUpdatingStatus = false;
 
   @override
@@ -579,7 +768,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             title: 'Order #${currentOrder.id.substring(0, 8)}',
           ),
           body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(EatoTheme.getHorizontalPadding(context)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -590,13 +779,21 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(20.0),
+                    padding:
+                        EdgeInsets.all(EatoTheme.getHorizontalPadding(context)),
                     child: Column(
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Order Status', style: EatoTheme.labelLarge),
+                            Flexible(
+                              child: Text(
+                                'Order Status',
+                                style: EatoTheme.getResponsiveHeadingSmall(
+                                    context),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             OrderStatusWidget(status: currentOrder.status),
                           ],
                         ),
@@ -613,8 +810,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 // Order details using reusable card with provider view
                 OrderCard(
                   order: currentOrder,
-                  isProviderView:
-                      true, // ✅ Enable provider view for customer contact
+                  isProviderView: true,
                   actionButtons: _buildStatusActions(currentOrder),
                 ),
               ],
@@ -629,11 +825,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     if (_isOrderCompleted(order.status)) return null;
 
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(EatoTheme.getHorizontalPadding(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Update Order Status', style: EatoTheme.headingSmall),
+          Text('Update Order Status',
+              style: EatoTheme.getResponsiveHeadingSmall(context)),
           SizedBox(height: 16),
 
           // Status action buttons based on current status
@@ -714,25 +911,25 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 ),
               )
             : Icon(icon, color: Colors.white),
-        label: Text(_isUpdatingStatus ? 'Updating...' : title,
-            style: TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          padding: EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+        label: Text(
+          _isUpdatingStatus ? 'Updating...' : title,
+          style: EatoTheme.getResponsiveBodyMedium(context).copyWith(
+            color: Colors.white,
           ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: EatoTheme.getResponsivePrimaryButtonStyle(context).copyWith(
+          backgroundColor: MaterialStateProperty.all(color),
         ),
       ),
     );
   }
 
-  // ✅ FIXED: Update status method using notification method
+  // Update status method with proper loading state management
   Future<void> _updateStatus(OrderStatus newStatus) async {
     setState(() => _isUpdatingStatus = true);
 
     try {
-      // ✅ USE NOTIFICATION METHOD DIRECTLY
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
       await orderProvider.updateOrderStatusWithNotifications(
         orderId: widget.order.id,
@@ -771,7 +968,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     }
   }
 
-  // ✅ NEW: Helper method to get estimated time
   String? _getEstimatedTime(OrderStatus status) {
     switch (status) {
       case OrderStatus.preparing:
@@ -789,9 +985,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Cancel Order?'),
+        title: Text('Cancel Order?',
+            style: EatoTheme.getResponsiveHeadingSmall(context)),
         content: Text(
-            'Are you sure you want to cancel this order? This action cannot be undone.'),
+          'Are you sure you want to cancel this order? This action cannot be undone.',
+          style: EatoTheme.getResponsiveBodyMedium(context),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

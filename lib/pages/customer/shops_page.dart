@@ -1,10 +1,17 @@
+// FILE: lib/pages/customer/shops_page.dart
+// Updated to use separate card widgets with swipeable tabs
+
+import 'package:eato/EatoComponents.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
+import 'package:eato/widgets/shop_card.dart';
+import 'package:eato/widgets/subscribed_shop_card.dart';
 import 'package:eato/services/firebase_subscription_service.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/pages/customer/shop_menu_modal.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
 
 class ShopsPage extends StatefulWidget {
   final bool showBottomNav;
@@ -19,11 +26,16 @@ class _ShopsPageState extends State<ShopsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Store> _allShops = [];
+  List<Store> _filteredShops = [];
   List<Map<String, dynamic>> _subscribedShops = [];
   bool _isLoading = true;
   String? _error;
   Map<String, bool> _subscriptionStatus = {};
   bool _isDisposed = false;
+
+  // Add this variable at the top of your class
+  bool _showSearchBar = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -36,30 +48,22 @@ class _ShopsPageState extends State<ShopsPage>
 
   @override
   void dispose() {
-    _isDisposed = true; // ✅ Add this line
+    _isDisposed = true;
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
+    _searchController.dispose(); // Don't forget to dispose
     super.dispose();
   }
 
   void _onTabChanged() {
     if (_isDisposed) return;
+
+    // Add haptic feedback for better UX
+    HapticFeedback.selectionClick();
+
     if (_tabController.index == 1) {
       // Refresh subscribed shops when switching to subscribed tab
       _loadSubscribedShops();
-    }
-  }
-
-  String _getDeliveryModeText(Store shop) {
-    switch (shop.deliveryMode) {
-      case DeliveryMode.pickup:
-        return 'Pickup';
-      case DeliveryMode.delivery:
-        return 'Delivery';
-      case DeliveryMode.both:
-        return 'Both';
-      default:
-        return 'Pickup';
     }
   }
 
@@ -119,6 +123,7 @@ class _ShopsPageState extends State<ShopsPage>
       if (mounted && !_isDisposed) {
         setState(() {
           _allShops = shops;
+          _filteredShops = List.from(shops);
         });
       }
 
@@ -204,7 +209,6 @@ class _ShopsPageState extends State<ShopsPage>
             _subscriptionStatus[shop.id] = false;
           });
         }
-        // Refresh subscribed shops list
         await _loadSubscribedShops();
 
         if (mounted) {
@@ -212,12 +216,12 @@ class _ShopsPageState extends State<ShopsPage>
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.unsubscribe, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
+                  const Icon(Icons.unsubscribe, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
                   Text('Unsubscribed from ${shop.name}'),
                 ],
               ),
-              backgroundColor: Colors.orange,
+              backgroundColor: EatoTheme.warningColor,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -230,8 +234,8 @@ class _ShopsPageState extends State<ShopsPage>
           'shopContact': shop.contact,
           'shopLocation': shop.location ?? 'Location not specified',
           'isPickup': shop.isPickup,
-          'distance': 2.5, // Mock distance
-          'deliveryTime': 30, // Mock time
+          'distance': 2.5,
+          'deliveryTime': 30,
         };
 
         await FirebaseSubscriptionService.subscribeToShop(shop.id, shopData);
@@ -240,7 +244,6 @@ class _ShopsPageState extends State<ShopsPage>
             _subscriptionStatus[shop.id] = true;
           });
         }
-        // Refresh subscribed shops list
         await _loadSubscribedShops();
 
         if (mounted && !_isDisposed) {
@@ -248,12 +251,12 @@ class _ShopsPageState extends State<ShopsPage>
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.unsubscribe, color: Colors.white, size: 20),
-                  SizedBox(width: 8),
-                  Text('Unsubscribed from ${shop.name}'),
+                  const Icon(Icons.favorite, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Subscribed to ${shop.name}'),
                 ],
               ),
-              backgroundColor: Colors.orange,
+              backgroundColor: EatoTheme.primaryColor,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -264,14 +267,8 @@ class _ShopsPageState extends State<ShopsPage>
       if (mounted && !_isDisposed) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.favorite, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Subscribed to ${shop.name}'),
-              ],
-            ),
-            backgroundColor: Colors.purple,
+            content: Text('Error: $e'),
+            backgroundColor: EatoTheme.errorColor,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -286,26 +283,27 @@ class _ShopsPageState extends State<ShopsPage>
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.login, color: Colors.purple),
-            SizedBox(width: 8),
-            Text('Login Required'),
+            Icon(Icons.login, color: EatoTheme.primaryColor),
+            const SizedBox(width: 8),
+            const Text('Login Required'),
           ],
         ),
-        content: Text(
+        content: const Text(
           'Please log in to subscribe to restaurants and get updates.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/login');
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
-            child: Text('Login', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor),
+            child: const Text('Login', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -314,7 +312,6 @@ class _ShopsPageState extends State<ShopsPage>
 
   Future<void> _viewShopMenu(Store shop) async {
     try {
-      // Show the shop menu modal directly
       await showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -328,18 +325,111 @@ class _ShopsPageState extends State<ShopsPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load menu: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: EatoTheme.errorColor,
         ),
       );
     }
   }
 
-  void _onBottomNavTap(int index) {
-    if (index == 1 || _isDisposed) {
-      // Already on shops page
-      return;
+  Future<void> _unsubscribeFromShop(Store shop) async {
+    if (_isDisposed) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.unsubscribe, color: EatoTheme.warningColor),
+            const SizedBox(width: 8),
+            const Text('Unsubscribe'),
+          ],
+        ),
+        content:
+            Text('Are you sure you want to unsubscribe from ${shop.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.warningColor),
+            child: const Text('Unsubscribe',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseSubscriptionService.unsubscribeFromShop(shop.id);
+        await _loadSubscribedShops();
+
+        if (mounted) {
+          if (mounted && !_isDisposed) {
+            setState(() {
+              _subscriptionStatus[shop.id] = false;
+            });
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text('Unsubscribed from ${shop.name}'),
+                ],
+              ),
+              backgroundColor: EatoTheme.warningColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted && !_isDisposed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to unsubscribe: $e'),
+              backgroundColor: EatoTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  DeliveryMode _parseDeliveryMode(Map<String, dynamic> shopData) {
+    if (shopData.containsKey('deliveryMode')) {
+      final mode = shopData['deliveryMode'] as String?;
+      switch (mode?.toLowerCase()) {
+        case 'pickup':
+          return DeliveryMode.pickup;
+        case 'delivery':
+          return DeliveryMode.delivery;
+        case 'both':
+          return DeliveryMode.both;
+        default:
+          return DeliveryMode.pickup;
+      }
     }
 
+    final isPickup = shopData['isPickup'] as bool? ?? true;
+    return isPickup ? DeliveryMode.pickup : DeliveryMode.delivery;
+  }
+
+  void _onBottomNavTap(int index) {
+    if (index == 1 || _isDisposed) {
+      return;
+    }
+    if (_showSearchBar) {
+      setState(() {
+        _showSearchBar = false;
+        _searchController.clear();
+        _filteredShops = List.from(_allShops);
+      });
+    }
     switch (index) {
       case 0:
         Navigator.pushReplacementNamed(context, '/home');
@@ -360,50 +450,91 @@ class _ShopsPageState extends State<ShopsPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: Row(
-          children: [
-            Icon(Icons.store, color: Colors.purple, size: 24),
-            SizedBox(width: 8),
-            Text(
-              'Shops',
-              style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.bold,
+      appBar: _showSearchBar
+          ? AppBar(
+              title: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search shops...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: EatoTheme.textSecondaryColor),
+                ),
+                style: EatoTheme.bodyMedium,
+                onChanged: (value) {
+                  _performSearch(value);
+                },
+              ),
+              backgroundColor: Colors.white,
+              elevation: 1,
+              actions: [
+                IconButton(
+                  icon: Icon(Icons.close, color: EatoTheme.textSecondaryColor),
+                  onPressed: () {
+                    setState(() {
+                      _showSearchBar = false;
+                      _searchController.clear();
+                      _filteredShops = List.from(_allShops);
+                    });
+                  },
+                ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                indicatorColor: EatoTheme.primaryColor,
+                labelColor: EatoTheme.primaryColor,
+                unselectedLabelColor: EatoTheme.textSecondaryColor,
+                labelStyle:
+                    EatoTheme.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                indicatorSize: TabBarIndicatorSize.label,
+                indicatorWeight: 3.0,
+                splashFactory: InkRipple.splashFactory,
+                tabs: const [
+                  Tab(text: 'All Shops'),
+                  Tab(text: 'Subscribed'),
+                ],
+              ),
+            )
+          : EatoComponents.appBar(
+              context: context,
+              title: 'Shops',
+              titleIcon: Icons.store,
+              actions: [
+                IconButton(
+                  onPressed: () => setState(() => _showSearchBar = true),
+                  icon: Icon(Icons.search, color: EatoTheme.textSecondaryColor),
+                  tooltip: 'Search Shops',
+                ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                indicatorColor: EatoTheme.primaryColor,
+                labelColor: EatoTheme.primaryColor,
+                unselectedLabelColor: EatoTheme.textSecondaryColor,
+                labelStyle:
+                    EatoTheme.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                indicatorSize: TabBarIndicatorSize.label,
+                indicatorWeight: 3.0,
+                splashFactory: InkRipple.splashFactory,
+                tabs: const [
+                  Tab(text: 'All Shops'),
+                  Tab(text: 'Subscribed'),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: _loadData,
-            icon: Icon(Icons.refresh, color: Colors.grey[600]),
-            tooltip: 'Refresh',
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.purple,
-          labelColor: Colors.purple,
-          unselectedLabelColor: Colors.grey,
-          labelStyle: TextStyle(fontWeight: FontWeight.w600),
-          tabs: [
-            Tab(text: 'All Shops'),
-            Tab(text: 'Subscribed'),
-          ],
-        ),
-      ),
       body: Column(
         children: [
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Colors.purple))
+                ? Center(
+                    child: CircularProgressIndicator(
+                        color: EatoTheme.primaryColor))
                 : _error != null
                     ? _buildErrorState()
                     : TabBarView(
                         controller: _tabController,
+                        physics:
+                            const BouncingScrollPhysics(), // Enable smooth swiping
                         children: [
                           _buildAllShopsTab(),
                           _buildSubscribedShopsTab(),
@@ -412,7 +543,7 @@ class _ShopsPageState extends State<ShopsPage>
           ),
           if (widget.showBottomNav)
             BottomNavBar(
-              currentIndex: 1, // Shops tab
+              currentIndex: 1,
               onTap: _onBottomNavTap,
             ),
         ],
@@ -420,34 +551,62 @@ class _ShopsPageState extends State<ShopsPage>
     );
   }
 
+  void _performSearch(String query) {
+    print('🔍 Searching for: "$query"');
+    print('📊 All shops count: ${_allShops.length}');
+
+    setState(() {
+      if (query.isEmpty) {
+        _filteredShops = List.from(_allShops);
+        print('✅ Reset to all shops: ${_filteredShops.length}');
+      } else {
+        _filteredShops = _allShops
+            .where((shop) =>
+                shop.name.toLowerCase().contains(query.toLowerCase()) ||
+                (shop.location?.toLowerCase().contains(query.toLowerCase()) ??
+                    false))
+            .toList();
+        print('🎯 Filtered shops: ${_filteredShops.length}');
+
+        // Debug: Print shop names being checked
+        for (var shop in _allShops.take(3)) {
+          print('   Checking: ${shop.name} | ${shop.location}');
+        }
+      }
+    });
+  }
+
   Widget _buildErrorState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.red),
-          SizedBox(height: 16),
+          Icon(Icons.error_outline, size: 64, color: EatoTheme.errorColor),
+          const SizedBox(height: 16),
           Text(
             'Something went wrong',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: EatoTheme.headingMedium,
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
               _error ?? 'Unknown error occurred',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
             ),
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _loadData,
-            icon: Icon(Icons.refresh, color: Colors.white),
-            label: Text('Try Again', style: TextStyle(color: Colors.white)),
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            label:
+                const Text('Try Again', style: TextStyle(color: Colors.white)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              backgroundColor: EatoTheme.primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
           ),
         ],
@@ -456,21 +615,36 @@ class _ShopsPageState extends State<ShopsPage>
   }
 
   Widget _buildAllShopsTab() {
-    if (_allShops.isEmpty) {
+    final shopsToShow =
+        _searchController.text.isEmpty ? _allShops : _filteredShops;
+
+    print('🏪 Building shops tab:');
+    print('   Search text: "${_searchController.text}"');
+    print('   All shops: ${_allShops.length}');
+    print('   Filtered shops: ${_filteredShops.length}');
+    print('   Showing: ${shopsToShow.length}');
+    if (shopsToShow.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.store_outlined, size: 64, color: Colors.grey[400]),
-            SizedBox(height: 16),
+            Icon(Icons.store_outlined,
+                size: 64, color: EatoTheme.textSecondaryColor),
+            const SizedBox(height: 16),
             Text(
-              'No Shops Available',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              _searchController.text.isEmpty
+                  ? 'No Shops Available'
+                  : 'No shops found',
+              style: EatoTheme.headingMedium,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
-              'Check back later for new restaurants',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              _searchController.text.isEmpty
+                  ? 'Check back later for new restaurants'
+                  : 'Try a different search term',
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
             ),
           ],
         ),
@@ -480,12 +654,19 @@ class _ShopsPageState extends State<ShopsPage>
     return RefreshIndicator(
       onRefresh: _loadAllShops,
       child: ListView.builder(
-        padding: EdgeInsets.all(16),
-        itemCount: _allShops.length,
+        padding: const EdgeInsets.all(16),
+        itemCount: shopsToShow.length,
         itemBuilder: (context, index) {
-          final shop = _allShops[index];
+          final shop = shopsToShow[index];
           final isSubscribed = _subscriptionStatus[shop.id] ?? false;
-          return _buildShopCard(shop, isSubscribed, true);
+
+          return ShopCard(
+            shop: shop,
+            isSubscribed: isSubscribed,
+            showSubscribeButton: true,
+            onSubscriptionToggle: () => _toggleSubscription(shop),
+            onViewMenu: () => _viewShopMenu(shop),
+          );
         },
       ),
     );
@@ -497,23 +678,26 @@ class _ShopsPageState extends State<ShopsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.login, size: 64, color: Colors.grey[400]),
-            SizedBox(height: 16),
+            Icon(Icons.login, size: 64, color: EatoTheme.textSecondaryColor),
+            const SizedBox(height: 16),
             Text(
               'Login Required',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: EatoTheme.headingMedium,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               'Please log in to view your subscriptions',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => Navigator.pushNamed(context, '/login'),
-              icon: Icon(Icons.login, color: Colors.white),
-              label: Text('Login', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+              icon: const Icon(Icons.login, color: Colors.white),
+              label: const Text('Login', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor),
             ),
           ],
         ),
@@ -525,28 +709,32 @@ class _ShopsPageState extends State<ShopsPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.favorite_border, size: 64, color: Colors.grey[400]),
-            SizedBox(height: 16),
+            Icon(Icons.favorite_border,
+                size: 64, color: EatoTheme.textSecondaryColor),
+            const SizedBox(height: 16),
             Text(
               'No Subscriptions Yet',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: EatoTheme.headingMedium,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
+              padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Text(
                 'Subscribe to restaurants in the "All Shops" tab to see them here',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: EatoTheme.bodyMedium.copyWith(
+                  color: EatoTheme.textSecondaryColor,
+                ),
               ),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => _tabController.animateTo(0),
-              icon: Icon(Icons.store, color: Colors.white),
-              label:
-                  Text('Browse Shops', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+              icon: const Icon(Icons.store, color: Colors.white),
+              label: const Text('Browse Shops',
+                  style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor),
             ),
           ],
         ),
@@ -556,7 +744,7 @@ class _ShopsPageState extends State<ShopsPage>
     return RefreshIndicator(
       onRefresh: _loadSubscribedShops,
       child: ListView.builder(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         itemCount: _subscribedShops.length,
         itemBuilder: (context, index) {
           final shopData = _subscribedShops[index];
@@ -573,547 +761,15 @@ class _ShopsPageState extends State<ShopsPage>
             location: shopData['shopLocation'],
             rating: (shopData['shopRating'] ?? 0.0).toDouble(),
           );
-          return _buildSubscribedShopCard(shop, shopData);
+
+          return SubscribedShopCard(
+            shop: shop,
+            shopData: shopData,
+            onViewMenu: () => _viewShopMenu(shop),
+            onUnsubscribe: () => _unsubscribeFromShop(shop),
+          );
         },
       ),
     );
-  }
-
-  DeliveryMode _parseDeliveryMode(Map<String, dynamic> shopData) {
-    // Check if we have the new deliveryMode field
-    if (shopData.containsKey('deliveryMode')) {
-      final mode = shopData['deliveryMode'] as String?;
-      switch (mode?.toLowerCase()) {
-        case 'pickup':
-          return DeliveryMode.pickup;
-        case 'delivery':
-          return DeliveryMode.delivery;
-        case 'both':
-          return DeliveryMode.both;
-        default:
-          return DeliveryMode.pickup;
-      }
-    }
-
-    // Fallback to old boolean logic
-    final isPickup = shopData['isPickup'] as bool? ?? true;
-    return isPickup ? DeliveryMode.pickup : DeliveryMode.delivery;
-  }
-
-  Widget _buildShopCard(
-      Store shop, bool isSubscribed, bool showSubscribeButton) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSubscribed
-              ? Colors.purple.withOpacity(0.3)
-              : Colors.grey.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Shop image
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: shop.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: shop.imageUrl,
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          errorWidget: (context, url, error) => Container(
-                            width: 60,
-                            height: 60,
-                            color: Colors.grey[300],
-                            child: Icon(Icons.store, size: 30),
-                          ),
-                        )
-                      : Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.grey[300],
-                          child: Icon(Icons.store, size: 30),
-                        ),
-                ),
-
-                SizedBox(width: 16),
-
-                // Shop details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              shop.name,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          if (showSubscribeButton)
-                            GestureDetector(
-                              onTap: () => _toggleSubscription(shop),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isSubscribed
-                                      ? Colors.purple.withOpacity(0.1)
-                                      : Colors.grey.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSubscribed
-                                        ? Colors.purple
-                                        : Colors.grey,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isSubscribed
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      size: 14,
-                                      color: isSubscribed
-                                          ? Colors.purple
-                                          : Colors.grey,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      isSubscribed ? 'Subscribed' : 'Subscribe',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: isSubscribed
-                                            ? Colors.purple
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      SizedBox(height: 8),
-
-                      // Shop stats
-                      Row(
-                        children: [
-                          if ((shop.rating ?? 0) > 0) ...[
-                            Icon(Icons.star, size: 16, color: Colors.amber),
-                            SizedBox(width: 4),
-                            Text(
-                              '${(shop.rating ?? 0.0).toStringAsFixed(1)}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                          ],
-                          Icon(Icons.location_on,
-                              size: 16, color: Colors.grey[600]),
-                          SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              shop.location ?? 'Location not specified',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: 8),
-
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: shop.isPickup ? Colors.green : Colors.blue,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  shop.isPickup
-                                      ? Icons.store
-                                      : Icons.delivery_dining,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  _getDeliveryModeText(shop),
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Action buttons
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _viewShopMenu(shop),
-                icon:
-                    Icon(Icons.restaurant_menu, size: 16, color: Colors.white),
-                label: Text('View Menu', style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple,
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubscribedShopCard(Store shop, Map<String, dynamic> shopData) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Shop image
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: shop.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: shop.imageUrl,
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          errorWidget: (context, url, error) => Container(
-                            width: 60,
-                            height: 60,
-                            color: Colors.grey[300],
-                            child: Icon(Icons.store, size: 30),
-                          ),
-                        )
-                      : Container(
-                          width: 60,
-                          height: 60,
-                          color: Colors.grey[300],
-                          child: Icon(Icons.store, size: 30),
-                        ),
-                ),
-
-                SizedBox(width: 16),
-
-                // Shop details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              shop.name,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          // Subscribed badge
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.purple.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.purple),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.favorite,
-                                    size: 12, color: Colors.purple),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Subscribed',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.purple,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: 8),
-
-                      // Shop stats
-                      Row(
-                        children: [
-                          Icon(Icons.star, size: 16, color: Colors.amber),
-                          SizedBox(width: 4),
-                          Text(
-                            '${(shop.rating ?? 0.0).toStringAsFixed(1)}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          Icon(Icons.people, size: 16, color: Colors.purple),
-                          SizedBox(width: 4),
-                          Text(
-                            '${shopData['subscriberCount'] ?? 0} subscribers',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.purple,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: 4),
-
-                      Row(
-                        children: [
-                          Icon(Icons.location_on,
-                              size: 16, color: Colors.grey[600]),
-                          SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              shop.location ?? 'Location not specified',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      SizedBox(height: 8),
-
-                      Text(
-                        'Subscribed ${_getTimeAgo(shopData['subscribedAt'])}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Action buttons
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _viewShopMenu(shop),
-                    icon: Icon(Icons.restaurant_menu,
-                        size: 16, color: Colors.white),
-                    label: Text('View Menu',
-                        style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: () => _unsubscribeFromShop(shop),
-                  icon: Icon(Icons.unsubscribe, size: 16, color: Colors.orange),
-                  label: Text('Unsubscribe',
-                      style: TextStyle(color: Colors.orange)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.orange),
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _unsubscribeFromShop(Store shop) async {
-    if (_isDisposed) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.unsubscribe, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Unsubscribe'),
-          ],
-        ),
-        content:
-            Text('Are you sure you want to unsubscribe from ${shop.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: Text('Unsubscribe', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await FirebaseSubscriptionService.unsubscribeFromShop(shop.id);
-        await _loadSubscribedShops(); // Refresh the list
-
-        if (mounted) {
-          if (mounted && !_isDisposed) {
-            setState(() {
-              _subscriptionStatus[shop.id] = false;
-            });
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Unsubscribed from ${shop.name}'),
-                ],
-              ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted && !_isDisposed) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to unsubscribe: $e'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  String _getTimeAgo(String? subscribedAt) {
-    if (subscribedAt == null) return 'recently';
-
-    try {
-      final subscribedDate = DateTime.parse(subscribedAt);
-      final now = DateTime.now();
-      final difference = now.difference(subscribedDate);
-
-      if (difference.inDays > 0) {
-        return '${difference.inDays}d ago';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours}h ago';
-      } else {
-        return '${difference.inMinutes}m ago';
-      }
-    } catch (e) {
-      return 'recently';
-    }
   }
 }

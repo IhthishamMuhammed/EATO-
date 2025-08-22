@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/userProvider.dart';
-import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
-import 'package:eato/pages/provider/ProviderHomePage.dart';
 import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/activity_page.dart';

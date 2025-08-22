@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:provider/provider.dart';
-import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/Model/Food&Store.dart';

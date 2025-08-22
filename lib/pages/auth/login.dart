@@ -12,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart'; // For email cachin
 
 import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
-import 'phoneVerification.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
 
 class LoginPage extends StatefulWidget {

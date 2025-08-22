@@ -3,7 +3,6 @@
 
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/homepage/meal_category_page.dart';
-import 'package:eato/services/order_notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';

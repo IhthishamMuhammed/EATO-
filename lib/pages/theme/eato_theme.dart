@@ -25,6 +25,46 @@ class EatoTheme {
   static const Color textLightColor = Color(0xFF9E9E9E); // Grey 500
   static const Color textOnPrimaryColor = Colors.white;
 
+  // ✅ RESPONSIVE BREAKPOINTS
+  static const double mobileBreakpoint = 480;
+  static const double tabletBreakpoint = 768;
+  static const double desktopBreakpoint = 1024;
+
+  // ✅ RESPONSIVE HELPERS
+  static bool isMobile(BuildContext context) =>
+      MediaQuery.of(context).size.width < mobileBreakpoint;
+
+  static bool isTablet(BuildContext context) =>
+      MediaQuery.of(context).size.width >= mobileBreakpoint &&
+      MediaQuery.of(context).size.width < tabletBreakpoint;
+
+  static bool isDesktop(BuildContext context) =>
+      MediaQuery.of(context).size.width >= tabletBreakpoint;
+
+  static bool isSmallScreen(BuildContext context) =>
+      MediaQuery.of(context).size.width < 360;
+
+  // ✅ RESPONSIVE SPACING
+  static double getHorizontalPadding(BuildContext context) =>
+      isMobile(context) ? 16.0 : 24.0;
+
+  static double getVerticalPadding(BuildContext context) =>
+      isMobile(context) ? 12.0 : 16.0;
+
+  static double getButtonSpacing(BuildContext context) =>
+      isSmallScreen(context) ? 8.0 : 12.0;
+
+  static double getCardSpacing(BuildContext context) =>
+      isMobile(context) ? 12.0 : 16.0;
+
+  // ✅ RESPONSIVE TEXT SCALING
+  static double getTextScale(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < 360) return 0.9; // Very small screens
+    if (width < 400) return 0.95; // Small screens
+    return 1.0; // Normal and larger screens
+  }
+
   // Gradient definitions
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryColor, primaryDarkColor],
@@ -38,7 +78,51 @@ class EatoTheme {
     end: Alignment.bottomRight,
   );
 
-  // Text styles
+  // ✅ RESPONSIVE TEXT STYLES
+  static TextStyle getResponsiveHeadingLarge(BuildContext context) => TextStyle(
+        fontSize: 28 * getTextScale(context),
+        fontWeight: FontWeight.bold,
+        color: textPrimaryColor,
+        height: 1.2,
+      );
+
+  static TextStyle getResponsiveHeadingMedium(BuildContext context) =>
+      TextStyle(
+        fontSize: 22 * getTextScale(context),
+        fontWeight: FontWeight.bold,
+        color: textPrimaryColor,
+        height: 1.3,
+      );
+
+  static TextStyle getResponsiveHeadingSmall(BuildContext context) => TextStyle(
+        fontSize: 18 * getTextScale(context),
+        fontWeight: FontWeight.w600,
+        color: textPrimaryColor,
+        height: 1.3,
+      );
+
+  static TextStyle getResponsiveBodyLarge(BuildContext context) => TextStyle(
+        fontSize: 16 * getTextScale(context),
+        fontWeight: FontWeight.w400,
+        color: textPrimaryColor,
+        height: 1.5,
+      );
+
+  static TextStyle getResponsiveBodyMedium(BuildContext context) => TextStyle(
+        fontSize: 14 * getTextScale(context),
+        fontWeight: FontWeight.w400,
+        color: textPrimaryColor,
+        height: 1.5,
+      );
+
+  static TextStyle getResponsiveBodySmall(BuildContext context) => TextStyle(
+        fontSize: 12 * getTextScale(context),
+        fontWeight: FontWeight.w400,
+        color: textSecondaryColor,
+        height: 1.4,
+      );
+
+  // Original text styles (kept for backward compatibility)
   static TextStyle get headingLarge => const TextStyle(
         fontSize: 28,
         fontWeight: FontWeight.bold,
@@ -102,6 +186,147 @@ class EatoTheme {
         height: 1.4,
       );
 
+  // ✅ RESPONSIVE LAYOUT HELPERS
+  // Quick fixes for the layout errors
+// Add these fixed methods to your EatoTheme class
+// Replace the existing buildResponsiveRow and buildResponsiveButtonRow methods
+
+// ✅ FIXED: Responsive row with proper constraints
+  static Widget buildResponsiveRow({
+    required List<Widget> children,
+    MainAxisAlignment mainAxisAlignment = MainAxisAlignment.start,
+    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
+    double? spacing,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final actualSpacing = spacing ?? getButtonSpacing(context);
+
+        if (constraints.maxWidth < 400) {
+          // Stack vertically on very small screens
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children
+                .expand((child) => [
+                      child,
+                      if (child != children.last)
+                        SizedBox(height: actualSpacing),
+                    ])
+                .toList(),
+          );
+        }
+
+        // Horizontal layout with proper constraints
+        return Row(
+          mainAxisAlignment: mainAxisAlignment,
+          crossAxisAlignment: crossAxisAlignment,
+          children: children
+              .asMap()
+              .entries
+              .expand((entry) => [
+                    if (entry.key == 0)
+                      Flexible(child: entry.value)
+                    else ...[
+                      SizedBox(width: actualSpacing),
+                      Flexible(child: entry.value),
+                    ]
+                  ])
+              .toList(),
+        );
+      },
+    );
+  }
+
+// ✅ FIXED: Responsive button row with proper constraints
+  static Widget buildResponsiveButtonRow({
+    required List<Widget> buttons,
+    MainAxisAlignment mainAxisAlignment = MainAxisAlignment.spaceEvenly,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (isSmallScreen(context) || constraints.maxWidth < 380) {
+          // Stack buttons vertically on small screens
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: buttons
+                .expand((button) => [
+                      SizedBox(
+                        height: 48, // Fixed height for consistency
+                        child: button,
+                      ),
+                      if (button != buttons.last)
+                        SizedBox(height: getButtonSpacing(context)),
+                    ])
+                .toList(),
+          );
+        }
+
+        // Horizontal layout for larger screens
+        return Row(
+          mainAxisAlignment: mainAxisAlignment,
+          children: buttons
+              .map(
+                (button) => Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: getButtonSpacing(context) / 2,
+                    ),
+                    child: SizedBox(
+                      height: 48, // Fixed height for consistency
+                      child: button,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+  }
+
+  static ButtonStyle getResponsivePrimaryButtonStyle(BuildContext context) =>
+      ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: getHorizontalPadding(context),
+          vertical: getVerticalPadding(context),
+        ),
+        minimumSize: Size(
+          isMobile(context) ? 80 : 100,
+          isMobile(context) ? 40 : 48,
+        ),
+        textStyle: TextStyle(
+          fontSize: 14 * getTextScale(context),
+          fontWeight: FontWeight.w500,
+        ),
+      );
+
+  static ButtonStyle getResponsiveOutlinedButtonStyle(BuildContext context) =>
+      OutlinedButton.styleFrom(
+        foregroundColor: primaryColor,
+        side: const BorderSide(color: primaryColor, width: 1.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: getHorizontalPadding(context),
+          vertical: getVerticalPadding(context),
+        ),
+        minimumSize: Size(
+          isMobile(context) ? 80 : 100,
+          isMobile(context) ? 40 : 48,
+        ),
+        textStyle: TextStyle(
+          fontSize: 14 * getTextScale(context),
+          fontWeight: FontWeight.w500,
+        ),
+      );
+
   // Reusable component styles
   static BoxDecoration get cardDecoration => BoxDecoration(
         color: surfaceColor,
@@ -140,9 +365,9 @@ class EatoTheme {
     return AppBar(
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           color: textPrimaryColor,
-          fontSize: 18,
+          fontSize: 18 * getTextScale(context),
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -160,7 +385,7 @@ class EatoTheme {
     );
   }
 
-  // Button styles
+  // Button styles (kept for backward compatibility)
   static ButtonStyle get primaryButtonStyle => ElevatedButton.styleFrom(
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
@@ -189,6 +414,52 @@ class EatoTheme {
           borderRadius: BorderRadius.circular(8),
         ),
       );
+
+  // ✅ RESPONSIVE INPUT DECORATION
+  static InputDecoration inputDecoration({
+    required String hintText,
+    String? labelText,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    BuildContext? context,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      labelText: labelText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: Colors.grey[100],
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: context != null ? getHorizontalPadding(context) : 16,
+        vertical: context != null ? getVerticalPadding(context) : 14,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: primaryColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: errorColor, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: errorColor, width: 1.5),
+      ),
+      hintStyle: context != null
+          ? getResponsiveBodyMedium(context).copyWith(color: textSecondaryColor)
+          : null,
+    );
+  }
+
   static PageRouteBuilder slideTransition({
     required Widget page,
     Duration duration = const Duration(milliseconds: 500),
@@ -242,44 +513,6 @@ class EatoTheme {
                 : Colors.grey.withOpacity(0.3),
           ),
         ),
-      ),
-    );
-  }
-
-  // Input decoration
-  static InputDecoration inputDecoration({
-    required String hintText,
-    String? labelText,
-    Widget? prefixIcon,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      hintText: hintText,
-      labelText: labelText,
-      prefixIcon: prefixIcon,
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: Colors.grey[100],
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: primaryColor, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: errorColor, width: 1.5),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: errorColor, width: 1.5),
       ),
     );
   }

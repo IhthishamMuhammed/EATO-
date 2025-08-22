@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/EatoComponents.dart';
 import 'package:intl/intl.dart';
 
 class OrderCard extends StatelessWidget {

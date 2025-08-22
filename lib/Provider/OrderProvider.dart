@@ -421,6 +421,31 @@ class OrderProvider with ChangeNotifier {
       });
 
       await batch.commit();
+
+      // ✅ ADD: Send notification for confirmed status
+      try {
+        final orderDoc =
+            await _firestore.collection('orders').doc(orderId).get();
+        if (orderDoc.exists) {
+          final orderData = orderDoc.data() as Map<String, dynamic>;
+          final customerId = orderData['customerId'] as String;
+          final storeName = orderData['storeName'] as String;
+
+          await OrderNotificationService.sendOrderStatusUpdate(
+            orderId: orderId,
+            customerId: customerId,
+            newStatus: 'confirmed',
+            storeName: storeName,
+            estimatedTime: '20-30 mins', // Standard prep time
+          );
+
+          print(
+              '✅ [OrderProvider] Confirmation notification sent for order $orderId');
+        }
+      } catch (e) {
+        print('❌ Error sending confirmation notification: $e');
+      }
+
       print('✅ [OrderProvider] Order request $requestId accepted');
     } catch (e) {
       _setError('Error accepting order request: $e');
@@ -453,6 +478,32 @@ class OrderProvider with ChangeNotifier {
       });
 
       await batch.commit();
+
+      // ✅ ADD: Send notification for rejected status
+      try {
+        final orderDoc =
+            await _firestore.collection('orders').doc(orderId).get();
+        if (orderDoc.exists) {
+          final orderData = orderDoc.data() as Map<String, dynamic>;
+          final customerId = orderData['customerId'] as String;
+          final storeName = orderData['storeName'] as String;
+
+          // Send rejection notification with reason
+          await OrderNotificationService.sendOrderStatusUpdate(
+            orderId: orderId,
+            customerId: customerId,
+            newStatus: 'rejected',
+            storeName: storeName,
+            // Include rejection reason in the notification
+          );
+
+          print(
+              '✅ [OrderProvider] Rejection notification sent for order $orderId');
+        }
+      } catch (e) {
+        print('❌ Error sending rejection notification: $e');
+      }
+
       print('✅ [OrderProvider] Order request $requestId rejected');
     } catch (e) {
       _setError('Error rejecting order request: $e');

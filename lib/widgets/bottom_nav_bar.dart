@@ -1,8 +1,9 @@
 // FILE: lib/widgets/bottom_nav_bar.dart
-// FIXED VERSION - Safe provider access and lifecycle management
+// IMPROVED VERSION - Better alignment and modern UI
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
 import '../Provider/CartProvider.dart';
 
 class BottomNavBar extends StatefulWidget {
@@ -19,12 +20,32 @@ class BottomNavBar extends StatefulWidget {
   State<BottomNavBar> createState() => _BottomNavBarState();
 }
 
-class _BottomNavBarState extends State<BottomNavBar> {
+class _BottomNavBarState extends State<BottomNavBar>
+    with TickerProviderStateMixin {
   bool _isDisposed = false;
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+  }
 
   @override
   void dispose() {
     _isDisposed = true;
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -35,19 +56,19 @@ class _BottomNavBarState extends State<BottomNavBar> {
     }
 
     return Container(
-      height: 75,
+      height: 85,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: Colors.black.withOpacity(0.08),
             spreadRadius: 0,
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
       ),
@@ -55,30 +76,31 @@ class _BottomNavBarState extends State<BottomNavBar> {
         alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
+          // Main Navigation Items
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildNavItem(
-                icon: Icons.home,
+                icon: Icons.home_rounded,
                 label: 'Home',
                 isSelected: widget.currentIndex == 0,
                 index: 0,
               ),
               _buildNavItem(
-                icon: Icons.favorite,
-                label: 'shops',
+                icon: Icons.store_rounded,
+                label: 'Shops',
                 isSelected: widget.currentIndex == 1,
                 index: 1,
               ),
-              const SizedBox(width: 65),
+              const SizedBox(width: 70), // Space for cart button
               _buildNavItem(
-                icon: Icons.timeline,
+                icon: Icons.timeline_rounded,
                 label: 'Activity',
                 isSelected: widget.currentIndex == 3,
                 index: 3,
               ),
               _buildNavItem(
-                icon: Icons.person,
+                icon: Icons.person_rounded,
                 label: 'Account',
                 isSelected: widget.currentIndex == 4,
                 index: 4,
@@ -86,54 +108,12 @@ class _BottomNavBarState extends State<BottomNavBar> {
             ],
           ),
 
-          // ✅ FIXED: Safe cart button with provider access
+          // Floating Cart Button
           Positioned(
             top: -20,
             child: _buildSafeCartButton(context),
           ),
-
-          _buildSelectionIndicator(context),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSelectionIndicator(BuildContext context) {
-    if (widget.currentIndex == 2 || _isDisposed) {
-      return const SizedBox.shrink();
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final itemWidth = screenWidth / 5;
-
-    double leftPosition;
-    switch (widget.currentIndex) {
-      case 0:
-        leftPosition = itemWidth * 0.5 - 15;
-        break;
-      case 1:
-        leftPosition = itemWidth * 1.5 - 15;
-        break;
-      case 3:
-        leftPosition = itemWidth * 3.5 - 15;
-        break;
-      case 4:
-        leftPosition = itemWidth * 4.5 - 15;
-        break;
-      default:
-        leftPosition = 0;
-    }
-
-    return Positioned(
-      bottom: 0,
-      left: leftPosition,
-      child: Container(
-        height: 4,
-        width: 30,
-        decoration: BoxDecoration(
-          color: Colors.purple,
-          borderRadius: BorderRadius.circular(10),
-        ),
       ),
     );
   }
@@ -148,40 +128,80 @@ class _BottomNavBarState extends State<BottomNavBar> {
       return const SizedBox.shrink();
     }
 
-    return InkWell(
+    return GestureDetector(
       onTap: () {
         if (!_isDisposed && mounted) {
+          _animationController.forward().then((_) {
+            _animationController.reverse();
+          });
           widget.onTap(index);
         }
       },
-      child: Container(
-        width: 70,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isSelected ? Colors.purple : Colors.grey,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.purple : Colors.grey,
-                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: isSelected ? _scaleAnimation.value : 1.0,
+            child: Container(
+              width: 60,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Icon with background
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? EatoTheme.primaryColor.withOpacity(0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: isSelected
+                          ? EatoTheme.primaryColor
+                          : EatoTheme.textSecondaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  // Label
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isSelected
+                          ? EatoTheme.primaryColor
+                          : EatoTheme.textSecondaryColor,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                    child: Text(label),
+                  ),
+                  // Selection indicator dot
+                  const SizedBox(height: 1),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isSelected ? 4 : 0,
+                    height: isSelected ? 4 : 0,
+                    decoration: BoxDecoration(
+                      color: EatoTheme.primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  // ✅ FIXED: Safe cart button with try-catch for provider access
   Widget _buildSafeCartButton(BuildContext context) {
     if (_isDisposed) {
       return _buildFallbackCartButton();
@@ -189,7 +209,6 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
     return Consumer<CartProvider>(
       builder: (context, cartProvider, child) {
-        // ✅ FIX: Handle null cartProvider gracefully
         if (cartProvider == null) {
           return _buildFallbackCartButton();
         }
@@ -203,13 +222,12 @@ class _BottomNavBarState extends State<BottomNavBar> {
           onTap: () {
             if (!_isDisposed && mounted) {
               widget.onTap(2);
-              // ✅ FIX: Safe refresh with null check
               Future.delayed(const Duration(milliseconds: 200), () {
                 if (!_isDisposed && mounted) {
                   try {
                     cartProvider.refreshCartCount();
                   } catch (e) {
-                    print('⚠️ Cart refresh failed: $e');
+                    print('Cart refresh failed: $e');
                   }
                 }
               });
@@ -237,20 +255,35 @@ class _BottomNavBarState extends State<BottomNavBar> {
     required bool isLoading,
     required VoidCallback onTap,
   }) {
+    final isSelected = widget.currentIndex == 2;
+
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 65,
-        height: 65,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 70,
+        height: 70,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: widget.currentIndex == 2 ? Colors.purpleAccent : Colors.purple,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isSelected
+                ? [
+                    EatoTheme.primaryColor.withOpacity(0.9),
+                    EatoTheme.primaryColor,
+                  ]
+                : [
+                    EatoTheme.primaryColor,
+                    EatoTheme.primaryColor.withOpacity(0.8),
+                  ],
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.purple.withOpacity(0.3),
-              spreadRadius: 1,
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+              color: EatoTheme.primaryColor.withOpacity(0.4),
+              spreadRadius: isSelected ? 2 : 1,
+              blurRadius: isSelected ? 12 : 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -258,23 +291,26 @@ class _BottomNavBarState extends State<BottomNavBar> {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              const Icon(
-                Icons.shopping_cart,
+              Icon(
+                Icons.shopping_cart_rounded,
                 color: Colors.white,
-                size: 30,
+                size: 28,
               ),
 
-              // ✅ Cart count badge
+              // Cart count badge
               if (cartCount > 0)
                 Positioned(
-                  top: -8,
-                  right: -8,
+                  top: -6,
+                  right: -6,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white, width: 2),
                     ),
                     constraints: const BoxConstraints(
@@ -294,17 +330,25 @@ class _BottomNavBarState extends State<BottomNavBar> {
                   ),
                 ),
 
-              // ✅ Loading indicator
+              // Loading indicator
               if (isLoading)
                 Positioned(
-                  top: -6,
-                  right: -6,
+                  top: -8,
+                  right: -8,
                   child: Container(
-                    width: 16,
-                    height: 16,
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
                     ),
                   ),
                 ),

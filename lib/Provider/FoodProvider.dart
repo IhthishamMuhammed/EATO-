@@ -1132,26 +1132,6 @@ class FoodProvider with ChangeNotifier {
     return 2.5;
   }
 
-  int _estimateDeliveryTime(double distance) {
-    // Base time of 20 minutes + 3 minutes per km
-    return (20 + (distance * 3)).round();
-  }
-
-  String _getVariationName(String foodType) {
-    switch (foodType.toLowerCase()) {
-      case 'vegetarian':
-        return 'Veggie';
-      case 'non-vegetarian':
-        return 'Classic';
-      case 'vegan':
-        return 'Plant-Based';
-      case 'dessert':
-        return 'Sweet';
-      default:
-        return 'Traditional';
-    }
-  }
-
   double _calculateAvailabilityScore(Store store, Food food) {
     // Calculate a score based on various factors
     double score = 0.0;

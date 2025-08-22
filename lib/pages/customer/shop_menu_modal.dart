@@ -321,20 +321,19 @@ class _ShopMenuModalState extends State<ShopMenuModal>
     final portionPrices = foodData['portionPrices'] as Map<String, dynamic>?;
 
     if (portionPrices != null && portionPrices.isNotEmpty) {
-      // Find the cheapest portion
       double minPrice = portionPrices.values
           .map((price) => (price as num).toDouble())
           .reduce((a, b) => a < b ? a : b);
 
       if (portionPrices.length > 1) {
-        return 'From ₹${minPrice.toStringAsFixed(2)}';
+        return 'From Rs.${minPrice.toStringAsFixed(2)}';
       } else {
-        return '₹${minPrice.toStringAsFixed(2)}';
+        return 'Rs.${minPrice.toStringAsFixed(2)}';
       }
     }
 
     final price = (foodData['price'] as num).toDouble();
-    return '₹${price.toStringAsFixed(2)}';
+    return 'Rs.${price.toStringAsFixed(2)}';
   }
 
   @override
@@ -696,25 +695,6 @@ class _ShopMenuModalState extends State<ShopMenuModal>
           ],
         ),
       ),
-    );
-  }
-
-  // Static method to show the modal
-  static Future<void> show({
-    required BuildContext context,
-    required String shopId,
-    String? shopName,
-  }) async {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return ShopMenuModal(
-          shopId: shopId,
-          shopName: shopName,
-        );
-      },
     );
   }
 }
