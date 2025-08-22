@@ -9,7 +9,6 @@ import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/shops_page.dart';
-import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/widgets/notification_widget.dart';
 import 'package:firebase_auth/firebase_auth.dart';

@@ -34,16 +34,15 @@ class OrderProvider with ChangeNotifier {
 
   // Filtered getters for provider
   List<CustomerOrder> get pendingOrders => _providerOrders
-      .where((order) =>
-          order.status == OrderStatus.pending ||
-          order.status == OrderStatus.confirmed)
+      .where((order) => order.status == OrderStatus.confirmed)
       .toList();
 
   List<CustomerOrder> get activeOrders => _providerOrders
       .where((order) =>
           order.status == OrderStatus.preparing ||
           order.status == OrderStatus.ready ||
-          order.status == OrderStatus.onTheWay)
+          (order.status == OrderStatus.onTheWay &&
+              order.deliveryOption == 'Delivery'))
       .toList();
 
   List<CustomerOrder> get completedOrders => _providerOrders

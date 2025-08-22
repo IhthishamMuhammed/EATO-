@@ -454,16 +454,18 @@ class _OrderHomePageState extends State<OrderHomePage>
         nextStatus = OrderStatus.ready;
         break;
       case OrderStatus.ready:
-        if (order.deliveryOption == 'Delivery') {
+        // For pickup orders, skip "On the Way" and go directly to "Delivered"
+        if (order.deliveryOption == 'Pickup') {
+          buttonText = 'Mark Picked Up';
+          buttonIcon = Icons.check;
+          buttonColor = EatoTheme.successColor;
+          nextStatus = OrderStatus.delivered;
+        } else {
+          // For delivery orders, go to "On the Way"
           buttonText = 'Out for Delivery';
           buttonIcon = Icons.directions_bike;
           buttonColor = Colors.indigo;
           nextStatus = OrderStatus.onTheWay;
-        } else {
-          buttonText = 'Mark Delivered';
-          buttonIcon = Icons.check;
-          buttonColor = EatoTheme.successColor;
-          nextStatus = OrderStatus.delivered;
         }
         break;
       case OrderStatus.onTheWay:
@@ -664,7 +666,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
           if (order.status == OrderStatus.ready ||
               order.status == OrderStatus.onTheWay)
             _buildStatusButton(
-              title: 'Mark as Delivered',
+              title: order.deliveryOption == 'Pickup'
+                  ? 'Mark as Picked Up'
+                  : 'Mark as Delivered',
               icon: Icons.check,
               color: EatoTheme.successColor,
               onTap: () => _updateStatus(OrderStatus.delivered),

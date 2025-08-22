@@ -307,29 +307,6 @@ class NotificationService {
   // Get current FCM token
   static String? getCurrentToken() => _currentToken;
 
-  // ✅ Helper methods
-  static String _getChannelName(String channelId) {
-    switch (channelId) {
-      case 'order_updates':
-        return 'Order Updates';
-      case 'promotions':
-        return 'Promotions & Offers';
-      default:
-        return 'Eato Notifications';
-    }
-  }
-
-  static String _getChannelDescription(String channelId) {
-    switch (channelId) {
-      case 'order_updates':
-        return 'Notifications about your order status';
-      case 'promotions':
-        return 'Special offers and promotional notifications';
-      default:
-        return 'General notifications from Eato app';
-    }
-  }
-
   static String _createPayload(Map<String, dynamic> data) {
     return data.entries.map((e) => '${e.key}:${e.value}').join('|');
   }

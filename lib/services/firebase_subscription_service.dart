@@ -2,7 +2,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:eato/Model/Food&Store.dart';
 
 class FirebaseSubscriptionService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;

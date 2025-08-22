@@ -12,8 +12,7 @@ class OrderCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Widget? actionButtons;
   final bool showProgress;
-  final bool
-      isProviderView; // New parameter to show customer contact for providers
+  final bool isProviderView;
 
   const OrderCard({
     Key? key,
@@ -21,13 +20,14 @@ class OrderCard extends StatelessWidget {
     this.onTap,
     this.actionButtons,
     this.showProgress = false,
-    this.isProviderView = false, // Default to customer view
+    this.isProviderView = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: EdgeInsets.symmetric(
+          horizontal: 16, vertical: 6), // Reduced vertical margin
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -42,35 +42,23 @@ class OrderCard extends StatelessWidget {
 
             // Order details
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(12.0), // Reduced padding
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Customer info (enhanced for provider view)
+                  // Customer info with call button
                   _buildCustomerInfo(context),
-                  SizedBox(height: 16),
-
-                  // Customer contact card (only for provider view)
-                  if (isProviderView && order.customerPhone.isNotEmpty) ...[
-                    _buildCustomerContactCard(context),
-                    SizedBox(height: 16),
-                  ],
+                  SizedBox(height: 12), // Reduced spacing
 
                   // Order items
                   _buildOrderItems(),
-                  SizedBox(height: 12),
-
-                  // Delivery info
-                  if (order.deliveryOption == 'Delivery') ...[
-                    _buildDeliveryInfo(),
-                    SizedBox(height: 8),
-                  ],
+                  SizedBox(height: 8), // Reduced spacing
 
                   // Special instructions
                   if (order.specialInstructions != null &&
                       order.specialInstructions!.isNotEmpty) ...[
                     _buildSpecialInstructions(),
-                    SizedBox(height: 12),
+                    SizedBox(height: 8), // Reduced spacing
                   ],
 
                   // Total amount
@@ -91,7 +79,8 @@ class OrderCard extends StatelessWidget {
 
   Widget _buildOrderHeader() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding:
+          EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Reduced padding
       decoration: BoxDecoration(
         color: EatoTheme.primaryColor.withOpacity(0.05),
         borderRadius: BorderRadius.only(
@@ -106,15 +95,16 @@ class OrderCard extends StatelessWidget {
             children: [
               Icon(
                 Icons.receipt,
-                size: 16,
+                size: 14, // Smaller icon
                 color: EatoTheme.primaryColor,
               ),
-              SizedBox(width: 8),
+              SizedBox(width: 6),
               Text(
                 'Order #${order.id.substring(0, 8)}',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: EatoTheme.primaryColor,
+                  fontSize: 13, // Smaller text
                 ),
               ),
             ],
@@ -123,7 +113,7 @@ class OrderCard extends StatelessWidget {
             children: [
               Icon(
                 Icons.access_time,
-                size: 16,
+                size: 14, // Smaller icon
                 color: EatoTheme.textSecondaryColor,
               ),
               SizedBox(width: 4),
@@ -131,7 +121,7 @@ class OrderCard extends StatelessWidget {
                 _formatTime(order.orderTime),
                 style: TextStyle(
                   color: EatoTheme.textSecondaryColor,
-                  fontSize: 12,
+                  fontSize: 11, // Smaller text
                 ),
               ),
             ],
@@ -145,15 +135,15 @@ class OrderCard extends StatelessWidget {
     return Row(
       children: [
         CircleAvatar(
-          radius: 20,
+          radius: 18,
           backgroundColor: EatoTheme.primaryColor.withOpacity(0.1),
           child: Icon(
             Icons.person,
             color: EatoTheme.primaryColor,
-            size: 20,
+            size: 18,
           ),
         ),
-        SizedBox(width: 12),
+        SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,17 +152,17 @@ class OrderCard extends StatelessWidget {
                 order.customerName,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 15,
                 ),
               ),
-              // Show phone for provider view or just show it always as in original
-              Text(
-                order.customerPhone,
-                style: TextStyle(
-                  color: EatoTheme.textSecondaryColor,
-                  fontSize: 13,
+              if (order.customerPhone.isNotEmpty)
+                Text(
+                  order.customerPhone,
+                  style: TextStyle(
+                    color: EatoTheme.textSecondaryColor,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -181,86 +171,58 @@ class OrderCard extends StatelessWidget {
           InkWell(
             onTap: () =>
                 _callCustomer(context, order.customerPhone, order.customerName),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: EatoTheme.primaryColor,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
                 Icons.phone,
                 color: Colors.white,
-                size: 20,
+                size: 18,
               ),
             ),
           ),
           SizedBox(width: 8),
         ],
-        OrderStatusWidget(status: order.status),
+        // Location button for delivery orders
+        if (order.deliveryOption == 'Delivery') ...[
+          InkWell(
+            onTap: () => _openDirections(context, order.deliveryAddress),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.navigation,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+          SizedBox(width: 8),
+        ],
+        _buildStatusWidget(),
       ],
     );
   }
 
-  // Customer contact card for provider view
-  Widget _buildCustomerContactCard(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: EatoTheme.primaryColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.phone, color: EatoTheme.primaryColor, size: 20),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Customer Contact',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: EatoTheme.primaryColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  order.customerPhone,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: EatoTheme.primaryColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 60,
-            height: 32,
-            child: ElevatedButton(
-              onPressed: () => _callCustomer(
-                  context, order.customerPhone, order.customerName),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: EatoTheme.primaryColor,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size(60, 32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Icon(Icons.call, size: 16),
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildStatusWidget() {
+    // Don't show "On the Way" status for pickup orders
+    OrderStatus displayStatus = order.status;
+    if (order.deliveryOption == 'Pickup' &&
+        order.status == OrderStatus.onTheWay) {
+      displayStatus = OrderStatus.ready;
+    }
+
+    return OrderStatusWidget(status: displayStatus);
   }
 
   Widget _buildOrderItems() {
@@ -272,25 +234,34 @@ class OrderCard extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: EatoTheme.textPrimaryColor,
+            fontSize: 13, // Smaller text
           ),
         ),
-        SizedBox(height: 8),
+        SizedBox(height: 6),
         ...order.items
             .map((item) => Padding(
-                  padding: EdgeInsets.only(bottom: 4),
+                  padding: EdgeInsets.only(bottom: 2), // Reduced spacing
                   child: Row(
                     children: [
-                      Text('• ${item.foodName}'),
+                      Text(
+                        '• ${item.foodName}',
+                        style: TextStyle(fontSize: 13), // Smaller text
+                      ),
                       if (item.variation != null)
-                        Text(' (${item.variation})',
-                            style:
-                                TextStyle(color: EatoTheme.textSecondaryColor)),
+                        Text(
+                          ' (${item.variation})',
+                          style: TextStyle(
+                            color: EatoTheme.textSecondaryColor,
+                            fontSize: 12, // Smaller text
+                          ),
+                        ),
                       Spacer(),
                       Text(
                         'x${item.quantity}',
                         style: TextStyle(
                           fontWeight: FontWeight.w500,
                           color: EatoTheme.primaryColor,
+                          fontSize: 13, // Smaller text
                         ),
                       ),
                     ],
@@ -301,48 +272,24 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDeliveryInfo() {
-    return Row(
-      children: [
-        Icon(
-          Icons.location_on_outlined,
-          size: 16,
-          color: EatoTheme.textSecondaryColor,
-        ),
-        SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            order.deliveryAddress,
-            style: TextStyle(
-              color: EatoTheme.textSecondaryColor,
-              fontSize: 13,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSpecialInstructions() {
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: EdgeInsets.all(6), // Reduced padding
       decoration: BoxDecoration(
         color: Colors.amber.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         border: Border.all(color: Colors.amber.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.note, size: 16, color: Colors.amber[700]),
-          SizedBox(width: 8),
+          Icon(Icons.note, size: 14, color: Colors.amber[700]), // Smaller icon
+          SizedBox(width: 6),
           Expanded(
             child: Text(
               order.specialInstructions!,
               style: TextStyle(
                 color: Colors.amber[700],
-                fontSize: 12,
+                fontSize: 11, // Smaller text
               ),
             ),
           ),
@@ -359,14 +306,14 @@ class OrderCard extends StatelessWidget {
           'Total Amount',
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: 16,
+            fontSize: 14, // Smaller text
           ),
         ),
         Text(
           'Rs. ${order.totalAmount.toStringAsFixed(2)}',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            fontSize: 18,
+            fontSize: 16, // Smaller text
             color: EatoTheme.primaryColor,
           ),
         ),
@@ -376,7 +323,8 @@ class OrderCard extends StatelessWidget {
 
   Widget _buildViewDetailsAction() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding:
+          EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Reduced padding
       decoration: BoxDecoration(
         color: Colors.grey[100],
         borderRadius: BorderRadius.only(
@@ -392,11 +340,12 @@ class OrderCard extends StatelessWidget {
             style: TextStyle(
               color: EatoTheme.primaryColor,
               fontWeight: FontWeight.w500,
+              fontSize: 13, // Smaller text
             ),
           ),
           Icon(
             Icons.arrow_forward_ios,
-            size: 14,
+            size: 12, // Smaller icon
             color: EatoTheme.primaryColor,
           ),
         ],
@@ -408,7 +357,27 @@ class OrderCard extends StatelessWidget {
     return DateFormat('h:mm a').format(time);
   }
 
-  // Call functionality for provider view
+  Future<void> _openDirections(BuildContext context, String address) async {
+    try {
+      final Uri mapsUri = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(address)}');
+
+      if (await canLaunchUrl(mapsUri)) {
+        await launchUrl(mapsUri);
+      } else {
+        await Clipboard.setData(ClipboardData(text: address));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Address copied: $address'),
+            backgroundColor: EatoTheme.primaryColor,
+          ),
+        );
+      }
+    } catch (e) {
+      await Clipboard.setData(ClipboardData(text: address));
+    }
+  }
+
   Future<void> _callCustomer(
       BuildContext context, String phoneNumber, String customerName) async {
     try {
@@ -417,7 +386,6 @@ class OrderCard extends StatelessWidget {
       if (await canLaunchUrl(phoneUri)) {
         await launchUrl(phoneUri);
       } else {
-        // Fallback: Copy to clipboard
         await Clipboard.setData(ClipboardData(text: phoneNumber));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -428,8 +396,6 @@ class OrderCard extends StatelessWidget {
         );
       }
     } catch (e) {
-      print('Error launching phone call: $e');
-      // Fallback: Copy to clipboard
       await Clipboard.setData(ClipboardData(text: phoneNumber));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
