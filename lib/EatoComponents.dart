@@ -11,7 +11,7 @@ class EatoComponents {
   // ✅ EXISTING: Primary button with gradient background
   static Widget primaryButton({
     required String text,
-    required VoidCallback onPressed,
+    VoidCallback? onPressed,
     bool isLoading = false,
     IconData? icon,
     double width = double.infinity,

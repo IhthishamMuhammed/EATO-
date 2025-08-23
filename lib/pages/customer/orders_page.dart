@@ -8,11 +8,13 @@ import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/services/CartService.dart';
-import 'package:eato/services/PaymentService.dart';
+import 'package:eato/services/StripePaymentService.dart';
 import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:eato/widgets/stripe_payment_widget.dart';
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -29,6 +31,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   int _totalCartItems = 0;
   double _totalCartValue = 0.0;
   bool _isLoading = true;
+  bool _isPlacingOrder = false; // NEW: For Stripe integration
 
   // Order Options
   DeliveryType _deliveryOption = DeliveryType.pickup;
@@ -50,13 +53,11 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
 
   @override
-  @override
   void initState() {
     super.initState();
     _initializeAnimations();
     _loadCartItems();
 
-    // ✅ SIMPLE FIX: Listen to provider changes correctly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CartProvider>(context, listen: false).addListener(() {
         if (mounted) {
@@ -275,9 +276,153 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   // ===================================
-  // ORDER PLACEMENT WITH PROPER CLEARING
+  // ORDER PLACEMENT WITH STRIPE INTEGRATION
   // ===================================
 
+  // NEW: Enhanced place order method with Stripe handling
+  Future<void> _handlePlaceOrder() async {
+    // Validate required fields first
+    if (!_validateOrderDetails()) {
+      return;
+    }
+
+    setState(() => _isPlacingOrder = true);
+
+    try {
+      final calculation = StripePaymentService.calculateFees(
+        subtotal: _totalCartValue,
+        paymentMethod: _paymentMethod,
+        deliveryMethod: _deliveryOption,
+      );
+
+      // Show confirmation dialog
+      final confirmed = await _showOrderConfirmationDialog();
+      if (!confirmed) {
+        setState(() => _isPlacingOrder = false);
+        return;
+      }
+
+      // Handle different payment methods
+      if (_paymentMethod == PaymentType.stripe) {
+        // Handle Stripe payment
+        await _handleStripePayment(calculation);
+      } else {
+        // Handle cash/card payments as before
+        await _placeOrderWithBackend();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to place order: $e');
+    } finally {
+      setState(() => _isPlacingOrder = false);
+    }
+  }
+
+  // NEW: Synchronous wrapper for the button callback
+  void _handlePlaceOrderSync() {
+    _handlePlaceOrder();
+  }
+
+  // NEW: Stripe payment handling method
+  Future<void> _handleStripePayment(FeeCalculation calculation) async {
+    // Generate order ID first
+    final orderId = DateTime.now().millisecondsSinceEpoch.toString();
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    // Show Stripe payment modal
+    StripePaymentHelper.showStripePayment(
+      context: context,
+      amount: calculation.totalAmount,
+      orderId: orderId,
+      customerId: currentUserId,
+      onSuccess: (result) async {
+        // Payment successful - proceed with order
+        await _placeOrderWithStripePayment(result);
+      },
+      onError: (error) {
+        // Show error message
+        _showErrorSnackBar('Payment failed: $error');
+      },
+    );
+  }
+
+  // NEW: Method for Stripe order submission
+  Future<void> _placeOrderWithStripePayment(Map<String, dynamic> paymentResult) async {
+    // Show loading dialog
+    _showLoadingDialog('Placing your orders...');
+
+    try {
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+
+      if (userProvider.currentUser == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Place orders with notifications
+      final orderIds = await orderProvider.placeOrdersWithNotifications(
+        customerId: userProvider.currentUser!.id,
+        customerName: userProvider.currentUser!.name,
+        customerPhone: userProvider.currentUser!.phoneNumber ?? '',
+        cartItems: _cartItems,
+        deliveryOption: _deliveryOption.displayName,
+        deliveryAddress: _deliveryAddress,
+        deliveryLocation: _deliveryLocation,
+        locationDisplayText: _locationDisplayText,
+        paymentMethod: _paymentMethod.displayName,
+        specialInstructions:
+            _specialInstructions.isNotEmpty ? _specialInstructions : null,
+        scheduledTime: _scheduledTime,
+      );
+
+      Navigator.pop(context); // Close loading dialog
+
+      if (orderIds.isNotEmpty) {
+        // Send payment confirmation for Stripe payments
+        await orderProvider.sendPaymentConfirmation(
+          orderId: orderIds.first,
+          amount: paymentResult['amount'] ?? 0.0,
+          paymentMethod: 'Stripe',
+        );
+
+        // Clear cart after successful order placement
+        await CartService.clearCart();
+        setState(() {
+          _cartItems.clear();
+          _updateCartTotals();
+        });
+
+        // Start listening to customer orders for real-time updates
+        orderProvider.listenToCustomerOrders(userProvider.currentUser!.id);
+
+        // Show success dialog
+        _showOrderSuccessDialog(orderIds.length);
+      } else {
+        throw Exception('No orders were created');
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      _showOrderFailureDialog(e.toString());
+    }
+  }
+
+  // NEW: Validation method
+  bool _validateOrderDetails() {
+    if (_cartItems.isEmpty) {
+      _showErrorSnackBar('Your cart is empty');
+      return false;
+    }
+
+    if (_deliveryOption == DeliveryType.delivery) {
+      if (_deliveryLocation == null && _deliveryAddress.trim().isEmpty) {
+        _showErrorSnackBar('Please select a delivery location');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // EXISTING: Original backend order placement method
   Future<void> _placeOrderWithBackend() async {
     if (_cartItems.isEmpty) {
       _showErrorSnackBar('Your cart is empty');
@@ -326,7 +471,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       Navigator.pop(context); // Close loading dialog
 
       if (orderIds.isNotEmpty) {
-        // ✅ FIXED: Properly clear cart after successful order placement
+        // Clear cart after successful order placement
         await CartService.clearCart();
         setState(() {
           _cartItems.clear();
@@ -1116,7 +1261,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   Widget _buildPaymentMethod() {
-    final calculation = PaymentService.calculateFees(
+    final calculation = StripePaymentService.calculateFees(
       subtotal: _totalCartValue,
       paymentMethod: _paymentMethod,
       deliveryMethod: _deliveryOption,
@@ -1159,7 +1304,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
               .map((payment) => _buildPaymentMethodTile(payment)),
 
           // Fee savings message
-          if (PaymentService.getFeeSavingsMessage(
+          if (StripePaymentService.getFeeSavingsMessage(
                   _paymentMethod, _deliveryOption) !=
               null)
             Container(
@@ -1176,7 +1321,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      PaymentService.getFeeSavingsMessage(
+                      StripePaymentService.getFeeSavingsMessage(
                           _paymentMethod, _deliveryOption)!,
                       style: TextStyle(
                         fontSize: 12,
@@ -1223,7 +1368,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                PaymentService.getPaymentMethodIcon(payment),
+                StripePaymentService.getPaymentMethodIcon(payment),
                 style: TextStyle(fontSize: 16),
               ),
             ),
@@ -1243,7 +1388,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                     ),
                   ),
                   Text(
-                    PaymentService.getPaymentMethodDescription(payment),
+                    StripePaymentService.getPaymentMethodDescription(payment),
                     style: TextStyle(
                       fontSize: 12,
                       color: EatoTheme.textSecondaryColor,
@@ -1400,7 +1545,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   Widget _buildOrderSummary() {
-    final calculation = PaymentService.calculateFees(
+    final calculation = StripePaymentService.calculateFees(
       subtotal: _totalCartValue,
       paymentMethod: _paymentMethod,
       deliveryMethod: _deliveryOption,
@@ -1672,8 +1817,9 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
     );
   }
 
+  // ENHANCED: Place Order Button with Stripe Integration
   Widget _buildPlaceOrderButton() {
-    final calculation = PaymentService.calculateFees(
+    final calculation = StripePaymentService.calculateFees(
       subtotal: _totalCartValue,
       paymentMethod: _paymentMethod,
       deliveryMethod: _deliveryOption,
@@ -1722,8 +1868,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
           ),
           SizedBox(height: 12),
           EatoComponents.primaryButton(
-            text: 'Place Orders',
-            onPressed: _placeOrderWithBackend,
+            text: _isPlacingOrder ? 'Processing...' : 'Place Orders',
+            onPressed: _isPlacingOrder ? null : () async { await _handlePlaceOrder(); },
             icon: Icons.shopping_cart_checkout,
           ),
         ],
@@ -1834,7 +1980,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   Future<bool> _showOrderConfirmationDialog() async {
-    final calculation = PaymentService.calculateFees(
+    final calculation = StripePaymentService.calculateFees(
       subtotal: _totalCartValue,
       paymentMethod: _paymentMethod,
       deliveryMethod: _deliveryOption,
