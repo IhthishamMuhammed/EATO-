@@ -1,5 +1,5 @@
 // File: lib/pages/provider/ShopDetailsSection.dart
-// Shop details management component
+// Enhanced Shop details management component with modern UI
 
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -47,12 +47,10 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
   @override
   void initState() {
     super.initState();
-    // Initialize store controllers
     _shopNameController = TextEditingController();
     _shopContactController = TextEditingController();
     _shopLocationController = TextEditingController();
 
-    // Load store data but don't affect parent loading state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadStoreDataSilently();
     });
@@ -78,7 +76,6 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
     } catch (e) {
       print('ShopDetailsSection: Error loading store data: $e');
     }
-    // Don't call widget.onLoadingChanged - let parent manage its own loading
   }
 
   @override
@@ -146,14 +143,12 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final currentStore = storeProvider.userStore;
 
-      // Upload shop image if changed
       String? shopImageUrl;
       if (_pickedShopImage != null) {
         shopImageUrl = await _uploadShopImage();
       }
 
       if (currentStore != null) {
-        // UPDATING EXISTING STORE
         final Store updatedStore = Store(
           id: currentStore.id,
           name: _shopNameController.text.trim(),
@@ -175,7 +170,6 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
         await storeProvider.createOrUpdateStore(
             updatedStore, widget.currentUser.id);
       } else {
-        // CREATING NEW STORE
         final Store newStore = Store(
           id: '',
           name: _shopNameController.text.trim(),
@@ -223,20 +217,259 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
     setState(() {
       _isEditingShop = false;
 
-      // Reset controllers to original values
       if (store != null) {
         _shopNameController.text = store.name;
         _shopContactController.text = store.contact;
         _shopLocationController.text = store.location ?? '';
       }
 
-      // Clear picked image
       _pickedShopImage = null;
       _webShopImageData = null;
     });
   }
 
-  // Delivery Mode Selector Widget
+  // Show edit shop dialog (Customer style)
+  void _showEditShopDialog(Store? store) {
+    if (store != null) {
+      _shopNameController.text = store.name;
+      _shopContactController.text = store.contact;
+      _shopLocationController.text = store.location ?? '';
+    } else {
+      _shopNameController.text = '';
+      _shopContactController.text = '';
+      _shopLocationController.text = '';
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Form(
+                  key: _shopFormKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          Icon(Icons.store,
+                              color: EatoTheme.primaryColor, size: 24),
+                          const SizedBox(width: 8),
+                          Text('Edit Shop Details',
+                              style: EatoTheme.headingSmall),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Shop Image Section
+                      Center(
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                border: Border.all(
+                                  color:
+                                      EatoTheme.primaryColor.withOpacity(0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _buildShopImage(store),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () async {
+                                  await _pickShopImage();
+                                  setDialogState(() {});
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: EatoTheme.primaryColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Shop Name Field
+                      TextFormField(
+                        controller: _shopNameController,
+                        decoration: EatoTheme.inputDecoration(
+                          labelText: 'Shop Name',
+                          hintText: 'Enter shop name',
+                          prefixIcon: Icon(Icons.store_outlined),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter shop name';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(width: 16),
+
+                      const SizedBox(height: 16),
+
+                      // Contact Field
+                      TextFormField(
+                        controller: _shopContactController,
+                        decoration: EatoTheme.inputDecoration(
+                          labelText: 'Contact Number',
+                          hintText: 'Enter contact number',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter contact number';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Location Field
+                      GestureDetector(
+                        onTap: () async {
+                          try {
+                            final result = await Navigator.push<LocationData>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LocationPickerPage(
+                                  initialLocation: store?.latitude != null &&
+                                          store?.longitude != null
+                                      ? GeoPoint(
+                                          store!.latitude!, store.longitude!)
+                                      : null,
+                                  initialAddress: store?.location,
+                                ),
+                              ),
+                            );
+
+                            if (result != null) {
+                              setDialogState(() {
+                                _shopLocationController.text =
+                                    result.formattedAddress;
+                              });
+
+                              if (store != null) {
+                                final updatedStore = store.copyWith(
+                                  location: result.formattedAddress,
+                                  latitude: result.geoPoint.latitude,
+                                  longitude: result.geoPoint.longitude,
+                                );
+                                Provider.of<StoreProvider>(context,
+                                        listen: false)
+                                    .setStore(updatedStore);
+                              }
+                            }
+                          } catch (e) {
+                            widget.onShowSnackBar(
+                                'Error selecting location: $e',
+                                EatoTheme.errorColor);
+                          }
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.grey.shade50,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on_outlined,
+                                  color: EatoTheme.primaryColor),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _shopLocationController.text.isEmpty
+                                      ? 'Tap to select location from map'
+                                      : _shopLocationController.text,
+                                  style: TextStyle(
+                                    color: _shopLocationController.text.isEmpty
+                                        ? Colors.grey
+                                        : Colors.black,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.arrow_forward_ios,
+                                  size: 16, color: Colors.grey),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Delivery Mode Selector
+                      _buildDeliveryModeSelector(store),
+                      const SizedBox(height: 24),
+
+                      // Action Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: EatoTheme.outlinedButtonStyle,
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (_shopFormKey.currentState!.validate()) {
+                                  Navigator.of(context).pop();
+                                  await _saveShopChanges();
+                                }
+                              },
+                              style: EatoTheme.primaryButtonStyle,
+                              child: const Text('Save Changes'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildDeliveryModeSelector(Store? store) {
     return Consumer<StoreProvider>(
       builder: (context, storeProvider, child) {
@@ -315,115 +548,29 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
     );
   }
 
-  // Location Picker Widget
-  Widget _buildLocationPicker(Store? store) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Shop Location',
-          style: EatoTheme.labelLarge,
-        ),
-        SizedBox(height: 8),
-        GestureDetector(
-          onTap: () async {
-            try {
-              final result = await Navigator.push<LocationData>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => LocationPickerPage(
-                    initialLocation:
-                        store?.latitude != null && store?.longitude != null
-                            ? GeoPoint(store!.latitude!, store.longitude!)
-                            : null,
-                    initialAddress: store?.location,
-                  ),
-                ),
-              );
-
-              if (result != null) {
-                setState(() {
-                  _shopLocationController.text = result.formattedAddress;
-                });
-
-                if (store != null) {
-                  final updatedStore = store.copyWith(
-                    location: result.formattedAddress,
-                    latitude: result.geoPoint.latitude,
-                    longitude: result.geoPoint.longitude,
-                  );
-                  Provider.of<StoreProvider>(context, listen: false)
-                      .setStore(updatedStore);
-                }
-              }
-            } catch (e) {
-              widget.onShowSnackBar(
-                  'Error selecting location: $e', EatoTheme.errorColor);
-            }
-          },
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey.shade50,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  color: EatoTheme.primaryColor,
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _shopLocationController.text.isEmpty
-                        ? 'Tap to select location from map'
-                        : _shopLocationController.text,
-                    style: TextStyle(
-                      color: _shopLocationController.text.isEmpty
-                          ? Colors.grey
-                          : Colors.black,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildShopImage(Store? store) {
     if (_pickedShopImage != null) {
       if (kIsWeb) {
         return Image.memory(
           _webShopImageData!,
           fit: BoxFit.cover,
-          width: 100,
-          height: 100,
+          width: 80,
+          height: 80,
         );
       } else {
         return Image.file(
           io.File(_pickedShopImage!.path),
           fit: BoxFit.cover,
-          width: 100,
-          height: 100,
+          width: 80,
+          height: 80,
         );
       }
     } else if (store != null && store.imageUrl.isNotEmpty) {
       return Image.network(
         store.imageUrl,
         fit: BoxFit.cover,
-        width: 100,
-        height: 100,
+        width: 80,
+        height: 80,
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Center(
@@ -438,11 +585,7 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
           );
         },
         errorBuilder: (context, error, stackTrace) {
-          return Icon(
-            Icons.store,
-            size: 40,
-            color: EatoTheme.primaryColor,
-          );
+          return Icon(Icons.store, size: 40, color: EatoTheme.primaryColor);
         },
       );
     } else {
@@ -455,125 +598,9 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
             ],
           ),
         ),
-        child: Icon(
-          Icons.store,
-          size: 40,
-          color: EatoTheme.primaryColor,
-        ),
+        child: Icon(Icons.store, size: 40, color: EatoTheme.primaryColor),
       );
     }
-  }
-
-  Widget _buildShopEditForm(Store? store) {
-    return Form(
-      key: _shopFormKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Shop image
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  'Shop Image',
-                  style: EatoTheme.labelLarge,
-                ),
-                SizedBox(height: 12),
-                GestureDetector(
-                  onTap: _pickShopImage,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: EatoTheme.primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: EatoTheme.primaryColor.withOpacity(0.5),
-                        width: 1,
-                      ),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: _buildShopImage(store),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Tap to change image',
-                  style: EatoTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 20),
-
-          // Shop name field
-          TextFormField(
-            controller: _shopNameController,
-            decoration: EatoTheme.inputDecoration(
-              hintText: 'Enter shop name',
-              labelText: 'Shop Name',
-              prefixIcon: Icon(Icons.store_outlined),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter shop name';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: 16),
-
-          // Shop contact field
-          TextFormField(
-            controller: _shopContactController,
-            decoration: EatoTheme.inputDecoration(
-              hintText: 'Enter shop contact number',
-              labelText: 'Contact Number',
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
-            keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter contact number';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: 16),
-
-          // Location picker
-          _buildLocationPicker(store),
-          SizedBox(height: 16),
-
-          // Delivery mode selector
-          _buildDeliveryModeSelector(store),
-          SizedBox(height: 24),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _cancelShopEditing,
-                  style: EatoTheme.outlinedButtonStyle,
-                  child: Text('Cancel'),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _saveShopChanges,
-                  style: EatoTheme.primaryButtonStyle,
-                  child: Text('Save Changes'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildShopViewDetails(Store? store) {
@@ -581,28 +608,16 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
       return Center(
         child: Column(
           children: [
-            Icon(
-              Icons.store_outlined,
-              size: 48,
-              color: Colors.grey,
-            ),
+            Icon(Icons.store_outlined, size: 48, color: Colors.grey),
             SizedBox(height: 16),
             Text(
               'No shop details available',
-              style: EatoTheme.bodyMedium.copyWith(
-                color: EatoTheme.textSecondaryColor,
-              ),
+              style: EatoTheme.bodyMedium
+                  .copyWith(color: EatoTheme.textSecondaryColor),
             ),
             SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _isEditingShop = true;
-                  _shopNameController.text = '';
-                  _shopContactController.text = '';
-                  _shopLocationController.text = '';
-                });
-              },
+              onPressed: () => _showEditShopDialog(null),
               style: EatoTheme.primaryButtonStyle,
               child: Text('Add Shop Details'),
             ),
@@ -613,39 +628,32 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
 
     return Column(
       children: [
-        // Shop image
         if (store.imageUrl.isNotEmpty)
           Center(
             child: Container(
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: EatoTheme.primaryColor.withOpacity(0.5),
-                  width: 1,
-                ),
+                    color: EatoTheme.primaryColor.withOpacity(0.3), width: 2),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   store.imageUrl,
                   fit: BoxFit.cover,
                   width: 100,
                   height: 100,
                   errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.store,
-                      size: 40,
-                      color: EatoTheme.primaryColor,
-                    );
+                    return Icon(Icons.store,
+                        size: 40, color: EatoTheme.primaryColor);
                   },
                 ),
               ),
             ),
           ),
         if (store.imageUrl.isNotEmpty) SizedBox(height: 16),
-
         _buildInfoTile(
           icon: Icons.store_outlined,
           title: 'Shop Name',
@@ -700,11 +708,7 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: EatoTheme.primaryColor,
-            size: 24,
-          ),
+          Icon(icon, color: EatoTheme.primaryColor, size: 24),
           SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -718,14 +722,62 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
                   ),
                 ),
                 SizedBox(height: 4),
-                Text(
-                  value,
-                  style: EatoTheme.bodyMedium,
-                ),
+                Text(value, style: EatoTheme.bodyMedium),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color backgroundColor,
+    Color iconColor,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: backgroundColor,
+                radius: 22,
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios,
+                  size: 16, color: Colors.grey.shade600),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -743,37 +795,24 @@ class _ShopDetailsSectionState extends State<ShopDetailsSection> {
           children: [
             Text(
               'Shop Details',
-              style: EatoTheme.headingSmall.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style:
+                  EatoTheme.headingSmall.copyWith(fontWeight: FontWeight.bold),
             ),
-            if (!_isEditingShop)
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: EatoTheme.primaryColor.withOpacity(0.3),
-                  ),
-                ),
-                child: TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isEditingShop = true;
-                    });
-                  },
-                  icon: Icon(Icons.edit, size: 18),
-                  label: Text('Edit'),
-                  style: EatoTheme.textButtonStyle,
-                ),
-              ),
           ],
         ),
         SizedBox(height: 16),
 
-        // Shop Details Form or View
-        _isEditingShop
-            ? _buildShopEditForm(store)
-            : _buildShopViewDetails(store),
+        // Shop Details Card with action button style
+        _buildActionButton(
+          store?.name ?? 'Shop Details',
+          store != null
+              ? '${store.contact} • ${store.deliveryMode.displayName}'
+              : 'Add your shop information',
+          Icons.store_outlined,
+          Colors.green.shade100,
+          Colors.green.shade700,
+          () => _showEditShopDialog(store),
+        ),
       ],
     );
   }

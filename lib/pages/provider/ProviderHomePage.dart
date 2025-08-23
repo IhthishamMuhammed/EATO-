@@ -71,29 +71,24 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   }
 
   Future<void> _loadStoreAndFoods() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     final storeProvider = Provider.of<StoreProvider>(context, listen: false);
     final foodProvider = Provider.of<FoodProvider>(context, listen: false);
 
-    try {
-      await storeProvider.fetchUserStore(widget.currentUser);
+    // Only show loading if no data is cached
+    if (storeProvider.userStore == null || foodProvider.foods.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
-      if (storeProvider.userStore != null) {
+    try {
+      if (storeProvider.userStore == null) {
+        await storeProvider.fetchUserStore(widget.currentUser);
+      }
+
+      if (storeProvider.userStore != null && foodProvider.foods.isEmpty) {
         await foodProvider.fetchFoods(storeProvider.userStore!.id);
         foodProvider.setFilterMealTime(_selectedMealTime);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: EatoTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       }
     } finally {
       if (mounted) {

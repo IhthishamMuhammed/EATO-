@@ -1,6 +1,3 @@
-// FILE: lib/pages/customer/homepage/customer_home.dart
-// Clean Customer Home Page with separated notification functionality
-
 import 'package:eato/pages/customer/Orders_Page.dart';
 import 'package:eato/pages/customer/homepage/meal_category_page.dart';
 import 'package:flutter/material.dart';

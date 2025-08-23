@@ -93,8 +93,6 @@ flutter:
     - assets/images/logo.png
     - assets/images/flogo.png
     - assets/images/get_started.jpeg
-    - assets/images/customer.png
-    - assets/images/meal_provider.png
 
   
   # An image asset can refer to one or more resolution-specific "variants", see

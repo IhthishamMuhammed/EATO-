@@ -113,8 +113,7 @@ class OrderProvider with ChangeNotifier {
         }
       }
 
-      print(
-          '📦 [OrderProvider] Creating orders for ${itemsByStore.length} stores');
+      print('Creating orders for ${itemsByStore.length} stores');
 
       // Create separate order for each store
       for (var entry in itemsByStore.entries) {
@@ -122,6 +121,10 @@ class OrderProvider with ChangeNotifier {
         final storeItems = entry.value;
         final storeName = storeNames[storeId] ?? 'Unknown Store';
         final providerId = providerIds[storeId] ?? '';
+
+        // Generate sequential order number for this store
+        final sequentialOrderNumber =
+            await _generateSequentialOrderNumber(storeId);
 
         // Calculate total for this store
         double storeTotal = 0.0;
@@ -143,12 +146,13 @@ class OrderProvider with ChangeNotifier {
           });
         }
 
-        // Create order document
+        // Create order document with Firestore auto-generated ID
         final orderRef = _firestore.collection('orders').doc();
-        final orderId = orderRef.id;
+        final orderId = orderRef.id; // Firestore document ID
 
         final orderData = {
-          'orderId': orderId,
+          'orderId': orderId, // Firestore document ID
+          'orderNumber': sequentialOrderNumber, // Sequential number for display
           'customerId': customer.id,
           'customerName': customer.name,
           'customerPhone': customer.phoneNumber,
@@ -158,7 +162,7 @@ class OrderProvider with ChangeNotifier {
           'items': orderItems,
           'subtotal': storeTotal,
           'deliveryFee': deliveryOption == 'Delivery' ? 50.0 : 0.0,
-          'serviceFee': storeTotal * 0.05, // 5% service fee
+          'serviceFee': storeTotal * 0.05,
           'totalAmount': storeTotal +
               (deliveryOption == 'Delivery' ? 50.0 : 0.0) +
               (storeTotal * 0.05),
@@ -184,10 +188,10 @@ class OrderProvider with ChangeNotifier {
         orderIds.add(orderId);
 
         print(
-            '✅ [OrderProvider] Order created: $orderId for store: $storeName');
+            'Order created: $orderId with order number: $sequentialOrderNumber for store: $storeName');
       }
 
-      print('🎉 [OrderProvider] All orders placed successfully: $orderIds');
+      print('All orders placed successfully: $orderIds');
       return orderIds;
     } catch (e) {
       _setError('Error placing orders: $e');
@@ -355,6 +359,50 @@ class OrderProvider with ChangeNotifier {
   // ====================
   // PROVIDER METHODS
   // ====================
+  Future<String> _generateSequentialOrderNumber(String storeId) async {
+    try {
+      final today = DateTime.now();
+      final dateString =
+          '${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}';
+      final counterDocId = '${storeId}_$dateString';
+
+      // Reference to the counter document
+      final counterRef =
+          _firestore.collection('order_counters').doc(counterDocId);
+
+      // Use a transaction to ensure atomic counter increment
+      final orderNumber =
+          await _firestore.runTransaction<String>((transaction) async {
+        final counterDoc = await transaction.get(counterRef);
+
+        int nextNumber = 1;
+        if (counterDoc.exists) {
+          final data = counterDoc.data() as Map<String, dynamic>;
+          nextNumber = (data['counter'] ?? 0) + 1;
+        }
+
+        // Update the counter
+        transaction.set(
+            counterRef,
+            {
+              'counter': nextNumber,
+              'storeId': storeId,
+              'date': dateString,
+              'lastUpdated': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true));
+
+        // Format: YYYYMMDD-001, YYYYMMDD-002, etc.
+        return '$dateString-${nextNumber.toString().padLeft(3, '0')}';
+      });
+
+      return orderNumber;
+    } catch (e) {
+      print('Error generating sequential order number: $e');
+      // Fallback to timestamp-based number if counter fails
+      return '${DateTime.now().millisecondsSinceEpoch}';
+    }
+  }
 
   /// Listen to provider orders in real-time
   void listenToStoreOrders(String storeId) {
@@ -663,6 +711,55 @@ class OrderProvider with ChangeNotifier {
   // ====================
   // UTILITY METHODS
   // ====================
+
+  Future<int> getTodayOrderCount(String storeId) async {
+    try {
+      final today = DateTime.now();
+      final dateString =
+          '${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}';
+      final counterDocId = '${storeId}_$dateString';
+
+      final counterDoc =
+          await _firestore.collection('order_counters').doc(counterDocId).get();
+
+      if (counterDoc.exists) {
+        final data = counterDoc.data() as Map<String, dynamic>;
+        return data['counter'] ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print('Error getting today order count: $e');
+      return 0;
+    }
+  }
+
+// Helper method to reset daily counters (can be called by a scheduled function)
+  Future<void> resetDailyCounters() async {
+    try {
+      final yesterday = DateTime.now().subtract(Duration(days: 1));
+      final yesterdayString =
+          '${yesterday.year}${yesterday.month.toString().padLeft(2, '0')}${yesterday.day.toString().padLeft(2, '0')}';
+
+      // Query old counter documents
+      final oldCounters = await _firestore
+          .collection('order_counters')
+          .where('date', isLessThan: yesterdayString)
+          .get();
+
+      // Delete old counters (optional - keeps database clean)
+      final batch = _firestore.batch();
+      for (var doc in oldCounters.docs) {
+        batch.delete(doc.reference);
+      }
+
+      if (oldCounters.docs.isNotEmpty) {
+        await batch.commit();
+        print('Deleted ${oldCounters.docs.length} old counter documents');
+      }
+    } catch (e) {
+      print('Error resetting daily counters: $e');
+    }
+  }
 
   /// Get order by ID
   Future<CustomerOrder?> getOrderById(String orderId) async {
