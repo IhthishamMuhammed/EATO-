@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:eato/pages/onboarding/onboarding2.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/pages/onboarding/GetStartedPage.dart'; // Import for GetStartedPage
 
 import 'RoleSelectionPage.dart';
 

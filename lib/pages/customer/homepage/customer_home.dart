@@ -1,11 +1,15 @@
 import 'package:eato/pages/customer/Orders_Page.dart';
-import 'package:eato/pages/customer/homepage/meal_category_page.dart'; // ✅ FIXED: Correct import path
+import 'package:eato/pages/customer/homepage/meal_category_page.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/shops_page.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/widgets/notification_widget.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:eato/Provider/userProvider.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({Key? key}) : super(key: key);
@@ -15,63 +19,91 @@ class CustomerHomePage extends StatefulWidget {
 }
 
 class _CustomerHomePageState extends State<CustomerHomePage>
-    with SingleTickerProviderStateMixin {
-  // Current selected tab index
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   int _currentIndex = 0;
   late AnimationController _animationController;
 
-  // URLs for meal images - using placeholder images initially
-  final Map<String, String> _mealImageUrls = {
-    'BREAKFAST':
-        'https://images.unsplash.com/photo-1533089860892-a9b9ac6cd6b4?q=80&w=600',
-    'LUNCH':
-        'https://images.unsplash.com/photo-1547592180-85f173990888?q=80&w=600',
-    'DINNER':
-        'https://images.unsplash.com/photo-1559847844-5315695dadae?q=80&w=600',
+  // ✅ PREVENT USERPROVIDER REBUILDS: Store user state locally
+  bool _userLoaded = false;
+  bool _userLoading = false;
+
+  // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal
+  final Map<String, List<String>> _mealImageOptions = {
+    'BREAKFAST': [
+      'https://images.unsplash.com/photo-1551218808-94e220e084d2?q=80&w=600',
+      'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2017/05/07/08/56/pancakes-2291908_960_720.jpg',
+    ],
+    'LUNCH': [
+      'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2017/12/09/08/18/pizza-3007395_960_720.jpg',
+    ],
+    'DINNER': [
+      'https://images.unsplash.com/photo-1559847844-5315695dadae?q=80&w=600',
+      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?q=80&w=600',
+      'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=600',
+      'https://cdn.pixabay.com/photo/2016/12/26/17/28/spaghetti-1932466_960_720.jpg',
+    ],
   };
 
-  bool _isLoading = true;
+  bool _isDisposed = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    print("🚀 CustomerHomePage: initState called");
+
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
+      duration: const Duration(milliseconds: 600),
+    );
 
-    // Try to load image URLs from Firebase if available
-    _loadImageUrls();
+    _initializeAppInBackground();
+    _animationController.forward();
   }
 
-  Future<void> _loadImageUrls() async {
+  Future<void> _initializeAppInBackground() async {
+    if (_isDisposed) return;
+
     try {
-      final FirebaseStorage storage = FirebaseStorage.instance;
-
-      // Try to get URLs from Firebase Storage
-      final breakfastRef = storage.ref().child('meals/breakfast.jpg');
-      final lunchRef = storage.ref().child('meals/lunch.jpg');
-      final dinnerRef = storage.ref().child('meals/dinner.jpg');
-
-      final breakfastUrl = await breakfastRef.getDownloadURL();
-      final lunchUrl = await lunchRef.getDownloadURL();
-      final dinnerUrl = await dinnerRef.getDownloadURL();
-
-      // Update the map with actual Firebase URLs
-      if (mounted) {
+      // ✅ FIXED: Load user once and store state locally
+      final User? authUser = FirebaseAuth.instance.currentUser;
+      if (authUser != null &&
+          mounted &&
+          !_isDisposed &&
+          !_userLoaded &&
+          !_userLoading) {
         setState(() {
-          _mealImageUrls['BREAKFAST'] = breakfastUrl;
-          _mealImageUrls['LUNCH'] = lunchUrl;
-          _mealImageUrls['DINNER'] = dinnerUrl;
-          _isLoading = false;
+          _userLoading = true;
         });
+
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+        // Only fetch if user is not already loaded
+        if (userProvider.currentUser == null ||
+            userProvider.currentUser!.id != authUser.uid) {
+          print("📥 Fetching user data for the first time...");
+          await userProvider.fetchUser(authUser.uid);
+        }
+
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _userLoaded = true;
+            _userLoading = false;
+          });
+          print("✅ User loaded and state saved locally");
+        }
       }
+
+      print("✅ Using direct image URLs with fallbacks");
     } catch (e) {
-      // If any error occurs, we'll use the fallback URLs
-      print('Error loading image URLs from Firebase: $e');
-      if (mounted) {
+      print("⚠️ Background initialization failed: $e");
+      if (mounted && !_isDisposed) {
         setState(() {
-          _isLoading = false;
+          _userLoading = false;
         });
       }
     }
@@ -79,72 +111,58 @@ class _CustomerHomePageState extends State<CustomerHomePage>
 
   @override
   void dispose() {
+    print("🗑️ CustomerHomePage: dispose called");
+    _isDisposed = true;
     _animationController.dispose();
     super.dispose();
   }
 
-  // Method to handle tab change
   void _onTabTapped(int index) {
+    print(
+        "🔄 Tab tapped: $index (current: $_currentIndex, disposed: $_isDisposed, mounted: $mounted)");
+
+    if (index == _currentIndex) {
+      print("   → Same tab, ignoring");
+      return;
+    }
+
+    if (_isDisposed || !mounted) {
+      print("   → Widget disposed or unmounted, ignoring");
+      return;
+    }
+
+    print("✅ Switching from tab $_currentIndex to $index");
+
     setState(() {
       _currentIndex = index;
     });
   }
 
-  // ✅ FIXED: Navigate to meal type page with bottom nav maintained
-  void _navigateToMealPage(BuildContext context, String mealType) {
-    Navigator.push(
-      context,
+  void _navigateToMealPage(String mealType) {
+    if (_isDisposed) return;
+
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => MealCategoryPage(
           mealTime: mealType,
-          showBottomNav: true, // ✅ Keep bottom nav on sub-pages
+          showBottomNav: false,
         ),
       ),
-    ).then((selectedTabIndex) {
-      // ✅ Handle navigation back with tab switching
-      if (selectedTabIndex != null && selectedTabIndex is int) {
-        setState(() {
-          _currentIndex = selectedTabIndex;
-        });
-      }
-    });
+    );
   }
+
+  // ===================================================================
+  // 🏗️ BUILD METHODS
+  // ===================================================================
 
   @override
   Widget build(BuildContext context) {
-    // ✅ FIXED: Better error handling and page switching
-    Widget currentPage;
-
-    try {
-      switch (_currentIndex) {
-        case 0:
-          currentPage = _buildHomePage(context);
-          break;
-        case 1:
-          currentPage = const ShopsPage(showBottomNav: false);
-          break;
-        case 2:
-          currentPage = const OrdersPage(showBottomNav: false);
-          break;
-        case 3:
-          currentPage = const ActivityPage(showBottomNav: false);
-          break;
-        case 4:
-          currentPage = const AccountPage(showBottomNav: false);
-          break;
-        default:
-          currentPage = _buildHomePage(context);
-      }
-    } catch (e) {
-      print('Error building page for index $_currentIndex: $e');
-      // Fallback to home page if there's an error
-      currentPage = _buildHomePage(context);
-      // Reset to home tab
-      _currentIndex = 0;
-    }
+    super.build(context);
+    print(
+        "🏗️ CustomerHomePage: build called (currentIndex: $_currentIndex, userLoaded: $_userLoaded, userLoading: $_userLoading)");
 
     return Scaffold(
-      body: currentPage,
+      body: _buildBody(),
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
@@ -152,257 +170,320 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     );
   }
 
-  // Build the main home page with meal options
-  Widget _buildHomePage(BuildContext context) {
-    return Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Colors.purple.shade50,
-            ],
-          ),
+  Widget _buildBody() {
+    // ✅ FIXED: Use local state instead of Consumer to prevent rebuilds
+    if (_userLoading) {
+      print("⏳ Showing loading indicator...");
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(EatoTheme.primaryColor),
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 30), // Increased top padding
+      );
+    }
 
-                  // Welcome Text with Animation
-                  FadeTransition(
-                    opacity: CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-                    ),
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, -0.2),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-                      )),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Column(
-                          children: [
-                            Text(
-                              'WELCOME',
-                              style: TextStyle(
-                                fontSize: 38, // Increased font size
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple.shade800,
-                                letterSpacing: 2.0,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 30, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.shade100,
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              child: Text(
-                                'Select your meal option',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  color: Colors.purple.shade800,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+    if (!_userLoaded) {
+      print("❌ User not loaded, showing login message");
+      return const Center(
+        child: Text('Please log in to continue'),
+      );
+    }
 
-                  const SizedBox(height: 30),
+    print("✅ Rendering IndexedStack with index $_currentIndex");
 
-                  // Breakfast Button - Enhanced design
-                  FadeTransition(
-                    opacity: CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.2, 0.8, curve: Curves.easeOut),
-                    ),
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(-0.2, 0),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.2, 0.8, curve: Curves.easeOut),
-                      )),
-                      child: _buildEnhancedMealButton(
-                        title: 'BREAKFAST',
-                        imageUrl: _mealImageUrls['BREAKFAST']!,
-                        onTap: () => _navigateToMealPage(context, 'Breakfast'),
-                        color: Colors.orange.shade800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Lunch Button - Enhanced design
-                  FadeTransition(
-                    opacity: CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.3, 0.9, curve: Curves.easeOut),
-                    ),
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.2, 0),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.3, 0.9, curve: Curves.easeOut),
-                      )),
-                      child: _buildEnhancedMealButton(
-                        title: 'LUNCH',
-                        imageUrl: _mealImageUrls['LUNCH']!,
-                        onTap: () => _navigateToMealPage(context, 'Lunch'),
-                        color: Colors.green.shade800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Dinner Button - Enhanced design
-                  FadeTransition(
-                    opacity: CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
-                    ),
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(-0.2, 0),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
-                      )),
-                      child: _buildEnhancedMealButton(
-                        title: 'DINNER',
-                        imageUrl: _mealImageUrls['DINNER']!,
-                        onTap: () => _navigateToMealPage(context, 'Dinner'),
-                        color: Colors.red.shade800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                ],
-              ),
-            ),
-          ),
-        ));
+    // ✅ STABLE: IndexedStack with no Consumer to prevent rebuilds
+    return IndexedStack(
+      index: _currentIndex,
+      children: [
+        _buildHomeContent(), // 0: Home
+        const ShopsPage(showBottomNav: false), // 1: Shops
+        const OrdersPage(showBottomNav: false), // 2: Orders
+        const ActivityPage(showBottomNav: false), // 3: Activity
+        const AccountPage(showBottomNav: false), // 4: Account
+      ],
+    );
   }
 
-  // Enhanced meal button with beautiful design using standard network images
-  Widget _buildEnhancedMealButton({
-    required String title,
-    required String imageUrl,
-    required VoidCallback onTap,
-    required Color color,
-  }) {
+  Widget _buildHomeContent() {
+    print("🏠 Building home content widget");
+    return Scaffold(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        automaticallyImplyLeading: false,
+        title: Row(
+          children: [
+            Icon(Icons.restaurant, color: EatoTheme.primaryColor, size: 32),
+            const SizedBox(width: 8),
+            Text(
+              'EATO',
+              style: EatoTheme.headingLarge.copyWith(
+                color: EatoTheme.primaryColor,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // 🔔 Clean notification widget integration
+          NotificationWidget(),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Welcome Section - Use Provider here only, not at top level
+                Consumer<UserProvider>(
+                  builder: (context, userProvider, child) {
+                    final user = userProvider.currentUser;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello ${user?.name ?? 'Guest'} 👋',
+                          style: EatoTheme.headingMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'What would you like to eat today?',
+                          style: EatoTheme.bodyMedium.copyWith(
+                            color: EatoTheme.textSecondaryColor,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                // Quick Actions Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildQuickActionCard(
+                        'Order Now',
+                        Icons.restaurant,
+                        EatoTheme.primaryColor,
+                        () {
+                          print("🎯 Order Now button pressed");
+                          _onTabTapped(1);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildQuickActionCard(
+                        'Track Order',
+                        Icons.delivery_dining,
+                        Colors.orange,
+                        () {
+                          print("🎯 Track Order button pressed");
+                          _onTabTapped(3);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Meal Categories Section
+                Text(
+                  'Explore by Meal Time',
+                  style: EatoTheme.headingSmall,
+                ),
+                const SizedBox(height: 16),
+
+                // ✅ ROBUST MEAL TIME CARDS: With fallback image loading
+                Column(
+                  children: [
+                    _buildMealTimeCard(
+                      'BREAKFAST',
+                      'Start your day right',
+                      _mealImageOptions['BREAKFAST']!,
+                      () => _navigateToMealPage('Breakfast'),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildMealTimeCard(
+                      'LUNCH',
+                      'Fuel your afternoon',
+                      _mealImageOptions['LUNCH']!,
+                      () => _navigateToMealPage('Lunch'),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildMealTimeCard(
+                      'DINNER',
+                      'End your day deliciously',
+                      _mealImageOptions['DINNER']!,
+                      () => _navigateToMealPage('Dinner'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 80),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 140,
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(25),
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: EatoTheme.bodyMedium.copyWith(
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ ROBUST MEAL TIME CARD: With multiple fallback URLs
+  Widget _buildMealTimeCard(
+    String title,
+    String subtitle,
+    List<String> imageUrls,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 120,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.3),
-              spreadRadius: 1,
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(16),
           child: Stack(
-            fit: StackFit.expand,
             children: [
-              // Background Image with overlay
-              Hero(
-                tag: 'meal_$title',
-                child: _isLoading
-                    ? _buildLoadingPlaceholder(color)
-                    : Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return _buildLoadingPlaceholder(color);
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return _buildErrorPlaceholder(title, color);
-                        },
+              // ✅ ROBUST IMAGE: Using fallback widget
+              Positioned.fill(
+                child: _ImageWithFallbacks(
+                  imageUrls: imageUrls,
+                  fit: BoxFit.cover,
+                  loadingWidget: Container(
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          EatoTheme.primaryColor.withOpacity(0.3),
+                          EatoTheme.primaryColor.withOpacity(0.1),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.restaurant,
+                            size: 32,
+                            color: EatoTheme.primaryColor,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            title,
+                            style: EatoTheme.bodySmall.copyWith(
+                              color: EatoTheme.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
 
               // Gradient overlay
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.1),
-                      Colors.black.withOpacity(0.5),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Decorative elements
-              Positioned(
-                top: 15,
-                left: 15,
+              Positioned.fill(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: Icon(
-                    _getIconForMeal(title),
-                    color: Colors.white,
-                    size: 20,
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.black.withOpacity(0.7),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
                 ),
               ),
 
-              // Title label
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 36, // Increased font size from 24 to 36
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2.0,
-                    shadows: [
-                      // Added text shadow for better visibility
-                      Shadow(
-                        blurRadius: 5.0,
-                        color: Colors.black.withOpacity(0.5),
-                        offset: const Offset(0, 2),
+              // Text content
+              Positioned(
+                left: 20,
+                top: 0,
+                bottom: 0,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: EatoTheme.headingSmall.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: EatoTheme.bodySmall.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Arrow icon
+              const Positioned(
+                right: 20,
+                top: 0,
+                bottom: 0,
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white,
+                  size: 20,
                 ),
               ),
             ],
@@ -411,56 +492,101 @@ class _CustomerHomePageState extends State<CustomerHomePage>
       ),
     );
   }
+}
 
-  // Loading placeholder widget
-  Widget _buildLoadingPlaceholder(Color color) {
-    return Container(
-      color: color.withOpacity(0.2),
-      child: Center(
-        child: CircularProgressIndicator(
-          color: color,
-          strokeWidth: 2,
-        ),
-      ),
-    );
-  }
+// ✅ HELPER WIDGET: Image widget that tries multiple URLs automatically
+class _ImageWithFallbacks extends StatefulWidget {
+  final List<String> imageUrls;
+  final BoxFit fit;
+  final Widget loadingWidget;
+  final Widget errorWidget;
 
-  // Error placeholder widget
-  Widget _buildErrorPlaceholder(String title, Color color) {
-    return Container(
-      color: color.withOpacity(0.3),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _getIconForMeal(title),
-            size: 40,
-            color: Colors.white.withOpacity(0.7),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  const _ImageWithFallbacks({
+    required this.imageUrls,
+    required this.fit,
+    required this.loadingWidget,
+    required this.errorWidget,
+  });
 
-  // Helper method to get icon for each meal type
-  IconData _getIconForMeal(String mealType) {
-    switch (mealType.toUpperCase()) {
-      case 'BREAKFAST':
-        return Icons.coffee;
-      case 'LUNCH':
-        return Icons.restaurant;
-      case 'DINNER':
-        return Icons.dinner_dining;
-      default:
-        return Icons.food_bank;
+  @override
+  _ImageWithFallbacksState createState() => _ImageWithFallbacksState();
+}
+
+class _ImageWithFallbacksState extends State<_ImageWithFallbacks> {
+  int _currentIndex = 0;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError && _currentIndex >= widget.imageUrls.length) {
+      return widget.errorWidget;
     }
+
+    if (_isLoading) {
+      return Stack(
+        children: [
+          widget.loadingWidget,
+          _buildCurrentImage(),
+        ],
+      );
+    }
+
+    return _buildCurrentImage();
+  }
+
+  Widget _buildCurrentImage() {
+    if (_currentIndex >= widget.imageUrls.length) {
+      return widget.errorWidget;
+    }
+
+    return Image.network(
+      widget.imageUrls[_currentIndex],
+      fit: widget.fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          // Image loaded successfully
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _isLoading) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          });
+          return child;
+        }
+        // Still loading, show nothing (loading widget is shown from parent Stack)
+        return const SizedBox.shrink();
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print(
+            '❌ [HomePage] Image failed to load: ${widget.imageUrls[_currentIndex]} - Error: $error');
+
+        // Try next image URL
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            if (_currentIndex < widget.imageUrls.length - 1) {
+              // Try next image
+              print(
+                  '🔄 [HomePage] Trying next image URL: ${widget.imageUrls[_currentIndex + 1]}');
+              setState(() {
+                _currentIndex++;
+                _isLoading = true;
+              });
+            } else {
+              // All images failed, show error widget
+              print(
+                  '💥 [HomePage] All ${widget.imageUrls.length} image URLs failed, showing error widget');
+              setState(() {
+                _hasError = true;
+                _isLoading = false;
+              });
+            }
+          }
+        });
+
+        return const SizedBox.shrink();
+      },
+    );
   }
 }

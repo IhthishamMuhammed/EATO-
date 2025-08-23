@@ -1,3 +1,6 @@
+// File: lib/pages/provider/ProviderHomePage.dart
+// Modified version without bottom navigation bar
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
@@ -6,9 +9,6 @@ import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/pages/provider/AddFoodPage.dart';
 import 'package:eato/pages/provider/EditFoodPage.dart';
-import 'package:eato/pages/provider/OrderHomePage.dart';
-import 'package:eato/pages/provider/RequestHome.dart';
-import 'package:eato/pages/provider/ProfilePage.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'dart:async';
 
@@ -25,7 +25,6 @@ class ProviderHomePage extends StatefulWidget {
 class _ProviderHomePageState extends State<ProviderHomePage>
     with SingleTickerProviderStateMixin {
   String _selectedMealTime = 'Breakfast';
-  int _currentIndex = 2;
   final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
   bool _isLoading = false;
   bool _isRefreshing = false;
@@ -72,29 +71,24 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   }
 
   Future<void> _loadStoreAndFoods() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     final storeProvider = Provider.of<StoreProvider>(context, listen: false);
     final foodProvider = Provider.of<FoodProvider>(context, listen: false);
 
-    try {
-      await storeProvider.fetchUserStore(widget.currentUser);
+    // Only show loading if no data is cached
+    if (storeProvider.userStore == null || foodProvider.foods.isEmpty) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
-      if (storeProvider.userStore != null) {
+    try {
+      if (storeProvider.userStore == null) {
+        await storeProvider.fetchUserStore(widget.currentUser);
+      }
+
+      if (storeProvider.userStore != null && foodProvider.foods.isEmpty) {
         await foodProvider.fetchFoods(storeProvider.userStore!.id);
         foodProvider.setFilterMealTime(_selectedMealTime);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: EatoTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       }
     } finally {
       if (mounted) {
@@ -115,49 +109,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
     setState(() {
       _isRefreshing = false;
     });
-  }
-
-  void _onTabTapped(int index) {
-    if (index == _currentIndex) return;
-
-    setState(() {
-      _currentIndex = index;
-    });
-
-    switch (index) {
-      case 0: // Orders
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                OrderHomePage(currentUser: widget.currentUser),
-          ),
-        );
-        break;
-      case 1: // Requests
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RequestHome(currentUser: widget.currentUser),
-          ),
-        );
-        break;
-      case 2: // Home - Already here
-        // No action needed
-        break;
-      case 3: // Profile
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProfilePage(currentUser: widget.currentUser),
-          ),
-        ).then((_) {
-          setState(() {
-            _currentIndex = 2;
-          });
-        });
-        break;
-    }
   }
 
   void _navigateToAddFood() {
@@ -281,7 +232,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   Widget build(BuildContext context) {
     final storeProvider = Provider.of<StoreProvider>(context);
     final foodProvider = Provider.of<FoodProvider>(context);
-    final screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
       appBar: AppBar(
@@ -367,11 +317,8 @@ class _ProviderHomePageState extends State<ProviderHomePage>
         backgroundColor: EatoTheme.primaryColor,
         child: const Icon(Icons.add),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
-
-// Replace the _buildNoStoreView method in ProviderHomePage with this updated version
 
   Widget _buildNoStoreView() {
     return Center(
@@ -843,38 +790,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
           },
         );
       },
-    );
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: _onTabTapped,
-      selectedItemColor: EatoTheme.primaryColor,
-      unselectedItemColor: EatoTheme.textLightColor,
-      type: BottomNavigationBarType.fixed,
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.receipt_outlined),
-          activeIcon: Icon(Icons.receipt),
-          label: 'Orders',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_outlined),
-          activeIcon: Icon(Icons.notifications),
-          label: 'Requests',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.restaurant_menu_outlined),
-          activeIcon: Icon(Icons.restaurant_menu),
-          label: 'Menu',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ],
     );
   }
 }

@@ -1,1 +1,38 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"food-delivery-around-faculty","appId":"1:723840251214:android:7c2f55a30e8d8a85735a1f","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"food-delivery-around-faculty","configurations":{"android":"1:723840251214:android:7c2f55a30e8d8a85735a1f","ios":"1:723840251214:ios:951e1116a3bbb74b735a1f","macos":"1:723840251214:ios:951e1116a3bbb74b735a1f","web":"1:723840251214:web:d8fdb70e4479d03f735a1f","windows":"1:723840251214:web:1167dd66bf0c9a85735a1f"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "food-delivery-around-faculty",
+          "appId": "1:723840251214:android:7c2f55a30e8d8a85735a1f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "food-delivery-around-faculty",
+          "configurations": {
+            "android": "1:723840251214:android:7c2f55a30e8d8a85735a1f",
+            "ios": "1:723840251214:ios:951e1116a3bbb74b735a1f",
+            "macos": "1:723840251214:ios:951e1116a3bbb74b735a1f",
+            "web": "1:723840251214:web:d8fdb70e4479d03f735a1f",
+            "windows": "1:723840251214:web:1167dd66bf0c9a85735a1f"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

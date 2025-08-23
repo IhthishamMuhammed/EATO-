@@ -1,16 +1,18 @@
+// SIMPLIFIED LOGIN.DART - Remove all biometric/fingerprint code
+
 import 'package:eato/Provider/userProvider.dart';
+import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:local_auth/local_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // For email caching only
 
 import 'package:eato/Model/coustomUser.dart';
 import 'signup.dart';
-import 'phoneVerification.dart';
 import 'package:eato/pages/customer/homepage/customer_home.dart';
-import 'package:eato/pages/provider/ProviderHomePage.dart';
 
 class LoginPage extends StatefulWidget {
   final String role;
@@ -38,10 +40,8 @@ class _LoginPageState extends State<LoginPage>
   String? _emailErrorText;
   String? _passwordErrorText;
 
-  // Biometric authentication
-  final LocalAuthentication _localAuth = LocalAuthentication();
-  bool _canCheckBiometrics = false;
-  bool _hasBiometrics = false;
+  // Email caching (simple, no biometric)
+  bool _rememberEmail = false;
 
   // Animation controllers
   late AnimationController _animationController;
@@ -52,19 +52,18 @@ class _LoginPageState extends State<LoginPage>
   @override
   void initState() {
     super.initState();
+    print('Login page initialized with role: "${widget.role}"');
     _setupAnimations();
     _setupFocusListeners();
-    _checkBiometrics();
+    _loadSavedEmail(); // Load saved email only
   }
 
   void _setupAnimations() {
-    // Create animation controller
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
 
-    // Fade in animation
     _fadeInAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -73,7 +72,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     ));
 
-    // Slide animation
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.05),
       end: Offset.zero,
@@ -82,7 +80,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
     ));
 
-    // Scale animation
     _scaleAnimation = Tween<double>(
       begin: 0.95,
       end: 1.0,
@@ -91,7 +88,6 @@ class _LoginPageState extends State<LoginPage>
       curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
     ));
 
-    // Start the animation
     _animationController.forward();
   }
 
@@ -100,14 +96,36 @@ class _LoginPageState extends State<LoginPage>
     _passwordFocus.addListener(_onPasswordFocusChange);
   }
 
-  Future<void> _checkBiometrics() async {
+  // Simple email caching - no biometric
+  Future<void> _loadSavedEmail() async {
     try {
-      _canCheckBiometrics = await _localAuth.canCheckBiometrics;
-      final availableBiometrics = await _localAuth.getAvailableBiometrics();
-      _hasBiometrics = availableBiometrics.isNotEmpty;
-      setState(() {});
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('last_email');
+      final rememberEmail = prefs.getBool('remember_email') ?? false;
+
+      if (savedEmail != null && rememberEmail) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberEmail = true;
+        });
+      }
     } catch (e) {
-      debugPrint('Error checking biometrics: $e');
+      debugPrint('Error loading saved email: $e');
+    }
+  }
+
+  Future<void> _saveEmailIfRemembered() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberEmail) {
+        await prefs.setString('last_email', _emailController.text.trim());
+        await prefs.setBool('remember_email', true);
+      } else {
+        await prefs.remove('last_email');
+        await prefs.setBool('remember_email', false);
+      }
+    } catch (e) {
+      debugPrint('Error saving email: $e');
     }
   }
 
@@ -122,7 +140,6 @@ class _LoginPageState extends State<LoginPage>
   }
 
   void _onEmailFocusChange() {
-    // Clear error when field gets focus
     if (_emailFocus.hasFocus && _emailHasError) {
       setState(() {
         _emailHasError = false;
@@ -132,7 +149,6 @@ class _LoginPageState extends State<LoginPage>
   }
 
   void _onPasswordFocusChange() {
-    // Clear error when field gets focus
     if (_passwordFocus.hasFocus && _passwordHasError) {
       setState(() {
         _passwordHasError = false;
@@ -160,12 +176,14 @@ class _LoginPageState extends State<LoginPage>
     return null;
   }
 
-  // Authentication methods
+  // Enhanced authentication with email verification
   Future<void> _loginWithCredentials(BuildContext context) async {
-    // Validate form first
     if (!_formKey.currentState!.validate()) {
       return;
     }
+
+    // Check mounted before setState
+    if (!mounted) return;
 
     setState(() {
       _isLoading = true;
@@ -174,128 +192,270 @@ class _LoginPageState extends State<LoginPage>
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-      // Login using Firebase Authentication
       UserCredential userCredential =
           await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // Fetch user data
-      await userProvider.fetchUser(userCredential.user!.uid);
+      User? user = userCredential.user;
 
-      // Verify role matches
-      if (!_verifyRoleMatches(
-          userProvider.currentUser?.userType, widget.role)) {
-        throw Exception(
-            "This account doesn't match your selected role. Please use a ${widget.role} account.");
+      if (user != null) {
+        // Check email verification
+        await user.reload();
+        user = FirebaseAuth.instance.currentUser;
+
+        if (!user!.emailVerified) {
+          // Check mounted before setState
+          if (!mounted) return;
+
+          setState(() {
+            _isLoading = false;
+          });
+          await _showEmailNotVerifiedDialog(user);
+          return;
+        }
+
+        // Save email if remember is checked
+        await _saveEmailIfRemembered();
+
+        await userProvider.fetchUser(user.uid);
+
+        if (!_verifyRoleMatches(
+            userProvider.currentUser?.userType, widget.role)) {
+          throw Exception(
+              "This account doesn't match your selected role. Please use a ${widget.role} account.");
+        }
+
+        // Check mounted before successful login navigation
+        if (!mounted) return;
+
+        _handleSuccessfulLogin(userProvider.currentUser, context);
       }
-
-      // Navigate to appropriate screen
-      _handleSuccessfulLogin(userProvider.currentUser, context);
     } catch (e) {
-      _handleLoginError(e, context);
+      // Only handle error if still mounted
+      if (mounted) {
+        _handleLoginError(e, context);
+      }
     }
   }
 
-  Future<void> _authenticateWithBiometrics() async {
+  // Email verification dialog
+  Future<void> _showEmailNotVerifiedDialog(User user) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.email_outlined, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Email Not Verified'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Your email address has not been verified. Please check your inbox for a verification email.',
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: EatoTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                user.email ?? '',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: EatoTheme.primaryColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _resendVerificationEmail(user);
+            },
+            child: Text('Resend Email'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _checkEmailAndProceed(user);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor),
+            child:
+                Text('I\'ve Verified', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _resendVerificationEmail(User user) async {
     try {
-      final bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'Please authenticate to log in',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
+      await user.sendEmailVerification();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Verification email sent!'),
+            ],
+          ),
+          backgroundColor: EatoTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending email: $e'),
+          backgroundColor: EatoTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
-      if (authenticated) {
-        // Handle last logged in user authentication or show email field
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Biometric authentication successful'),
-            backgroundColor: EatoTheme.successColor,
-          ),
-        );
+  Future<void> _checkEmailAndProceed(User user) async {
+    try {
+      await user.reload();
+      user = FirebaseAuth.instance.currentUser!;
 
-        // In a real app, you might retrieve saved credentials here
-        // For demo purposes, we'll just prompt the user to enter credentials
-        setState(() {
-          _emailController.text = 'demo@example.com'; // Example only
+      if (user.emailVerified) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'emailVerified': true,
         });
+
+        // Check mounted before navigation
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+
+        setState(() {
+          _isLoading = true;
+        });
+
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        await userProvider.fetchUser(user.uid);
+
+        // Check mounted before proceeding
+        if (!mounted) return;
+
+        if (_verifyRoleMatches(
+            userProvider.currentUser?.userType, widget.role)) {
+          _handleSuccessfulLogin(userProvider.currentUser, context);
+        } else {
+          throw Exception("This account doesn't match your selected role.");
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Email not yet verified. Please check your inbox.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
-      debugPrint('Biometric authentication error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: EatoTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   bool _verifyRoleMatches(String? userRole, String expectedRole) {
     if (userRole == null) return false;
 
-    final dbRole = userRole.toLowerCase();
-    final expectedRoleLower = expectedRole.toLowerCase();
+    final dbRole = userRole.toLowerCase().trim();
+    final expectedRoleLower = expectedRole.toLowerCase().trim();
 
-    // Direct match
+    print('🔍 Role Debug: DB="$dbRole", Expected="$expectedRoleLower"');
+
+    bool result = false;
+
     if (dbRole == expectedRoleLower) {
-      return true;
-    }
-    // Meal provider variations
-    else if (expectedRoleLower == 'mealprovider' &&
-        (dbRole == 'provider' ||
-            dbRole == 'meal provider' ||
-            dbRole == 'meal_provider')) {
-      return true;
-    }
-    // Customer variations
-    else if (expectedRoleLower == 'customer' &&
-        (dbRole == 'user' || dbRole == 'client')) {
-      return true;
+      result = true;
+    } else if (expectedRoleLower == 'mealprovider' ||
+        expectedRoleLower == 'meal provider') {
+      result = dbRole == 'mealprovider' ||
+          dbRole == 'meal provider' ||
+          dbRole == 'provider' ||
+          dbRole == 'meal_provider';
+    } else if (expectedRoleLower == 'customer') {
+      result = dbRole == 'customer' || dbRole == 'user' || dbRole == 'client';
     }
 
-    return false;
+    print('Role match result: $result');
+    return result;
   }
 
   void _handleSuccessfulLogin(CustomUser? user, BuildContext context) {
     if (user == null) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       return;
     }
 
-    if (user.phoneNumber == null || user.phoneNumber!.isEmpty) {
-      // Navigate to phone verification if needed
-      if (!mounted) return;
+    if (!mounted) return;
 
-      Navigator.push(
+    // Add debug logging
+    print(
+        '🎯 Login success - User type: ${user.userType}, Expected role: ${widget.role}');
+
+    if (widget.role.toLowerCase() == 'customer') {
+      Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (context) => PhoneVerificationPage(
-            phoneNumber: '',
-            userType: widget.role,
-            isSignUp: false,
-            userData: null,
-          ),
-        ),
+        MaterialPageRoute(builder: (context) => CustomerHomePage()),
+        (route) => false,
       );
     } else {
-      // Navigate to appropriate home page
-      if (!mounted) return;
-
-      if (widget.role.toLowerCase() == 'customer') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => CustomerHomePage()),
-          (route) => false,
-        );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProviderHomePage(currentUser: user),
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProviderMainNavigation(
+            currentUser: user,
+            initialIndex: 0,
           ),
-          (route) => false,
-        );
-      }
+        ),
+        (route) => false,
+      );
     }
   }
 
@@ -305,24 +465,30 @@ class _LoginPageState extends State<LoginPage>
     if (error is FirebaseAuthException) {
       switch (error.code) {
         case 'user-not-found':
-          setState(() {
-            _emailHasError = true;
-            _emailErrorText = 'No account found with this email';
-          });
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _emailErrorText = 'No account found with this email';
+            });
+          }
           errorMessage = 'No account found with this email';
           break;
         case 'wrong-password':
-          setState(() {
-            _passwordHasError = true;
-            _passwordErrorText = 'Incorrect password';
-          });
+          if (mounted) {
+            setState(() {
+              _passwordHasError = true;
+              _passwordErrorText = 'Incorrect password';
+            });
+          }
           errorMessage = 'Incorrect password';
           break;
         case 'invalid-email':
-          setState(() {
-            _emailHasError = true;
-            _emailErrorText = 'Invalid email format';
-          });
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _emailErrorText = 'Invalid email format';
+            });
+          }
           errorMessage = 'Invalid email format';
           break;
         case 'user-disabled':
@@ -330,6 +496,17 @@ class _LoginPageState extends State<LoginPage>
           break;
         case 'too-many-requests':
           errorMessage = 'Too many attempts. Please try again later';
+          break;
+        case 'invalid-credential':
+          if (mounted) {
+            setState(() {
+              _emailHasError = true;
+              _passwordHasError = true;
+              _emailErrorText = 'Invalid credentials';
+              _passwordErrorText = 'Invalid credentials';
+            });
+          }
+          errorMessage = 'Invalid email or password';
           break;
         default:
           errorMessage = error.message ?? errorMessage;
@@ -340,7 +517,6 @@ class _LoginPageState extends State<LoginPage>
           : errorMessage;
     }
 
-    // Show error message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -357,11 +533,11 @@ class _LoginPageState extends State<LoginPage>
           ),
         ),
       );
-    }
 
-    setState(() {
-      _isLoading = false;
-    });
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   void _navigateToSignup(BuildContext context) {
@@ -383,10 +559,10 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    // Show a password reset confirmation dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Reset Password'),
         content: Text(
             'We will send a password reset link to ${_emailController.text}. Would you like to proceed?'),
@@ -403,7 +579,7 @@ class _LoginPageState extends State<LoginPage>
             style: ElevatedButton.styleFrom(
               backgroundColor: EatoTheme.primaryColor,
             ),
-            child: Text('Send Link'),
+            child: Text('Send Link', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -412,6 +588,9 @@ class _LoginPageState extends State<LoginPage>
 
   Future<void> _sendPasswordResetEmail() async {
     try {
+      // Check mounted before setState
+      if (!mounted) return;
+
       setState(() {
         _isLoading = true;
       });
@@ -440,9 +619,11 @@ class _LoginPageState extends State<LoginPage>
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -450,7 +631,6 @@ class _LoginPageState extends State<LoginPage>
   Widget build(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
     final bool isSmallScreen = screenSize.width < 360;
-    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
@@ -513,35 +693,15 @@ class _LoginPageState extends State<LoginPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Login header with role-specific image
                       _buildLoginHeader(screenSize, isSmallScreen),
-
-                      // Title and welcome message
                       _buildWelcomeSection(isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.03),
-
-                      // Login form
                       _buildLoginForm(screenSize, isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.04),
-
-                      // Login button
                       _buildLoginButton(isSmallScreen),
-
-                      SizedBox(height: screenSize.height * 0.02),
-
-                      // Biometric login
-                      if (_hasBiometrics) _buildBiometricLogin(),
-
                       SizedBox(height: screenSize.height * 0.03),
-
-                      // Sign up option
                       _buildSignupOption(isSmallScreen),
-
                       SizedBox(height: screenSize.height * 0.04),
-
-                      // Footer text
                       _buildFooterText(isSmallScreen),
                     ],
                   ),
@@ -563,7 +723,6 @@ class _LoginPageState extends State<LoginPage>
     return Center(
       child: Column(
         children: [
-          // Role indicator badge
           Container(
             padding: EdgeInsets.symmetric(
               horizontal: 16,
@@ -597,10 +756,7 @@ class _LoginPageState extends State<LoginPage>
               ],
             ),
           ),
-
           SizedBox(height: screenSize.height * 0.03),
-
-          // Logo or illustration
           Hero(
             tag: 'role_image',
             child: Container(
@@ -688,32 +844,47 @@ class _LoginPageState extends State<LoginPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Email field
           _buildEmailField(isSmallScreen),
           SizedBox(height: 20),
-
-          // Password field
           _buildPasswordField(isSmallScreen),
 
-          // Forgot password
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _handleForgotPassword,
-              style: TextButton.styleFrom(
-                foregroundColor: EatoTheme.primaryColor,
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 0),
-                minimumSize: Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          // Remember email checkbox and forgot password
+          Row(
+            children: [
+              Checkbox(
+                value: _rememberEmail,
+                onChanged: (value) {
+                  setState(() {
+                    _rememberEmail = value ?? false;
+                  });
+                },
+                activeColor: EatoTheme.primaryColor,
               ),
-              child: Text(
-                "Forgot Password?",
+              Text(
+                'Remember email',
                 style: TextStyle(
                   fontSize: isSmallScreen ? 13 : 14,
-                  fontWeight: FontWeight.w500,
+                  color: EatoTheme.textSecondaryColor,
                 ),
               ),
-            ),
+              Spacer(),
+              TextButton(
+                onPressed: _handleForgotPassword,
+                style: TextButton.styleFrom(
+                  foregroundColor: EatoTheme.primaryColor,
+                  padding: EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+                  minimumSize: Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  "Forgot Password?",
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 13 : 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -978,41 +1149,6 @@ class _LoginPageState extends State<LoginPage>
                   ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBiometricLogin() {
-    return Center(
-      child: Column(
-        children: [
-          TextButton.icon(
-            onPressed: _isLoading ? null : _authenticateWithBiometrics,
-            icon: Icon(
-              Icons.fingerprint,
-              color: EatoTheme.primaryColor,
-              size: 22,
-            ),
-            label: Text(
-              "Use Fingerprint",
-              style: TextStyle(
-                color: EatoTheme.primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            style: TextButton.styleFrom(
-              foregroundColor: EatoTheme.primaryColor,
-              backgroundColor: EatoTheme.primaryColor.withOpacity(0.05),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: EdgeInsets.symmetric(
-                vertical: 10,
-                horizontal: 16,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

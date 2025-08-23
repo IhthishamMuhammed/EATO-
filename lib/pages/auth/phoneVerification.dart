@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
 
-// Import home pages directly
 import 'package:eato/pages/customer/homepage/customer_home.dart';
-import 'package:eato/pages/provider/ProviderHomePage.dart';
 import '../theme/eato_theme.dart';
+import 'package:eato/pages/provider/ProviderMainNavigation.dart';
 
 class PhoneVerificationPage extends StatefulWidget {
   final String phoneNumber;
@@ -53,7 +53,7 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
   bool _isAutoRetrievalInProgress = false;
 
   // Debug mode
-  bool _debug = false;
+  bool _debug = true; // Set to true for debugging
 
   // Animation controllers
   late AnimationController _animationController;
@@ -75,117 +75,107 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
 
     // Start verification process in the background
     Future.microtask(() {
+      _checkFirebaseConfig(); // Debug Firebase configuration
       _verifyPhoneNumber();
       _startResendTimer();
     });
   }
 
   void _setupAnimations() {
-    // Main animation controller
     _animationController = AnimationController(
-      vsync: this,
       duration: const Duration(milliseconds: 800),
+      vsync: this,
     );
 
-    // Fade in animation
-    _fadeInAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-    ));
+    _fadeInAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeInOut),
+      ),
+    );
 
-    // Slide animation
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
+      begin: const Offset(0.0, 0.3),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
-    ));
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.3, 0.8, curve: Curves.easeInOut),
+      ),
+    );
 
-    // Scale animation
-    _scaleAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.2, 0.8, curve: Curves.easeInOut),
+      ),
+    );
 
-    // Start the animation
     _animationController.forward();
   }
 
   void _setupFormControllers() {
-    // Add listeners to code input fields
     for (int i = 0; i < 6; i++) {
       _codeControllers[i].addListener(() {
         _updateCurrentCode();
       });
     }
-
-    // Add listener to paste controller
-    _pasteController.addListener(() {
-      final text = _pasteController.text;
-      if (text.length == 6 && RegExp(r'^\d{6}$').hasMatch(text)) {
-        // Valid 6-digit code, fill the input fields
-        for (int i = 0; i < 6; i++) {
-          _codeControllers[i].text = text[i];
-        }
-
-        // Clear the paste field
-        _pasteController.clear();
-      }
-    });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-
-    // Dispose all controllers
     for (var controller in _codeControllers) {
       controller.dispose();
     }
-
-    for (var focus in _focusNodes) {
-      focus.dispose();
+    for (var focusNode in _focusNodes) {
+      focusNode.dispose();
     }
-
     _pasteController.dispose();
     super.dispose();
   }
 
-  // VERIFICATION PROCESS LOGIC
+  void _debugLog(String message) {
+    if (_debug) {
+      print('🔍 PhoneVerification: $message');
+    }
+  }
 
+  // ✅ ENHANCED: Better phone verification with improved error handling
   Future<void> _verifyPhoneNumber() async {
-    setState(() {
-      _isVerifying = true;
-      _errorMessage = '';
-    });
-
     try {
-      // Ensure proper phone number format
-      final String phoneNumber = widget.phoneNumber.trim();
-      final String formattedPhoneNumber =
-          phoneNumber.startsWith('+') ? phoneNumber : '+$phoneNumber';
-
-      _debugLog("Attempting to verify phone number: $formattedPhoneNumber");
-
       setState(() {
-        _isAutoRetrievalInProgress = true;
+        _isVerifying = true;
+        _errorMessage = '';
       });
 
+      // ✅ IMPROVED: Better phone number formatting
+      String phoneNumber = widget.phoneNumber.trim();
+
+      // Remove any spaces, dashes, or parentheses
+      phoneNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+
+      // Add country code if not present (assuming Sri Lanka +94)
+      if (!phoneNumber.startsWith('+')) {
+        if (phoneNumber.startsWith('0')) {
+          phoneNumber =
+              '+94${phoneNumber.substring(1)}'; // Remove leading 0 and add +94
+        } else if (phoneNumber.startsWith('94')) {
+          phoneNumber = '+$phoneNumber';
+        } else {
+          phoneNumber = '+94$phoneNumber';
+        }
+      }
+
+      _debugLog("Formatted phone number: $phoneNumber");
+
+      // ✅ ENHANCED: More detailed timeout and error handling
       await _auth.verifyPhoneNumber(
-        phoneNumber: formattedPhoneNumber,
+        phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 120),
         forceResendingToken: _forceResendingToken,
         verificationCompleted: (PhoneAuthCredential credential) async {
-          _debugLog("Auto verification completed");
-
-          // This is triggered when the SMS is auto-retrieved
+          _debugLog("✅ Auto verification completed");
           setState(() {
             _isAutoRetrievalInProgress = false;
             _isVerificationSuccessful = true;
@@ -212,14 +202,17 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
           await _signInWithCredential(credential);
         },
         verificationFailed: (FirebaseAuthException e) {
-          _debugLog("Verification failed: ${e.code} - ${e.message}");
+          _debugLog("❌ Verification failed: ${e.code} - ${e.message}");
           setState(() {
             _isAutoRetrievalInProgress = false;
+            _isVerifying = false;
           });
+
+          // ✅ ENHANCED: More specific error messages
           _handleVerificationError(e);
         },
         codeSent: (String verificationId, int? resendToken) {
-          _debugLog("Verification code sent to $formattedPhoneNumber");
+          _debugLog("📱 SMS sent to $phoneNumber");
           setState(() {
             _verificationId = verificationId;
             _forceResendingToken = resendToken;
@@ -228,10 +221,10 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
             _isAutoRetrievalInProgress = false;
           });
 
-          _showSuccessMessage("Verification code sent to your phone");
+          _showSuccessMessage("Verification code sent successfully!");
         },
         codeAutoRetrievalTimeout: (String verificationId) {
-          _debugLog("Auto retrieval timeout");
+          _debugLog("⏰ Auto retrieval timeout");
           setState(() {
             _verificationId = verificationId;
             _isAutoRetrievalInProgress = false;
@@ -239,12 +232,48 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
         },
       );
     } catch (e) {
-      _debugLog("Error in phone verification: $e");
+      _debugLog("💥 Phone verification error: $e");
       setState(() {
         _isVerifying = false;
         _isAutoRetrievalInProgress = false;
       });
-      _showErrorMessage("Phone verification error: $e");
+
+      // ✅ ENHANCED: Better error categorization
+      if (e.toString().contains('operation-not-allowed')) {
+        _showErrorMessage(
+            "Phone authentication is not enabled. Please contact support.");
+      } else if (e.toString().contains('quota-exceeded')) {
+        _showErrorMessage("SMS quota exceeded. Please try again later.");
+      } else if (e.toString().contains('invalid-phone-number')) {
+        _showErrorMessage(
+            "Invalid phone number format. Please check and try again.");
+      } else {
+        _showErrorMessage("Phone verification error: $e");
+      }
+    }
+  }
+
+  // ✅ ADD: Debug method to check Firebase configuration
+  Future<void> _checkFirebaseConfig() async {
+    try {
+      _debugLog("🔍 Checking Firebase configuration...");
+
+      // Check if Firebase is initialized
+      if (Firebase.apps.isEmpty) {
+        _debugLog("❌ Firebase not initialized");
+        return;
+      }
+
+      _debugLog("✅ Firebase initialized");
+      _debugLog("📱 Project ID: ${Firebase.app().options.projectId}");
+      _debugLog(
+          "🔑 API Key: ${Firebase.app().options.apiKey?.substring(0, 10)}...");
+
+      // Check auth configuration
+      final authSettings = FirebaseAuth.instance.app.options;
+      _debugLog("🔐 Auth domain: ${authSettings.authDomain}");
+    } catch (e) {
+      _debugLog("💥 Firebase config check failed: $e");
     }
   }
 
@@ -409,98 +438,33 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
 
   Future<void> _handleSignup(
       PhoneAuthCredential credential, UserProvider userProvider) async {
-    _debugLog("Creating new user account");
-    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-      email: widget.userData!['email']!,
-      password: widget.userData!['password']!,
-    );
+    _debugLog("Creating user after both email and phone verification");
 
-    // Update the phone number in Firebase Auth
-    User user = userCredential.user!;
-    _debugLog("User created with ID: ${user.uid}");
+    User? user = _auth.currentUser;
 
-    try {
-      _debugLog("Updating phone number");
-      await user.updatePhoneNumber(credential);
-    } catch (e) {
-      _debugLog("Error updating phone directly: $e");
-      // If unable to update phone directly, try linking method
-      try {
-        _debugLog("Attempting to link credential instead");
-        await user.linkWithCredential(credential);
-      } catch (linkError) {
-        _debugLog("Error linking credential: $linkError");
-        // Continue anyway, as we'll update in Firestore
-      }
-    }
-
-    // Create user document in Firestore
-    _debugLog("Creating user document in Firestore");
-    final userMap = {
-      'name': widget.userData!['name']!,
-      'email': widget.userData!['email']!,
-      'phoneNumber': widget.phoneNumber,
-      'userType': widget.userType,
-      'profileImageUrl': '',
-      'phoneVerified': true,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .set(userMap);
-
-    // Create and store user in provider
-    final customUser = CustomUser(
-      id: user.uid,
-      name: widget.userData!['name']!,
-      email: widget.userData!['email']!,
-      phoneNumber: widget.phoneNumber,
-      userType: widget.userType,
-      profileImageUrl: '',
-    );
-
-    userProvider.setCurrentUser(customUser);
-
-    if (!mounted) return;
-
-    _navigateToHome(userProvider.currentUser);
-  }
-
-  Future<void> _handleLogin(
-      PhoneAuthCredential credential, UserProvider userProvider) async {
-    _debugLog("Login flow - updating phone number");
-    final user = _auth.currentUser;
     if (user != null) {
-      _debugLog("Current user ID: ${user.uid}");
       try {
-        // Try linking phone credential to existing user
-        _debugLog("Updating phone number");
+        // Update phone number
         await user.updatePhoneNumber(credential);
       } catch (e) {
         _debugLog("Error updating phone: $e");
-        try {
-          // If unable to update phone directly, try linking method
-          _debugLog("Attempting to link credential instead");
-          await user.linkWithCredential(credential);
-        } catch (linkError) {
-          _debugLog("Error linking credential: $linkError");
-          // Continue anyway, as we'll update in Firestore
-        }
+        // Continue anyway, we'll save to Firestore
       }
 
-      // Update the phone number in Firestore
-      _debugLog("Updating phone number in Firestore");
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'phoneNumber': widget.phoneNumber,
-        'phoneVerified': true,
+      // NOW create user document in Firestore (both verifications complete)
+      _debugLog("Creating user document in Firestore");
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'name': widget.userData?['name'] ?? '',
+        'email': widget.userData?['email'] ?? user.email,
+        'phoneNumber': widget.userData?['phone'] ?? widget.phoneNumber,
+        'userType': widget.userType,
+        'profileImageUrl': '',
+        'emailVerified': true, // Already verified
+        'phoneVerified': true, // Just verified
+        'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Get updated user data from Firestore
+      // Get user data and set in provider
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -509,7 +473,49 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       if (userDoc.exists) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
 
-        // Create updated CustomUser
+        final customUser = CustomUser(
+          id: user.uid,
+          name: userData['name'] ?? '',
+          email: userData['email'] ?? '',
+          phoneNumber: widget.phoneNumber,
+          userType: userData['userType'] ?? widget.userType,
+          profileImageUrl: userData['profileImageUrl'] ?? '',
+        );
+
+        userProvider.setCurrentUser(customUser);
+      }
+
+      if (!mounted) return;
+      _navigateToHome(userProvider.currentUser);
+    }
+  }
+
+  Future<void> _handleLogin(
+      PhoneAuthCredential credential, UserProvider userProvider) async {
+    _debugLog("Login flow - updating phone number");
+    final user = _auth.currentUser;
+    if (user != null) {
+      // Update the phone number in Firestore, and mark as verified
+      _debugLog("Updating phone number in Firestore (verified)");
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'phoneNumber': widget.phoneNumber,
+        'phoneVerified': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Get user data
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+
+        // Update user in provider
         CustomUser updatedUser = CustomUser(
           id: user.uid,
           name: userData['name'] ?? '',
@@ -519,7 +525,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
           profileImageUrl: userData['profileImageUrl'] ?? '',
         );
 
-        // Update user in provider
         userProvider.setCurrentUser(updatedUser);
       }
 
@@ -529,24 +534,39 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
     }
   }
 
+// Add to phoneVerification.dart
+  void _cleanupIncompleteSignup() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null && widget.isSignUp) {
+        await user.delete();
+      }
+    } catch (e) {
+      print('Cleanup error: $e');
+    }
+  }
+
   void _navigateToHome(CustomUser? user) {
     if (user == null) return;
+
+    _debugLog("Navigating to home for user type: ${user.userType}");
 
     if (widget.userType.toLowerCase() == 'customer') {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => CustomerHomePage()),
-        (route) => false, // Clear all previous routes
+        (route) => false,
       );
     } else {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (context) => ProviderHomePage(
+          builder: (context) => ProviderMainNavigation(
             currentUser: user,
+            initialIndex: 0,
           ),
         ),
-        (route) => false, // Clear all previous routes
+        (route) => false,
       );
     }
   }
@@ -617,70 +637,87 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
     _signInWithCredential(credential);
   }
 
+  // In phoneVerification.dart - Modified _skipPhoneVerification method
   void _skipPhoneVerification() async {
     try {
       setState(() {
         _isVerifying = true;
       });
 
-      _debugLog("Skipping phone verification");
+      _debugLog("Skipping phone verification - completing account creation");
       final userProvider = Provider.of<UserProvider>(context, listen: false);
 
       if (widget.isSignUp) {
-        // For sign up process - create new user without phone verification
-        _debugLog("Creating new user account without phone verification");
-        UserCredential userCredential =
-            await _auth.createUserWithEmailAndPassword(
-          email: widget.userData!['email']!,
-          password: widget.userData!['password']!,
-        );
+        // For signup: Create complete user account with email verification only
+        _debugLog("Completing signup with email verification only");
 
-        // Create user document in Firestore
-        _debugLog("Creating user document in Firestore");
-        final userMap = {
-          'name': widget.userData!['name']!,
-          'email': widget.userData!['email']!,
-          'phoneNumber': widget.phoneNumber, // Store unverified phone number
-          'phoneVerified': false, // Flag to indicate phone is not verified
-          'userType': widget.userType,
-          'profileImageUrl': '',
-          'createdAt': FieldValue.serverTimestamp(),
-        };
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set(userMap);
-
-        // Create and store user in provider
-        final customUser = CustomUser(
-          id: userCredential.user!.uid,
-          name: widget.userData!['name']!,
-          email: widget.userData!['email']!,
-          phoneNumber: widget.phoneNumber,
-          userType: widget.userType,
-          profileImageUrl: '',
-        );
-
-        userProvider.setCurrentUser(customUser);
-
-        if (!mounted) return;
-
-        _navigateToHome(userProvider.currentUser);
-      } else {
-        // For login process - simply proceed
-        _debugLog("Login flow - proceeding without phone verification");
-        final user = _auth.currentUser;
+        User? user = _auth.currentUser;
         if (user != null) {
-          // Update the phone number in Firestore, but mark as unverified
-          _debugLog("Updating phone number in Firestore (unverified)");
+          // Create user document in Firestore (email already verified from signup.dart)
           await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
-              .update(
-                  {'phoneNumber': widget.phoneNumber, 'phoneVerified': false});
+              .set({
+            'name': widget.userData?['name'] ?? '',
+            'email': widget.userData?['email'] ?? user.email,
+            'phoneNumber':
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
+            'userType': widget.userType,
+            'profileImageUrl': '',
+            'emailVerified': true, // Already verified in signup flow
+            'phoneVerified': false, // Skipped
+            'createdAt': FieldValue.serverTimestamp(),
+          });
 
-          // Get user data
+          // Set user in provider
+          final customUser = CustomUser(
+            id: user.uid,
+            name: widget.userData?['name'] ?? '',
+            email: widget.userData?['email'] ?? user.email ?? '',
+            phoneNumber:
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
+            userType: widget.userType,
+            profileImageUrl: '',
+          );
+
+          userProvider.setCurrentUser(customUser);
+
+          if (!mounted) return;
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Account created successfully!'),
+                ],
+              ),
+              backgroundColor: EatoTheme.successColor,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
+          _navigateToHome(userProvider.currentUser);
+        }
+      } else {
+        // For login: Update user without phone verification
+        _debugLog("Login flow - updating user without phone verification");
+        final user = _auth.currentUser;
+        if (user != null) {
+          // Update phone number in Firestore as unverified
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .update({
+            'phoneNumber':
+                widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
+            'phoneVerified': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          // Get updated user data
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -690,12 +727,12 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
             Map<String, dynamic> userData =
                 userDoc.data() as Map<String, dynamic>;
 
-            // Update user in provider
             CustomUser updatedUser = CustomUser(
               id: user.uid,
               name: userData['name'] ?? '',
               email: userData['email'] ?? '',
-              phoneNumber: widget.phoneNumber,
+              phoneNumber:
+                  widget.phoneNumber.isNotEmpty ? widget.phoneNumber : null,
               userType: userData['userType'] ?? widget.userType,
               profileImageUrl: userData['profileImageUrl'] ?? '',
             );
@@ -704,7 +741,6 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
           }
 
           if (!mounted) return;
-
           _navigateToHome(userProvider.currentUser);
         }
       }
@@ -713,37 +749,94 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       setState(() {
         _isVerifying = false;
       });
-      _showErrorMessage("Error: $e");
+      _showErrorMessage("Error completing signup: $e");
     }
   }
 
+  // ✅ ENHANCED: Better error handling with specific solutions
   void _handleVerificationError(FirebaseAuthException e) {
     String errorMsg = "Verification failed";
+    String solution = "";
 
     switch (e.code) {
       case 'invalid-phone-number':
-        errorMsg = "The phone number format is incorrect";
+        errorMsg = "Invalid phone number format";
+        solution = "Please enter a valid Sri Lankan phone number (07XXXXXXXX)";
         break;
+
       case 'too-many-requests':
-        errorMsg = "Too many requests. Try again later";
+        errorMsg = "Too many verification attempts";
+        solution = "Please wait 24 hours before trying again";
         break;
+
       case 'operation-not-allowed':
-        errorMsg =
-            "Phone auth not enabled in Firebase or not allowed for this region";
+        errorMsg = "Phone verification not enabled";
+        solution =
+            "Contact support - Phone auth may not be configured properly";
         break;
+
       case 'quota-exceeded':
-        errorMsg = "SMS quota exceeded for the project";
+        errorMsg = "SMS quota exceeded";
+        solution = "Daily SMS limit reached. Try again tomorrow";
         break;
+
+      case 'missing-phone-number':
+        errorMsg = "Phone number is required";
+        solution = "Please provide a valid phone number";
+        break;
+
+      case 'app-not-authorized':
+        errorMsg = "App not authorized for phone auth";
+        solution = "Contact support - Firebase configuration issue";
+        break;
+
       default:
-        errorMsg = "${e.message}";
+        errorMsg = e.message ?? "Unknown verification error";
+        solution =
+            "Please try again or contact support if the problem persists";
     }
 
-    _debugLog("Verification failed: $errorMsg (code: ${e.code})");
-    setState(() {
-      _isVerifying = false;
-    });
+    _debugLog("Verification failed: $errorMsg (${e.code})");
 
-    _showErrorMessage(errorMsg);
+    // Show detailed error dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Verification Failed'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(errorMsg, style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text(solution),
+            SizedBox(height: 16),
+            Text('Error Code: ${e.code}',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('OK'),
+          ),
+          if (e.code != 'too-many-requests' && e.code != 'quota-exceeded')
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _verifyPhoneNumber(); // Retry
+              },
+              child: Text('Retry'),
+            ),
+        ],
+      ),
+    );
   }
 
   void _showSuccessMessage(String message) {
@@ -791,905 +884,336 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
     );
   }
 
-  void _debugLog(String message) {
-    if (_debug) {
-      print("PHONE AUTH DEBUG: $message");
-      setState(() {
-        _errorMessage += "\n$message";
-      });
-    } else {
-      print("PHONE AUTH: $message");
-    }
-  }
-
-  // UI BUILDING METHODS
-
   @override
   Widget build(BuildContext context) {
-    final Size screenSize = MediaQuery.of(context).size;
-    final bool isSmallScreen = screenSize.width < 360;
-
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.arrow_back_ios_rounded,
-              size: 16,
-              color: EatoTheme.primaryColor,
-            ),
-          ),
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            Navigator.pop(context);
-          },
+          icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Text(
+          'Phone Verification',
+          style: TextStyle(
+            color: EatoTheme.textPrimaryColor,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          // Debug button (only show in debug mode)
+          if (_debug)
+            IconButton(
+              icon: Icon(Icons.bug_report, color: EatoTheme.primaryColor),
+              onPressed: _checkFirebaseConfig,
+            ),
+        ],
       ),
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return FadeTransition(
-                opacity: _fadeInAnimation,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: child,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeInAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 20),
+
+                          // Phone icon
+                          ScaleTransition(
+                            scale: _scaleAnimation,
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.phone_android,
+                                size: 40,
+                                color: EatoTheme.primaryColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Title and description
+                          Text(
+                            'Verify Phone Number',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: EatoTheme.textPrimaryColor,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          Text(
+                            'We\'ve sent a 6-digit verification code to',
+                            style: TextStyle(
+                              color: EatoTheme.textSecondaryColor,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+
+                          Text(
+                            '+94${widget.phoneNumber}',
+                            style: TextStyle(
+                              color: EatoTheme.textPrimaryColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+
+                          // Code input fields
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: List.generate(6, (index) {
+                              return _buildCodeInputField(index);
+                            }),
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Status messages
+                          if (_isCodeSent && !_isVerificationSuccessful)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: EatoTheme.infoColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      color: EatoTheme.infoColor),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Enter the 6-digit code sent to your phone',
+                                      style:
+                                          TextStyle(color: EatoTheme.infoColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          if (_isVerificationSuccessful)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: EatoTheme.successColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      color: EatoTheme.successColor),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Phone number verified successfully!',
+                                      style: TextStyle(
+                                          color: EatoTheme.successColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          const SizedBox(height: 32),
+
+                          // Resend code section
+                          if (_canResend)
+                            TextButton(
+                              onPressed: _requestNewCode,
+                              child: Text(
+                                'Resend Code',
+                                style: TextStyle(
+                                  color: EatoTheme.primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          else
+                            Text(
+                              'Resend code in ${_remainingSeconds}s',
+                              style: TextStyle(
+                                  color: EatoTheme.textSecondaryColor),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: screenSize.width * 0.06,
-                  vertical: screenSize.height * 0.02,
-                ),
-                child: Column(
-                  children: [
-                    // Verification header animation
-                    _buildVerificationHeader(screenSize, isSmallScreen),
 
-                    SizedBox(height: screenSize.height * 0.03),
-
-                    // Main verification form
-                    _buildVerificationForm(screenSize, isSmallScreen),
-
-                    SizedBox(height: screenSize.height * 0.03),
-
-                    // Alternative options
-                    _buildAlternativeOptions(isSmallScreen),
-
-                    // Debug information if in debug mode
-                    if (_debug && _errorMessage.isNotEmpty) _buildDebugInfo(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVerificationHeader(Size screenSize, bool isSmallScreen) {
-    return Column(
-      children: [
-        // Verification illustration
-        Container(
-          width: screenSize.width * 0.5,
-          height: screenSize.width * 0.5,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _isVerificationSuccessful
-                ? Colors.green.withOpacity(0.1)
-                : _isAutoRetrievalInProgress
-                    ? Colors.blue.withOpacity(0.1)
-                    : EatoTheme.primaryColor.withOpacity(0.1),
-          ),
-          child: Center(
-            child: _isVerificationSuccessful
-                ? Icon(
-                    Icons.check_circle_rounded,
-                    size: screenSize.width * 0.25,
-                    color: Colors.green.withOpacity(0.7),
-                  )
-                : _isAutoRetrievalInProgress
-                    ? SizedBox(
-                        width: screenSize.width * 0.12,
-                        height: screenSize.width * 0.12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.blue.withOpacity(0.7),
+                  // Action buttons
+                  Column(
+                    children: [
+                      // Verify button
+                      if (_currentCode.length == 6 &&
+                          !_isVerificationSuccessful)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isVerifying ? null : _verifyManually,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: EatoTheme.primaryColor,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _isVerifying
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  )
+                                : Text(
+                                    'Verify Code',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                           ),
                         ),
-                      )
-                    : Icon(
-                        Icons.smartphone_rounded,
-                        size: screenSize.width * 0.25,
-                        color: EatoTheme.primaryColor.withOpacity(0.7),
-                      ),
-          ),
-        ),
 
-        SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-        // Title text
-        ShaderMask(
-          shaderCallback: (bounds) =>
-              EatoTheme.primaryGradient.createShader(bounds),
-          child: Text(
-            _isVerificationSuccessful
-                ? "Verification Successful"
-                : "Verify Your Phone",
-            style: TextStyle(
-              fontSize: isSmallScreen ? 24 : 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ),
-
-        SizedBox(height: 8),
-
-        // Subtitle text
-        Text(
-          _isCodeSent
-              ? "Enter the 6-digit code sent to your phone"
-              : "We're sending a verification code to your phone",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: isSmallScreen ? 14 : 16,
-            color: EatoTheme.textSecondaryColor,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVerificationForm(Size screenSize, bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
-            blurRadius: 20,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Phone number display with edit option
-          _buildPhoneDisplay(isSmallScreen),
-
-          SizedBox(height: 24),
-
-          // Status indicator
-          _buildStatusIndicator(isSmallScreen),
-
-          SizedBox(height: 24),
-
-          // Verification code input
-          _buildCodeInput(isSmallScreen),
-
-          SizedBox(height: 16),
-
-          // Hidden paste field for easy code pasting
-          Opacity(
-            opacity: 0.0,
-            child: TextField(
-              controller: _pasteController,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-            ),
-          ),
-
-          // Paste code option
-          TextButton.icon(
-            onPressed: () {
-              Clipboard.getData(Clipboard.kTextPlain).then((data) {
-                if (data != null && data.text != null) {
-                  String text = data.text!.trim();
-                  if (text.length == 6 && RegExp(r'^\d{6}$').hasMatch(text)) {
-                    // Valid 6-digit code, fill the input fields
-                    for (int i = 0; i < 6; i++) {
-                      _codeControllers[i].text = text[i];
-                    }
-
-                    _showSuccessMessage("Code pasted");
-                  } else {
-                    _showErrorMessage(
-                        "Clipboard doesn't contain a valid 6-digit code");
-                  }
-                }
-              });
-            },
-            icon: Icon(
-              Icons.content_paste_rounded,
-              size: 18,
-              color: EatoTheme.primaryColor,
-            ),
-            label: Text(
-              "Paste Code from Clipboard",
-              style: TextStyle(
-                color: EatoTheme.primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-
-          SizedBox(height: 16),
-
-          // Resend option with timer
-          _buildResendOption(isSmallScreen),
-
-          SizedBox(height: 24),
-
-          // Verify button
-          _buildVerifyButton(isSmallScreen),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhoneDisplay(bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: EatoTheme.primaryColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: EatoTheme.primaryColor.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.phone_android_rounded,
-                size: 20,
-                color: EatoTheme.primaryColor,
-              ),
-              SizedBox(width: 12),
-              Text(
-                widget.phoneNumber.startsWith('+')
-                    ? widget.phoneNumber
-                    : '+${widget.phoneNumber}',
-                style: TextStyle(
-                  fontSize: isSmallScreen ? 15 : 16,
-                  fontWeight: FontWeight.w500,
-                  color: EatoTheme.textPrimaryColor,
-                ),
-              ),
-            ],
-          ),
-          InkWell(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              Navigator.pop(context);
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Text(
-                    "Change",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: EatoTheme.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(
-                    Icons.edit_rounded,
-                    size: 16,
-                    color: EatoTheme.primaryColor,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusIndicator(bool isSmallScreen) {
-    if (_isAutoRetrievalInProgress) {
-      return Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.blue.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              padding: EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.blue.withOpacity(0.2),
-              ),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Auto-Verifying",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.blue.shade700,
-                      fontSize: isSmallScreen ? 14 : 15,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "Waiting for SMS to arrive automatically...",
-                    style: TextStyle(
-                      color: Colors.blue.shade600,
-                      fontSize: isSmallScreen ? 12 : 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    } else if (_isVerificationSuccessful) {
-      return Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.green.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green.withOpacity(0.2),
-              ),
-              child: Icon(
-                Icons.check,
-                color: Colors.green,
-                size: 16,
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Verification Successful",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.green.shade700,
-                      fontSize: isSmallScreen ? 14 : 15,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "Your phone number has been verified!",
-                    style: TextStyle(
-                      color: Colors.green.shade600,
-                      fontSize: isSmallScreen ? 12 : 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    } else if (_isCodeSent) {
-      return Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: EatoTheme.primaryColor.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: EatoTheme.primaryColor.withOpacity(0.1),
-              ),
-              child: Icon(
-                Icons.sms_rounded,
-                color: EatoTheme.primaryColor,
-                size: 14,
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Code Sent",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: EatoTheme.primaryColor,
-                      fontSize: isSmallScreen ? 14 : 15,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "Enter the 6-digit code from your SMS",
-                    style: TextStyle(
-                      color: EatoTheme.textSecondaryColor,
-                      fontSize: isSmallScreen ? 12 : 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return Container(
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 24,
-              height: 24,
-              padding: EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey.withOpacity(0.2),
-              ),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
-              ),
-            ),
-            SizedBox(width: 12),
-            Text(
-              "Sending verification code...",
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: isSmallScreen ? 13 : 14,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  Widget _buildCodeInput(bool isSmallScreen) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          "Verification Code",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: isSmallScreen ? 15 : 16,
-            color: EatoTheme.textPrimaryColor,
-          ),
-        ),
-        SizedBox(height: 16),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(
-              6,
-              (index) => AnimatedContainer(
-                duration: Duration(milliseconds: 200),
-                width: isSmallScreen ? 38 : 44,
-                height: isSmallScreen ? 50 : 56,
-                decoration: BoxDecoration(
-                  color: _getDigitFieldColor(index),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _getDigitBorderColor(index),
-                    width: 1.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _digitValidation[index] == true
-                          ? Colors.green.withOpacity(0.1)
-                          : _digitValidation[index] == false
-                              ? Colors.red.withOpacity(0.1)
-                              : Colors.transparent,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: TextField(
-                    controller: _codeControllers[index],
-                    focusNode: _focusNodes[index],
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    maxLength: 1,
-                    showCursor: false,
-                    readOnly: _isVerificationSuccessful || _isAutoVerifying,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: _getDigitColor(index),
-                    ),
-                    decoration: InputDecoration(
-                      counterText: '',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(1),
-                    ],
-                    onChanged: (value) {
-                      if (value.isNotEmpty) {
-                        if (index < 5) {
-                          FocusScope.of(context)
-                              .requestFocus(_focusNodes[index + 1]);
-                        } else {
-                          FocusScope.of(context).unfocus();
-                        }
-                      } else if (value.isEmpty && index > 0) {
-                        FocusScope.of(context)
-                            .requestFocus(_focusNodes[index - 1]);
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Digit formatting helpers for real-time validation
-  Color _getDigitColor(int index) {
-    if (_codeControllers[index].text.isEmpty) {
-      return EatoTheme.textPrimaryColor;
-    } else if (_digitValidation[index] == null) {
-      return EatoTheme.primaryColor;
-    } else if (_digitValidation[index]!) {
-      return Colors.green.shade700;
-    } else {
-      return Colors.red.shade700;
-    }
-  }
-
-  Color _getDigitFieldColor(int index) {
-    if (_codeControllers[index].text.isEmpty) {
-      return Colors.white;
-    } else if (_digitValidation[index] == null) {
-      return EatoTheme.primaryColor.withOpacity(0.05);
-    } else if (_digitValidation[index]!) {
-      return Colors.green.withOpacity(0.05);
-    } else {
-      return Colors.red.withOpacity(0.05);
-    }
-  }
-
-  Color _getDigitBorderColor(int index) {
-    if (_focusNodes[index].hasFocus) {
-      return EatoTheme.primaryColor;
-    } else if (_codeControllers[index].text.isEmpty) {
-      return Colors.grey.shade300;
-    } else if (_digitValidation[index] == null) {
-      return EatoTheme.primaryColor.withOpacity(0.5);
-    } else if (_digitValidation[index]!) {
-      return Colors.green.withOpacity(0.5);
-    } else {
-      return Colors.red.withOpacity(0.5);
-    }
-  }
-
-  Widget _buildResendOption(bool isSmallScreen) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Didn't receive the code? ",
-          style: TextStyle(
-            color: EatoTheme.textSecondaryColor,
-            fontSize: isSmallScreen ? 13 : 14,
-          ),
-        ),
-        TextButton(
-          onPressed: _canResend ? _requestNewCode : null,
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.zero,
-            minimumSize: Size(0, 0),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            _canResend ? "Resend Code" : "Resend in $_remainingSeconds s",
-            style: TextStyle(
-              color: _canResend ? EatoTheme.primaryColor : Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
-              fontSize: isSmallScreen ? 13 : 14,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVerifyButton(bool isSmallScreen) {
-    bool isDisabled = _isVerifying ||
-        _isAutoVerifying ||
-        !_isCodeSent ||
-        _currentCode.length != 6 ||
-        _isVerificationSuccessful;
-
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton(
-        onPressed: isDisabled
-            ? null
-            : _isVerificationSuccessful
-                ? () => _navigateToHome(
-                    Provider.of<UserProvider>(context, listen: false)
-                        .currentUser)
-                : _verifyManually,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white60,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.zero,
-        ),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: _isVerificationSuccessful
-                ? LinearGradient(
-                    colors: [Colors.green.shade500, Colors.green.shade700],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : isDisabled
-                    ? LinearGradient(
-                        colors: [Colors.grey.shade400, Colors.grey.shade500],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : EatoTheme.primaryGradient,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: isDisabled
-                ? []
-                : [
-                    BoxShadow(
-                      color: _isVerificationSuccessful
-                          ? Colors.green.withOpacity(0.3)
-                          : EatoTheme.primaryColor.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-          ),
-          child: Container(
-            height: 55,
-            alignment: Alignment.center,
-            child: _isVerifying
-                ? SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isVerificationSuccessful ? "Continue" : "Verify Code",
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 16 : 18,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                      // Skip verification button
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed:
+                              _isVerifying ? null : _skipPhoneVerification,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side:
+                                BorderSide(color: EatoTheme.textSecondaryColor),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Skip Verification',
+                            style: TextStyle(
+                              color: EatoTheme.textSecondaryColor,
+                              fontSize: 16,
+                            ),
+                          ),
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Icon(
-                        _isVerificationSuccessful
-                            ? Icons.check_circle
-                            : Icons.lock_open,
-                        size: 20,
-                      ),
                     ],
                   ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildAlternativeOptions(bool isSmallScreen) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: Colors.grey.shade300)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "OR",
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: Colors.grey.shade300)),
-          ],
-        ),
-        SizedBox(height: 20),
-        OutlinedButton.icon(
-          onPressed: _isVerifying ? null : _skipPhoneVerification,
-          icon: Icon(Icons.skip_next_rounded),
-          label: Text("Continue without verification"),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: EatoTheme.primaryColor,
-            side: BorderSide(color: EatoTheme.primaryColor.withOpacity(0.5)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
-        ),
-        SizedBox(height: 16),
-        Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.amber.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.amber.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: Colors.amber.shade800,
-                size: 24,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Why verify your phone?",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.amber.shade800,
-                        fontSize: isSmallScreen ? 14 : 15,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      "Verified phone numbers help protect your account and enable important notifications.",
-                      style: TextStyle(
-                        color: Colors.amber.shade700,
-                        fontSize: isSmallScreen ? 12 : 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDebugInfo() {
+  Widget _buildCodeInputField(int index) {
     return Container(
-      margin: EdgeInsets.only(top: 20),
-      padding: EdgeInsets.all(16),
+      width: 50, // Slightly wider
+      height: 60, // Slightly taller
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        border: Border.all(
+          color: _digitValidation[index] == true
+              ? EatoTheme.successColor
+              : _digitValidation[index] == false
+                  ? EatoTheme.errorColor
+                  : Colors.grey.shade300,
+          width: 2,
+        ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        color: _digitValidation[index] == true
+            ? EatoTheme.successColor.withOpacity(0.1)
+            : _digitValidation[index] == false
+                ? EatoTheme.errorColor.withOpacity(0.1)
+                : Colors.white, // Change to white background
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.bug_report, color: Colors.grey.shade700, size: 16),
-              SizedBox(width: 8),
-              Text(
-                "Debug Information",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            _errorMessage,
-            style: TextStyle(
-              fontSize: 12,
-              fontFamily: 'monospace',
-              color: Colors.grey.shade700,
-            ),
-          ),
+      child: TextField(
+        // Change from TextFormField to TextField
+        controller: _codeControllers[index],
+        focusNode: _focusNodes[index],
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        style: TextStyle(
+          fontSize: 24, // Larger font
+          fontWeight: FontWeight.bold,
+          color: EatoTheme.textPrimaryColor,
+        ),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          counterText: '',
+          contentPadding: EdgeInsets.zero, // Remove padding
+          isDense: true, // Make it dense
+        ),
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(1), // Ensure only 1 character
         ],
+        onChanged: (value) {
+          if (value.isNotEmpty) {
+            // Clear validation when typing
+            setState(() {
+              _digitValidation[index] = null;
+            });
+
+            // Move to next field
+            if (index < 5) {
+              FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+            } else {
+              FocusScope.of(context).unfocus();
+            }
+          } else {
+            // Move to previous field when deleting
+            if (index > 0) {
+              FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+            }
+          }
+        },
+        onTap: () {
+          // Clear the field when tapped
+          _codeControllers[index].clear();
+          setState(() {
+            _digitValidation[index] = null;
+          });
+        },
       ),
     );
+  }
+
+// Also add this method to help with focus management
+  void _focusOnFirstEmptyField() {
+    for (int i = 0; i < 6; i++) {
+      if (_codeControllers[i].text.isEmpty) {
+        FocusScope.of(context).requestFocus(_focusNodes[i]);
+        break;
+      }
+    }
   }
 }

@@ -1,114 +1,55 @@
-import 'package:eato/pages/customer/homepage/shop_category_page.dart';
+// FILE: lib/pages/customer/homepage/meal_pages.dart
+// Fixed version with proper method calls and error handling
+
 import 'package:flutter/material.dart';
-import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:eato/services/Firebase_Storage_Service.dart';
 import 'package:eato/Model/Food&Store.dart';
+import 'package:eato/pages/customer/homepage/shop_category_page.dart';
+import 'package:eato/widgets/bottom_nav_bar.dart';
+import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MealPage extends StatefulWidget {
-  // Keep both parameters for backward compatibility
-  final String? mealType; // Old parameter (used in main.dart routes)
-  final String? categoryTitle; // New parameter
+  final String? categoryTitle;
+  final String? mealType;
   final bool showBottomNav;
 
-  // Constructor with both old and new parameters
   const MealPage({
     Key? key,
-    this.mealType, // Make it optional
-    this.categoryTitle, // Make it optional
+    this.categoryTitle,
+    this.mealType,
     this.showBottomNav = true,
-  })  : assert(mealType != null || categoryTitle != null,
-            "Either mealType or categoryTitle must be provided"),
-        super(key: key);
+  }) : super(key: key);
 
   @override
   State<MealPage> createState() => _MealPageState();
 }
 
 class _MealPageState extends State<MealPage> {
-  final TextEditingController _searchController = TextEditingController();
-  String _selectedMealType = '';
-  bool _isLoading = true;
   List<Food> _mealItems = [];
   List<Food> _filteredMealItems = [];
-  final FirebaseStorageService _storageService = FirebaseStorageService();
+  bool _isLoading = true;
+  String? _error;
+  String _searchQuery = '';
+  String _sortBy = 'name'; // name, price, rating
 
-  // Get the effective category title
+  // ✅ Get effective category title with fallback
   String get _effectiveCategoryTitle =>
-      widget.categoryTitle ?? widget.mealType!;
-
-  // ✅ FIXED: Only treat as meal time route when NO specific category is provided
-  // This means we're coming from a direct route like "/breakfast" without a category
-  bool get _isMealTimeRoute =>
-      widget.categoryTitle == null &&
-      widget.mealType != null &&
-      (widget.mealType == 'Breakfast' ||
-          widget.mealType == 'Lunch' ||
-          widget.mealType == 'Dinner');
+      widget.categoryTitle ?? 'All Categories';
 
   @override
   void initState() {
     super.initState();
-    // Set up search listener
-    _searchController.addListener(_onSearchChanged);
 
-    // Load meal items
+    // ✅ FIXED: Choose the right loading method based on input
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isMealTimeRoute) {
-        // Only when coming from direct meal time routes without category
-        // Load representative meals from all categories for that meal time
+      if (widget.categoryTitle != null) {
+        _loadMealItems();
+      } else if (widget.mealType != null) {
         _loadMealTimeItems();
       } else {
-        // Normal category view - load meals from specific category
-        // This will now be called when coming from category page
-        _loadMealItems();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged() {
-    _filterMeals();
-  }
-
-  // Filter meals based on search query
-  void _filterMeals() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredMealItems = List.from(_mealItems);
-      } else {
-        _filteredMealItems = _mealItems
-            .where((meal) =>
-                meal.name.toLowerCase().contains(query) ||
-                (meal.description?.toLowerCase().contains(query) ?? false))
-            .toList();
-      }
-    });
-  }
-
-  // Navigate to shop category page
-  void _selectMealType(Food meal) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ShopCategoryPage(
-          mealTitle: meal.name,
-          categoryTitle: _effectiveCategoryTitle,
-          showBottomNav: widget.showBottomNav,
-        ),
-      ),
-    ).then((selectedTabIndex) {
-      // ✅ Handle navigation back from ShopCategoryPage
-      if (selectedTabIndex != null && selectedTabIndex is int) {
-        Navigator.pop(context, selectedTabIndex);
+        _loadAllMealItems();
       }
     });
   }
@@ -117,6 +58,7 @@ class _MealPageState extends State<MealPage> {
   Future<void> _loadMealItems() async {
     setState(() {
       _isLoading = true;
+      _error = null;
     });
 
     try {
@@ -130,7 +72,7 @@ class _MealPageState extends State<MealPage> {
       List<Food> filteredMeals;
 
       if (widget.mealType != null) {
-        // ✅ FIXED: Use the new method that gets meals by category AND time
+        // ✅ FIXED: Use the corrected method that gets meals by category AND time
         filteredMeals = await foodProvider.getMealsByCategoryAndTime(
             _effectiveCategoryTitle, widget.mealType);
 
@@ -151,6 +93,10 @@ class _MealPageState extends State<MealPage> {
       });
 
       if (filteredMeals.isEmpty) {
+        setState(() {
+          _error =
+              'No meals found for $_effectiveCategoryTitle${widget.mealType != null ? ' at ${widget.mealType}' : ''}';
+        });
         print(
             '⚠️ [MealPage] No meals found for $_effectiveCategoryTitle${widget.mealType != null ? ' at ${widget.mealType}' : ''}');
       }
@@ -158,14 +104,16 @@ class _MealPageState extends State<MealPage> {
       print('❌ [MealPage] Error loading meal items: $e');
       setState(() {
         _isLoading = false;
+        _error = 'Failed to load meals: $e';
       });
     }
   }
 
-  // Special handling for meal time routes (breakfast, lunch, dinner) without category
+  // ✅ FIXED: Special handling for meal time routes (breakfast, lunch, dinner) without category
   Future<void> _loadMealTimeItems() async {
     setState(() {
       _isLoading = true;
+      _error = null;
     });
 
     try {
@@ -178,26 +126,30 @@ class _MealPageState extends State<MealPage> {
       final categories = await foodProvider.getAllCategories();
       print('📂 [MealPage] Found ${categories.length} categories');
 
+      if (categories.isEmpty) {
+        setState(() {
+          _error = 'No food categories available';
+          _isLoading = false;
+        });
+        return;
+      }
+
       // For each category, get representative meals for the specified meal time
       List<Food> meals = [];
       for (String category in categories) {
         try {
-          final categoryMeals = await foodProvider.getMealsByCategory(category);
-
-          // Filter meals by meal time
-          final mealTimeFiltered = categoryMeals
-              .where((meal) =>
-                  meal.time.toLowerCase() == widget.mealType!.toLowerCase())
-              .toList();
+          // ✅ FIXED: Use the corrected method with proper error handling
+          final categoryMeals = await foodProvider.getMealsByCategoryAndTime(
+              category, widget.mealType);
 
           // Add first meal as representative for this category
-          if (mealTimeFiltered.isNotEmpty) {
-            meals.add(mealTimeFiltered.first);
+          if (categoryMeals.isNotEmpty) {
+            meals.add(categoryMeals.first);
             print(
-                '✅ [MealPage] Added ${mealTimeFiltered.first.name} from $category');
+                '✅ [MealPage] Added ${categoryMeals.first.name} from $category');
           }
         } catch (e) {
-          print('⚠️ [MealPage] Error processing category $category: $e');
+          print('⚠️ [MealPage] Error loading meals for category $category: $e');
           continue;
         }
       }
@@ -208,247 +160,348 @@ class _MealPageState extends State<MealPage> {
         _isLoading = false;
       });
 
-      print(
-          '✅ [MealPage] Loaded ${meals.length} representative meals for ${widget.mealType}');
+      if (meals.isEmpty) {
+        setState(() {
+          _error = 'No ${widget.mealType} meals available';
+        });
+        print('⚠️ [MealPage] No ${widget.mealType} meals found');
+      } else {
+        print(
+            '✅ [MealPage] Loaded ${meals.length} representative ${widget.mealType} meals');
+      }
     } catch (e) {
       print('❌ [MealPage] Error loading meal time items: $e');
       setState(() {
         _isLoading = false;
+        _error = 'Failed to load ${widget.mealType} meals: $e';
       });
     }
   }
 
-  // ✅ Handle bottom nav taps
-  void _onBottomNavTap(int index) {
-    if (index == 0) {
-      // Home tab - stay on current page or go back
-      return;
-    } else {
-      // Other tabs - pass the index back through the navigation chain
-      Navigator.pop(context, index);
+  // ✅ NEW: Load all available meals when no specific filter is applied
+  Future<void> _loadAllMealItems() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      print('🍽️ [MealPage] Loading all available meals');
+
+      final foodProvider = Provider.of<FoodProvider>(context, listen: false);
+
+      // Get all categories and then get meals from each
+      final categories = await foodProvider.getAllCategories();
+      List<Food> allMeals = [];
+
+      for (String category in categories) {
+        try {
+          final categoryMeals = await foodProvider.getMealsByCategory(category);
+          allMeals.addAll(categoryMeals);
+        } catch (e) {
+          print('⚠️ [MealPage] Error loading meals for category $category: $e');
+          continue;
+        }
+      }
+
+      // Remove duplicates based on food name
+      final uniqueMeals = <String, Food>{};
+      for (var meal in allMeals) {
+        uniqueMeals[meal.name] = meal;
+      }
+
+      setState(() {
+        _mealItems = uniqueMeals.values.toList();
+        _filteredMealItems = List.from(_mealItems);
+        _isLoading = false;
+      });
+
+      print('✅ [MealPage] Loaded ${_mealItems.length} unique meals');
+    } catch (e) {
+      print('❌ [MealPage] Error loading all meals: $e');
+      setState(() {
+        _isLoading = false;
+        _error = 'Failed to load meals: $e';
+      });
     }
+  }
+
+  // ✅ IMPROVED: Search functionality
+  void _performSearch(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredMealItems = List.from(_mealItems);
+      } else {
+        _filteredMealItems = _mealItems
+            .where((meal) =>
+                meal.name.toLowerCase().contains(query.toLowerCase()) ||
+                meal.category.toLowerCase().contains(query.toLowerCase()) ||
+                (meal.description
+                        ?.toLowerCase()
+                        .contains(query.toLowerCase()) ??
+                    false))
+            .toList();
+      }
+    });
+  }
+
+  // ✅ IMPROVED: Sort functionality
+  void _sortMeals(String sortBy) {
+    setState(() {
+      _sortBy = sortBy;
+      switch (sortBy) {
+        case 'name':
+          _filteredMealItems.sort((a, b) => a.name.compareTo(b.name));
+          break;
+        case 'price':
+          _filteredMealItems.sort((a, b) => a.price.compareTo(b.price));
+          break;
+        case 'category':
+          _filteredMealItems.sort((a, b) => a.category.compareTo(b.category));
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  // Navigate to shop category page
+  void _selectMealType(Food meal) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ShopCategoryPage(
+          mealTitle: meal.name,
+          categoryTitle: meal.category,
+          showBottomNav: widget.showBottomNav,
+        ),
+      ),
+    ).then((selectedTabIndex) {
+      // ✅ Handle navigation back from ShopCategoryPage
+      if (selectedTabIndex != null && selectedTabIndex is int) {
+        Navigator.pop(context, selectedTabIndex);
+      }
+    });
+  }
+
+  // ✅ IMPROVED: Refresh functionality
+  Future<void> _refreshData() async {
+    if (widget.categoryTitle != null) {
+      await _loadMealItems();
+    } else if (widget.mealType != null) {
+      await _loadMealTimeItems();
+    } else {
+      await _loadAllMealItems();
+    }
+  }
+
+  // ✅ Get price display text with portion support using existing portionPrices structure
+  String _getPriceDisplayText(Food meal) {
+    if (meal.portionPrices.isNotEmpty) {
+      // Find the cheapest portion
+      double minPrice =
+          meal.portionPrices.values.reduce((a, b) => a < b ? a : b);
+
+      if (meal.portionPrices.length > 1) {
+        return 'From ₹${minPrice.toStringAsFixed(2)}';
+      } else {
+        return '₹${minPrice.toStringAsFixed(2)}';
+      }
+    }
+    return '₹${meal.price.toStringAsFixed(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.black),
+        title: Text(
+          widget.categoryTitle ?? widget.mealType ?? 'All Meals',
+          style: EatoTheme.headingMedium.copyWith(color: Colors.black),
+        ),
+        actions: [
+          // Sort button
+          PopupMenuButton<String>(
+            onSelected: _sortMeals,
+            icon: const Icon(Icons.sort, color: Colors.black),
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'name', child: Text('Sort by Name')),
+              const PopupMenuItem(value: 'price', child: Text('Sort by Price')),
+              const PopupMenuItem(
+                  value: 'category', child: Text('Sort by Category')),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search meals...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+              ),
+              onChanged: _performSearch,
+            ),
+          ),
+
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                    ),
+                  )
+                : _error != null
+                    ? _buildErrorWidget()
+                    : _filteredMealItems.isEmpty
+                        ? _buildEmptyWidget()
+                        : _buildMealsList(),
+          ),
+        ],
+      ),
+      bottomNavigationBar: widget.showBottomNav
+          ? BottomNavBar(
+              currentIndex: 0,
+              onTap: (index) {
+                Navigator.pop(context, index);
+              },
+            )
+          : null,
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ✅ FIXED: Constrained layout to prevent overflow
-            Expanded(
-              child: CustomScrollView(
-                slivers: [
-                  // Header section
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Back button
-                          const SizedBox(height: 12),
-                          InkWell(
-                            onTap: () {
-                              Navigator.pop(context);
-                            },
-                            child: const Row(
-                              children: [
-                                Icon(Icons.arrow_back,
-                                    size: 20, color: Colors.black87),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Back',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Title
-                          const SizedBox(height: 16),
-                          Text(
-                            _effectiveCategoryTitle,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-
-                          // Subtitle
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.mealType != null
-                                ? 'Select a ${widget.mealType!.toLowerCase()} meal'
-                                : 'Select a meal',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-
-                          // Search bar
-                          const SizedBox(height: 16),
-                          Container(
-                            height: 45,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(22),
-                              border: Border.all(
-                                  color: Colors.grey.shade300, width: 1),
-                            ),
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.search,
-                                      color: Colors.grey.shade500, size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _searchController,
-                                      decoration: InputDecoration(
-                                        hintText: 'Search for meals',
-                                        hintStyle: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade500,
-                                        ),
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                vertical: 8),
-                                      ),
-                                    ),
-                                  ),
-                                  if (_searchController.text.isNotEmpty)
-                                    GestureDetector(
-                                      onTap: () {
-                                        _searchController.clear();
-                                      },
-                                      child: Icon(Icons.clear,
-                                          size: 18,
-                                          color: Colors.grey.shade600),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Meal items list
-                  _isLoading
-                      ? const SliverFillRemaining(
-                          child: Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.purple),
-                          ),
-                        )
-                      : _filteredMealItems.isEmpty
-                          ? SliverFillRemaining(
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.no_food,
-                                      size: 48,
-                                      color: Colors.grey.shade400,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      _searchController.text.isNotEmpty
-                                          ? 'No meals match your search'
-                                          : widget.mealType != null
-                                              ? 'No ${widget.mealType!.toLowerCase()} meals available in $_effectiveCategoryTitle'
-                                              : 'No meals available in this category',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : SliverPadding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              sliver: SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    final meal = _filteredMealItems[index];
-                                    return _buildMealItemCard(meal);
-                                  },
-                                  childCount: _filteredMealItems.length,
-                                ),
-                              ),
-                            ),
-
-                  // Add bottom padding for bottom nav
-                  if (widget.showBottomNav)
-                    const SliverToBoxAdapter(
-                      child: SizedBox(height: 80),
-                    ),
-                ],
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
               ),
             ),
-
-            // ✅ Bottom Navigation Bar with proper navigation handling
-            if (widget.showBottomNav)
-              BottomNavBar(
-                currentIndex: 0, // Home tab is selected
-                onTap: _onBottomNavTap,
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _refreshData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
+              child: const Text('Retry', style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Build meal item card
+  Widget _buildEmptyWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.restaurant_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'No meals found for "$_searchQuery"'
+                  : 'No meals available',
+              textAlign: TextAlign.center,
+              style: EatoTheme.bodyMedium.copyWith(
+                color: EatoTheme.textSecondaryColor,
+              ),
+            ),
+            if (_searchQuery.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => _performSearch(''),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Clear Search',
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
-  Widget _buildMealItemCard(Food meal) {
-    return Container(
+  Widget _buildMealsList() {
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16.0),
+        itemCount: _filteredMealItems.length,
+        itemBuilder: (context, index) {
+          final meal = _filteredMealItems[index];
+          return _buildMealCard(meal);
+        },
+      ),
+    );
+  }
+
+  Widget _buildMealCard(Food meal) {
+    return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: InkWell(
         onTap: () => _selectMealType(meal),
         borderRadius: BorderRadius.circular(12),
         child: Row(
           children: [
-            // Food image (unchanged)
+            // Food Image
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
               ),
-              child: meal.imageUrl.isNotEmpty
+              child: meal.imageUrl != null && meal.imageUrl!.isNotEmpty
                   ? CachedNetworkImage(
-                      imageUrl: meal.imageUrl,
+                      imageUrl: meal.imageUrl!,
                       width: 120,
                       height: 100,
                       fit: BoxFit.cover,
@@ -499,7 +552,7 @@ class _MealPageState extends State<MealPage> {
                     ),
                     const SizedBox(height: 4),
 
-                    // UPDATED: New price display logic with portion support
+                    // ✅ UPDATED: New price display logic with portion support
                     Text(
                       _getPriceDisplayText(meal),
                       style: const TextStyle(
@@ -511,78 +564,56 @@ class _MealPageState extends State<MealPage> {
 
                     const SizedBox(height: 4),
                     Text(
-                      meal.description ?? 'No description available',
+                      meal.description ?? 'Delicious ${meal.name}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: Colors.grey[600],
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                    // Category and meal time tags
+                    Wrap(
+                      spacing: 8,
                       children: [
-                        // Food type tag
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                _getFoodTypeColor(meal.type).withOpacity(0.1),
+                            color: Colors.purple.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color:
-                                  _getFoodTypeColor(meal.type).withOpacity(0.3),
-                              width: 1,
-                            ),
                           ),
                           child: Text(
-                            meal.type,
-                            style: TextStyle(
+                            meal.category,
+                            style: const TextStyle(
                               fontSize: 10,
+                              color: Colors.purple,
                               fontWeight: FontWeight.w500,
-                              color: _getFoodTypeColor(meal.type),
                             ),
                           ),
                         ),
-
-                        // UPDATED: Show portion info if available
-                        Row(
-                          children: [
-                            if (meal.hasMultiplePortions) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '${meal.availablePortions.length} sizes',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                            ],
-                            Text(
-                              'View Shops',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.purple,
-                              ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            meal.time,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.orange,
+                              fontWeight: FontWeight.w500,
                             ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 12,
-                              color: Colors.purple,
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
@@ -590,53 +621,19 @@ class _MealPageState extends State<MealPage> {
                 ),
               ),
             ),
+
+            // Arrow icon
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Colors.grey,
+              ),
+            ),
           ],
         ),
       ),
     );
-  }
-
-  String _getPriceDisplayText(Food meal) {
-    // Use the helper method from Food model
-    return meal.priceDisplayText;
-
-    // Alternative implementation if you prefer custom logic:
-    /*
-  if (meal.portionPrices.isEmpty) {
-    // Fallback to single price for backward compatibility
-    return 'Rs. ${meal.price.toStringAsFixed(2)}';
-  } else if (meal.portionPrices.length == 1) {
-    // Single portion available
-    final price = meal.portionPrices.values.first;
-    return 'Rs. ${price.toStringAsFixed(2)}';
-  } else {
-    // Multiple portions - show range
-    final prices = meal.portionPrices.values.toList()..sort();
-    final minPrice = prices.first;
-    final maxPrice = prices.last;
-    
-    if (minPrice == maxPrice) {
-      return 'Rs. ${minPrice.toStringAsFixed(2)}';
-    } else {
-      return 'From Rs. ${minPrice.toStringAsFixed(2)}';
-    }
-  }
-  */
-  }
-
-  // Get color based on food type
-  Color _getFoodTypeColor(String foodType) {
-    switch (foodType) {
-      case 'Vegetarian':
-        return Colors.green;
-      case 'Non-Vegetarian':
-        return Colors.red;
-      case 'Vegan':
-        return Colors.teal;
-      case 'Dessert':
-        return Colors.orange;
-      default:
-        return Colors.purple;
-    }
   }
 }

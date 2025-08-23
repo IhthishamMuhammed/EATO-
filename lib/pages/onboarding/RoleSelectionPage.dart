@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/pages/auth/login.dart';
-import 'package:eato/pages/onboarding/onboarding2.dart';
 import 'GetStartedPage.dart';
 
 class RoleSelectionPage extends StatefulWidget {
@@ -55,7 +54,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 360;
 
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
@@ -269,7 +267,6 @@ class _RoleSelectionPageState extends State<RoleSelectionPage>
     required Color iconColor,
   }) {
     final isSelected = _selectedRole == role;
-    final screenSize = MediaQuery.of(context).size;
 
     return GestureDetector(
       onTap: () => _navigateToLogin(role),
