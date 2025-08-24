@@ -568,7 +568,6 @@ class _OrderHomePageState extends State<OrderHomePage>
             showProgress: true,
             isProviderView:
                 true, // Enable provider view to show customer contact
-            actionButtons: _buildOrderActionButtons(order),
           ),
         );
       },
@@ -588,17 +587,36 @@ class _OrderHomePageState extends State<OrderHomePage>
           bottomRight: Radius.circular(12),
         ),
       ),
-      child: EatoTheme.buildResponsiveButtonRow(
-        buttons: [
-          _buildQuickStatusButton(order),
-          OutlinedButton(
-            onPressed: () => _viewOrderDetails(order),
-            child: Text(
-              EatoTheme.isSmallScreen(context) ? 'Details' : 'View Details',
-              overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          // Existing buttons
+          Expanded(
+            child: EatoTheme.buildResponsiveButtonRow(
+              buttons: [
+                _buildQuickStatusButton(order),
+                OutlinedButton(
+                  onPressed: () => _viewOrderDetails(order),
+                  child: Text(
+                    EatoTheme.isSmallScreen(context)
+                        ? 'Details'
+                        : 'View Details',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  style: EatoTheme.getResponsiveOutlinedButtonStyle(context),
+                ),
+              ],
             ),
-            style: EatoTheme.getResponsiveOutlinedButtonStyle(context),
           ),
+          // Add compact action buttons here
+          if (order.customerPhone.isNotEmpty) ...[
+            SizedBox(width: 8),
+            // Add your compact call button here
+          ],
+          if (order.deliveryOption == 'Delivery' &&
+              order.deliveryAddress.isNotEmpty) ...[
+            SizedBox(width: 6),
+            // Add your compact directions button here
+          ],
         ],
       ),
     );

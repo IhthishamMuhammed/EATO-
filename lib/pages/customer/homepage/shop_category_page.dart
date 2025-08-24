@@ -1,6 +1,7 @@
 // FILE: lib/pages/customer/shop_category_page.dart
 // Fixed version with updated methods and cart confirmation modal
 
+import 'package:eato/widgets/floating_notification_button.dart.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -296,17 +297,22 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-              ),
-            )
-          : _error != null
-              ? _buildErrorWidget()
-              : _shopItems.isEmpty
-                  ? _buildEmptyWidget()
-                  : _buildShopsList(),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
+                  ),
+                )
+              : _error != null
+                  ? _buildErrorWidget()
+                  : _shopItems.isEmpty
+                      ? _buildEmptyWidget()
+                      : _buildShopsList(),
+          const FloatingNotificationButton(),
+        ],
+      ),
       bottomNavigationBar: widget.showBottomNav
           ? BottomNavBar(
               currentIndex: 0,

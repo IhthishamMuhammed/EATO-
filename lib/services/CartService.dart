@@ -566,6 +566,8 @@ class CartService {
     double serviceFee = subtotal * 0.05;
     double totalAmount = subtotal + deliveryFee + serviceFee;
 
+    final orderNumber = await _generateSequentialOrderNumber(storeId);
+
     // Convert cart items to order items
     List<OrderItem> orderItems = storeItems
         .map((item) => OrderItem(
@@ -592,6 +594,7 @@ class CartService {
     // Create enhanced order with location
     final order = CustomerOrder(
       id: '', // Will be set by Firestore
+      orderNumber: orderNumber,
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phoneNumber ?? '',
@@ -624,6 +627,52 @@ class CartService {
 
     print('✅ [CartService] Order created for store $storeId: ${docRef.id}');
     return docRef.id;
+  }
+
+  static Future<String> _generateSequentialOrderNumber(String storeId) async {
+    try {
+      final today = DateTime.now();
+      final dateString =
+          '${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}';
+      final counterDocId = '${storeId}_$dateString';
+
+      // Reference to the counter document
+      final counterRef = FirebaseFirestore.instance
+          .collection('order_counters')
+          .doc(counterDocId);
+
+      // Use a transaction to ensure atomic counter increment
+      final orderNumber = await FirebaseFirestore.instance
+          .runTransaction<String>((transaction) async {
+        final counterDoc = await transaction.get(counterRef);
+
+        int nextNumber = 1;
+        if (counterDoc.exists) {
+          final data = counterDoc.data() as Map<String, dynamic>;
+          nextNumber = (data['counter'] ?? 0) + 1;
+        }
+
+        // Update the counter
+        transaction.set(
+            counterRef,
+            {
+              'counter': nextNumber,
+              'storeId': storeId,
+              'date': dateString,
+              'lastUpdated': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true));
+
+        // Format: YYYYMMDD-001, YYYYMMDD-002, etc.
+        return '$dateString-${nextNumber.toString().padLeft(3, '0')}';
+      });
+
+      return orderNumber;
+    } catch (e) {
+      print('Error generating sequential order number: $e');
+      // Fallback to timestamp-based number if counter fails
+      return '${DateTime.now().millisecondsSinceEpoch}';
+    }
   }
 
   /// Create order request for store owner
