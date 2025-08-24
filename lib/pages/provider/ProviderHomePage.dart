@@ -28,9 +28,12 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   final List<String> _mealTimes = ['Breakfast', 'Lunch', 'Dinner'];
   bool _isLoading = false;
   bool _isRefreshing = false;
-  bool _showSearchBar = false;
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
+
+// Add these after existing variables
+  List<Food> _allFoods = [];
+  List<Food> _filteredFoods = [];
 
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
@@ -90,6 +93,10 @@ class _ProviderHomePageState extends State<ProviderHomePage>
         await foodProvider.fetchFoods(storeProvider.userStore!.id);
         foodProvider.setFilterMealTime(_selectedMealTime);
       }
+      setState(() {
+        _allFoods = List.from(foodProvider.foods);
+        _filteredFoods = List.from(_allFoods);
+      });
     } finally {
       if (mounted) {
         setState(() {
@@ -97,6 +104,12 @@ class _ProviderHomePageState extends State<ProviderHomePage>
         });
       }
     }
+  }
+
+  void _onFoodsFiltered(List<Food> filteredFoods) {
+    setState(() {
+      _filteredFoods = filteredFoods;
+    });
   }
 
   Future<void> _refreshData() async {
@@ -235,75 +248,45 @@ class _ProviderHomePageState extends State<ProviderHomePage>
 
     return Scaffold(
       appBar: AppBar(
-        title: _showSearchBar
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: EatoTheme.inputDecoration(
-                  hintText: 'Search foods...',
-                  prefixIcon:
-                      Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () {
-                      setState(() {
-                        _showSearchBar = false;
-                        _searchController.clear();
-                      });
-                      foodProvider.setSearchQuery('');
-                    },
-                  ),
-                ),
-                style: EatoTheme.bodyMedium,
-              )
-            : Text(
-                'My Menu',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: EatoTheme.textPrimaryColor,
-                ),
-              ),
+        title: Text(
+          'My Menu',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: EatoTheme.textPrimaryColor,
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
-        centerTitle: _showSearchBar ? false : true,
-        leadingWidth: _showSearchBar ? 0 : null,
-        leading: _showSearchBar
-            ? null
-            : (Navigator.canPop(context)
-                ? IconButton(
-                    icon: Icon(Icons.arrow_back,
-                        color: EatoTheme.textPrimaryColor),
-                    onPressed: () => Navigator.pop(context),
-                  )
-                : null),
+        centerTitle: true,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         actions: [
-          if (!_showSearchBar)
-            IconButton(
-              icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
-              onPressed: () {
-                setState(() {
-                  _showSearchBar = true;
-                });
-              },
-            ),
-          if (!_showSearchBar)
-            IconButton(
-              icon: Icon(Icons.filter_list, color: EatoTheme.textPrimaryColor),
-              onPressed: () {
-                // Show filter options
-                _showFilterBottomSheet();
-              },
-            ),
+          IconButton(
+            icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
+            onPressed: () {
+              // You can add search functionality here if needed
+              // For now, since you have the FoodFilterSearchWidget below,
+              // you could scroll to it or show a message
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Use the search bar below to search foods'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
         ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: EatoTheme.primaryColor,
           unselectedLabelColor: EatoTheme.textSecondaryColor,
           indicatorColor: EatoTheme.primaryColor,
-          tabs: _mealTimes.map((mealTime) {
-            return Tab(text: mealTime);
-          }).toList(),
+          tabs: _mealTimes.map((mealTime) => Tab(text: mealTime)).toList(),
         ),
       ),
       body: _isLoading
@@ -379,7 +362,14 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   }
 
   Widget _buildFoodListView(FoodProvider foodProvider) {
-    final filteredFoods = foodProvider.foods;
+    final allFoods = foodProvider.foods;
+    final searchQuery = _searchController.text.toLowerCase();
+
+    final filteredFoods = searchQuery.isEmpty
+        ? allFoods
+        : allFoods.where((food) {
+            return food.name.toLowerCase().contains(searchQuery);
+          }).toList();
 
     return RefreshIndicator(
       key: _refreshIndicatorKey,
@@ -387,54 +377,28 @@ class _ProviderHomePageState extends State<ProviderHomePage>
       color: EatoTheme.primaryColor,
       child: Column(
         children: [
+          // Add the new filter widget
+
           // Add new food button
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: GestureDetector(
               onTap: _navigateToAddFood,
               child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(vertical: 14.0),
-                decoration: BoxDecoration(
-                  color: EatoTheme.primaryColor,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: EatoTheme.primaryColor.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle_outline,
-                        color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Add New Food',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  // ... keep existing "Add New Food" button code
+                  ),
             ),
           ),
 
-          // Food list
+          // Food list - change filteredFoods to _filteredFoods
           Expanded(
-            child: filteredFoods.isEmpty
+            child: _filteredFoods.isEmpty
                 ? _buildEmptyFoodList()
                 : ListView.builder(
                     padding: EdgeInsets.only(bottom: 80),
-                    itemCount: filteredFoods.length,
+                    itemCount: _filteredFoods.length,
                     itemBuilder: (context, index) {
-                      final food = filteredFoods[index];
+                      final food = _filteredFoods[index];
                       return _buildFoodCard(food);
                     },
                   ),
@@ -658,138 +622,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
           ],
         ),
       ),
-    );
-  }
-
-  void _showFilterBottomSheet() {
-    final foodProvider = Provider.of<FoodProvider>(context, listen: false);
-
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Filter Foods',
-                        style: EatoTheme.headingMedium.copyWith(fontSize: 20),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          foodProvider.clearFilters();
-                          Navigator.pop(context);
-                        },
-                        child: Text('Reset'),
-                        style: EatoTheme.textButtonStyle,
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Food Type',
-                    style: EatoTheme.labelLarge,
-                  ),
-                  SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      'Vegetarian',
-                      'Non-Vegetarian',
-                      'Vegan',
-                      'Dessert',
-                    ].map((type) {
-                      bool isSelected = foodProvider.getFilterType() == type;
-                      return FilterChip(
-                        label: Text(type),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            foodProvider.setFilterType(type);
-                          } else {
-                            foodProvider.setFilterType('');
-                          }
-                          setState(() {});
-                        },
-                        selectedColor: EatoTheme.primaryColor.withOpacity(0.2),
-                        checkmarkColor: EatoTheme.primaryColor,
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? EatoTheme.primaryColor
-                              : EatoTheme.textPrimaryColor,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Food Category',
-                    style: EatoTheme.labelLarge,
-                  ),
-                  SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      'Rice and Curry',
-                      'String Hoppers',
-                      'Roti',
-                      'Egg Roti',
-                      'Short Eats',
-                      'Hoppers',
-                    ].map((category) {
-                      bool isSelected =
-                          foodProvider.getFilterCategory() == category;
-                      return FilterChip(
-                        label: Text(category),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            foodProvider.setFilterCategory(category);
-                          } else {
-                            foodProvider.setFilterCategory('');
-                          }
-                          setState(() {});
-                        },
-                        selectedColor: EatoTheme.primaryColor.withOpacity(0.2),
-                        checkmarkColor: EatoTheme.primaryColor,
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? EatoTheme.primaryColor
-                              : EatoTheme.textPrimaryColor,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: Text('Apply Filters'),
-                      style: EatoTheme.primaryButtonStyle,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

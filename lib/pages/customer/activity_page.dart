@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
+import 'package:eato/widgets/CustomerOrderCard.dart'; // Import the new card
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/Order.dart';
@@ -197,374 +198,13 @@ class _ActivityPageState extends State<ActivityPage>
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: orders.length,
-      itemBuilder: (context, index) => _buildOrderCard(orders[index]),
-    );
-  }
-
-  Widget _buildOrderCard(CustomerOrder order) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Order Header
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: EatoTheme.primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.restaurant, color: EatoTheme.primaryColor),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.storeName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          color: EatoTheme.textPrimaryColor,
-                        ),
-                        overflow:
-                            TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
-                      ),
-                      Text(
-                        'Order #${order.id.substring(0, 8)}',
-                        style: TextStyle(
-                          color: EatoTheme.textSecondaryColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    OrderStatusWidget(
-                      status: order.status,
-                      showAnimation: _isActiveStatus(order.status),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Rs. ${order.totalAmount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: EatoTheme.primaryColor,
-                        fontSize:
-                            14, // ✅ FIXED: Slightly smaller to prevent overflow
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Order Items Summary
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${order.items.length} item${order.items.length > 1 ? 's' : ''}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: EatoTheme.textSecondaryColor,
-                  ),
-                ),
-                SizedBox(height: 8),
-                // ✅ FIXED: Better item list with overflow handling
-                ...order.items.take(2).map((item) => Padding(
-                      padding: EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${item.quantity}x ',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: EatoTheme.primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              item.foodName,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: EatoTheme.textSecondaryColor,
-                              ),
-                              overflow: TextOverflow
-                                  .ellipsis, // ✅ FIXED: Prevent overflow
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-                if (order.items.length > 2)
-                  Text(
-                    '+${order.items.length - 2} more items',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: EatoTheme.primaryColor,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: 16),
-
-          // Store Contact Information
-          _buildStoreContactSection(order),
-
-          // Order Actions - ✅ FIXED: Better spacing and layout
-          _buildOrderActions(order),
-        ],
+      itemBuilder: (context, index) => CustomerOrderCard(
+        order: orders[index],
+        canCancel: _canCancelOrder(orders[index]),
+        onViewDetails: () => _showOrderDetailsDialog(orders[index]),
+        onCancel: () => _showCancelOrderDialog(orders[index]),
       ),
     );
-  }
-
-  Widget _buildStoreContactSection(CustomerOrder order) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('stores')
-          .doc(order.storeId)
-          .get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: EatoTheme.primaryColor),
-                ),
-                SizedBox(width: 12),
-                Text(
-                  'Loading restaurant contact...',
-                  style: TextStyle(
-                      fontSize: 12, color: EatoTheme.textSecondaryColor),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final storeData = snapshot.data!.data() as Map<String, dynamic>?;
-        final contact = storeData?['contact']?.toString() ?? '';
-
-        if (contact.isEmpty) {
-          return SizedBox(); // Don't show anything if no contact
-        }
-
-        return Container(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            // ✅ FIXED: Use EatoTheme purple instead of blue
-            color: EatoTheme.primaryColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.phone, color: EatoTheme.primaryColor, size: 20),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Restaurant Contact',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: EatoTheme.primaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    // ✅ FIXED: Better text wrapping and overflow handling
-                    Text(
-                      contact,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: EatoTheme.primaryColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              // ✅ FIXED: More compact call button
-              SizedBox(
-                width: 60,
-                height: 32,
-                child: ElevatedButton(
-                  onPressed: () => _callStore(contact, order.storeName),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: EatoTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size(60, 32),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.call, size: 14),
-                      SizedBox(width: 2),
-                      Text('Call', style: TextStyle(fontSize: 10)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildOrderActions(CustomerOrder order) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: EatoTheme.backgroundColor,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
-      ),
-      child: Column(
-        children: [
-          // ✅ FIXED: Date/time in separate row to prevent overflow
-          Row(
-            children: [
-              Icon(Icons.access_time,
-                  size: 14, color: EatoTheme.textSecondaryColor),
-              SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  DateFormat('MMM dd, yyyy • hh:mm a').format(order.orderTime),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: EatoTheme.textSecondaryColor,
-                  ),
-                  overflow: TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          // ✅ FIXED: Action buttons in separate row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (_canCancelOrder(order)) ...[
-                TextButton(
-                  onPressed: () => _showCancelOrderDialog(order),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    minimumSize: Size(60, 32),
-                  ),
-                ),
-                SizedBox(width: 8),
-              ] else if (order.status == OrderStatus.confirmed ||
-                  order.status == OrderStatus.preparing ||
-                  order.status == OrderStatus.ready ||
-                  order.status == OrderStatus.onTheWay) ...[
-                Tooltip(
-                  message:
-                      'Cannot cancel - order already confirmed by restaurant',
-                  child: TextButton(
-                    onPressed: () =>
-                        _showCancelOrderDialog(order), // Shows info dialog
-                    child: Text(
-                      'Cannot Cancel',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      minimumSize: Size(80, 32),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-              ],
-              ElevatedButton(
-                onPressed: () => _showOrderDetailsDialog(order),
-                child: Text(
-                  'View Details',
-                  style: TextStyle(fontSize: 12),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: EatoTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: Size(80, 32),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ===================================
-  // CALL FUNCTIONALITY
-  // ===================================
-
-  Future<void> _callStore(String phoneNumber, String storeName) async {
-    try {
-      final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
-
-      if (await canLaunchUrl(phoneUri)) {
-        await launchUrl(phoneUri);
-      } else {
-        // Fallback: Copy to clipboard
-        await Clipboard.setData(ClipboardData(text: phoneNumber));
-        _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
-      }
-    } catch (e) {
-      print('Error launching phone call: $e');
-      // Fallback: Copy to clipboard
-      await Clipboard.setData(ClipboardData(text: phoneNumber));
-      _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
-    }
   }
 
   // ===================================
@@ -599,7 +239,7 @@ class _ActivityPageState extends State<ActivityPage>
         status == OrderStatus.onTheWay;
   }
 
-  // ✅ UPDATED: Customer can only cancel BEFORE provider confirms (only pending orders)
+  // Customer can only cancel BEFORE provider confirms (only pending orders)
   bool _canCancelOrder(CustomerOrder order) {
     return order.status == OrderStatus.pending; // Only pending, NOT confirmed
   }
@@ -707,7 +347,7 @@ class _ActivityPageState extends State<ActivityPage>
                             ),
                           ),
                           Text(
-                            'Order #${order.id.substring(0, 8)}',
+                            'Order #${_getDisplayOrderNumber(order)}',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.9),
                               fontSize: 12,
@@ -944,6 +584,19 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
+  String _getDisplayOrderNumber(CustomerOrder order) {
+    // If orderNumber exists and looks like a proper sequential number, use it
+    if (order.orderNumber.isNotEmpty &&
+        order.orderNumber.contains('-') &&
+        order.orderNumber.length >= 11) {
+      // YYYYMMDD-XXX format
+      return order.orderNumber;
+    }
+
+    // Otherwise, use a cleaner version of the document ID
+    return order.id.substring(0, 8).toUpperCase();
+  }
+
   Widget _buildRestaurantInfoWithContact(CustomerOrder order) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
@@ -981,8 +634,7 @@ class _ActivityPageState extends State<ActivityPage>
                     child: Text(
                       contact,
                       style: TextStyle(fontSize: 14),
-                      overflow:
-                          TextOverflow.ellipsis, // ✅ FIXED: Prevent overflow
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   SizedBox(
@@ -1128,6 +780,29 @@ class _ActivityPageState extends State<ActivityPage>
         ],
       ),
     );
+  }
+
+  // ===================================
+  // CALL FUNCTIONALITY
+  // ===================================
+
+  Future<void> _callStore(String phoneNumber, String storeName) async {
+    try {
+      final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        // Fallback: Copy to clipboard
+        await Clipboard.setData(ClipboardData(text: phoneNumber));
+        _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
+      }
+    } catch (e) {
+      print('Error launching phone call: $e');
+      // Fallback: Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: phoneNumber));
+      _showSnackBar('Phone number copied: $phoneNumber', Colors.blue);
+    }
   }
 
   // ===================================

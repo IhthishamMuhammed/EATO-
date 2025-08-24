@@ -4,6 +4,7 @@ import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderCard.dart';
+import 'package:eato/widgets/order_request_card.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -486,51 +487,11 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
                 )
               : null),
       actions: [
-        if (!_showSearchBar) ...[
+        if (!_showSearchBar)
           IconButton(
             icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
             onPressed: () => setState(() => _showSearchBar = true),
           ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: EatoTheme.textPrimaryColor),
-            onPressed: _refreshRequests,
-          ),
-          // Show notification badge for requests
-          if (filteredRequests.isNotEmpty)
-            Container(
-              margin: EdgeInsets.only(right: 8),
-              child: Stack(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.notifications_active,
-                        color: EatoTheme.primaryColor),
-                    onPressed: () {},
-                  ),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: EatoTheme.errorColor,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      constraints: BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        '${filteredRequests.length}',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
       ],
     );
   }
@@ -598,184 +559,6 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
             label: Text('Refresh'),
             style: EatoTheme.outlinedButtonStyle,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// OrderRequestCard widget - you'll need to create this or use existing OrderCard
-class OrderRequestCard extends StatelessWidget {
-  final OrderRequest request;
-  final CustomerOrder? order;
-  final bool isLoading;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-  final VoidCallback onViewDetails;
-
-  const OrderRequestCard({
-    Key? key,
-    required this.request,
-    this.order,
-    this.isLoading = false,
-    required this.onAccept,
-    required this.onDecline,
-    required this.onViewDetails,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: EatoTheme.primaryColor, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: EatoTheme.primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_active, color: EatoTheme.primaryColor),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'New Order Request',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: EatoTheme.primaryColor,
-                        ),
-                      ),
-                      Text(
-                        'From: ${request.customerName}',
-                        style: TextStyle(
-                          color: EatoTheme.textSecondaryColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: EatoTheme.warningColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'PENDING',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Content
-          if (order != null)
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Order summary
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total: Rs.${order!.totalAmount.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: EatoTheme.primaryColor,
-                        ),
-                      ),
-                      Text(
-                        '${order!.items.length} items',
-                        style: EatoTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: onViewDetails,
-                          child: Text('View Details'),
-                          style: EatoTheme.outlinedButtonStyle,
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: isLoading ? null : onDecline,
-                          icon: Icon(Icons.close, size: 16),
-                          label: Text('Decline'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: EatoTheme.errorColor,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: isLoading ? null : onAccept,
-                          icon: isLoading
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Icon(Icons.check, size: 16),
-                          label: Text(isLoading ? 'Processing...' : 'Accept'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: EatoTheme.successColor,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(
-                child: CircularProgressIndicator(color: EatoTheme.primaryColor),
-              ),
-            ),
         ],
       ),
     );

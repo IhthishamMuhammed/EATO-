@@ -6,7 +6,7 @@ import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/shops_page.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/widgets/notification_widget.dart';
+import 'package:eato/widgets/floating_notification_button.dart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/userProvider.dart';
@@ -170,10 +170,10 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     );
   }
 
+  // Modify your _buildBody() method in CustomerHomePage
+
   Widget _buildBody() {
-    // ✅ FIXED: Use local state instead of Consumer to prevent rebuilds
     if (_userLoading) {
-      print("⏳ Showing loading indicator...");
       return Center(
         child: CircularProgressIndicator(
           valueColor: AlwaysStoppedAnimation<Color>(EatoTheme.primaryColor),
@@ -182,23 +182,28 @@ class _CustomerHomePageState extends State<CustomerHomePage>
     }
 
     if (!_userLoaded) {
-      print("❌ User not loaded, showing login message");
       return const Center(
         child: Text('Please log in to continue'),
       );
     }
 
-    print("✅ Rendering IndexedStack with index $_currentIndex");
-
-    // ✅ STABLE: IndexedStack with no Consumer to prevent rebuilds
-    return IndexedStack(
-      index: _currentIndex,
+    // Wrap with Stack to add floating notification button
+    return Stack(
       children: [
-        _buildHomeContent(), // 0: Home
-        const ShopsPage(showBottomNav: false), // 1: Shops
-        const OrdersPage(showBottomNav: false), // 2: Orders
-        const ActivityPage(showBottomNav: false), // 3: Activity
-        const AccountPage(showBottomNav: false), // 4: Account
+        // Main content
+        IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildHomeContent(), // 0: Home
+            const ShopsPage(showBottomNav: false), // 1: Shops
+            const OrdersPage(showBottomNav: false), // 2: Orders
+            const ActivityPage(showBottomNav: false), // 3: Activity
+            const AccountPage(showBottomNav: false), // 4: Account
+          ],
+        ),
+
+        // Floating notification button - appears on all pages
+        FloatingNotificationButton(),
       ],
     );
   }
@@ -222,10 +227,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
             ),
           ],
         ),
-        actions: [
-          // 🔔 Clean notification widget integration
-          NotificationWidget(),
-        ],
+        actions: [],
       ),
       body: SafeArea(
         child: SingleChildScrollView(

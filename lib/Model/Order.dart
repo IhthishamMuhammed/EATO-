@@ -101,6 +101,7 @@ class OrderItem {
 
 class CustomerOrder {
   final String id;
+  final String orderNumber;
   final String customerId;
   final String customerName;
   final String customerPhone;
@@ -129,6 +130,7 @@ class CustomerOrder {
 
   CustomerOrder({
     required this.id,
+    required this.orderNumber,
     required this.customerId,
     required this.customerName,
     required this.customerPhone,
@@ -156,6 +158,7 @@ class CustomerOrder {
   Map<String, dynamic> toMap() {
     return {
       'customerId': customerId,
+      'orderNumber': orderNumber,
       'customerName': customerName,
       'customerPhone': customerPhone,
       'storeId': storeId,
@@ -185,6 +188,7 @@ class CustomerOrder {
 
     return CustomerOrder(
       id: doc.id,
+      orderNumber: data['orderNumber'] ?? doc.id.substring(0, 8),
       customerId: data['customerId'] ?? '',
       customerName: data['customerName'] ?? '',
       customerPhone: data['customerPhone'] ?? '',
@@ -260,6 +264,7 @@ class CustomerOrder {
 
   CustomerOrder copyWith({
     String? id,
+    String? orderNumber,
     String? customerId,
     String? customerName,
     String? customerPhone,
@@ -285,6 +290,7 @@ class CustomerOrder {
   }) {
     return CustomerOrder(
       id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
       customerId: customerId ?? this.customerId,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,

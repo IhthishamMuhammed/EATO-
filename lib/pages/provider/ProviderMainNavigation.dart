@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/OrderProvider.dart';
@@ -32,6 +33,8 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
   bool _isDataInitialized = false;
   bool _isTransitioning = false;
 
+  String? _storeId;
+
   @override
   void initState() {
     super.initState();
@@ -52,10 +55,8 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       curve: Curves.easeInOut,
     ));
 
-    // Initialize data early for badge count
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeProviderData();
-    });
+    // Initialize data immediately, not in post frame callback
+    _initializeProviderData();
   }
 
   @override
@@ -69,25 +70,39 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
     if (_isDataInitialized) return;
 
     try {
+      print('🔧 [ProviderMainNavigation] Initializing provider data...');
+
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
       // Ensure store data is available
       if (storeProvider.userStore == null) {
+        print('📦 [ProviderMainNavigation] Fetching user store...');
         await storeProvider.fetchUserStore(widget.currentUser);
       }
 
       if (storeProvider.userStore != null) {
         final storeId = storeProvider.userStore!.id;
+        _storeId = storeId; // ADD THIS LINE - Set the _storeId variable
+        print('🏪 [ProviderMainNavigation] Store ID: $storeId');
 
-        // Start listening to both orders and requests
+        // Rest of your existing code...
         orderProvider.listenToStoreOrders(storeId);
         orderProvider.listenToStoreOrderRequests(storeId);
 
-        _isDataInitialized = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _isDataInitialized = true;
+            });
+            print('✅ [ProviderMainNavigation] Data initialization complete');
+          }
+        });
+      } else {
+        print('❌ [ProviderMainNavigation] No store found for user');
       }
     } catch (e) {
-      print('Error initializing provider data: $e');
+      print('❌ [ProviderMainNavigation] Error initializing provider data: $e');
     }
   }
 
@@ -176,10 +191,14 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
   }
 
   Widget _buildBottomNavigationBar() {
-    return Consumer<OrderProvider>(
-      builder:
-          (BuildContext context, OrderProvider orderProvider, Widget? child) {
-        final requestCount = orderProvider.orderRequests.length;
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('order_requests')
+          .where('storeId', isEqualTo: _storeId!)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final requestCount = snapshot.data?.docs.length ?? 0;
 
         return AnimatedContainer(
           duration: Duration(milliseconds: 200),
@@ -205,7 +224,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
             selectedFontSize: 12,
             unselectedFontSize: 12,
             iconSize: 24,
-            // Smooth animation for tab selection
             mouseCursor: SystemMouseCursors.click,
             items: [
               BottomNavigationBarItem(
@@ -255,6 +273,11 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   Widget _buildRequestsTabIcon(int requestCount, bool isActive, int index) {
     final isSelected = _currentIndex == index;
+
+    // ✅ DEBUG: Print each time the badge is rebuilt
+    print(
+        '🎯 [ProviderMainNavigation] Building badge with count: $requestCount');
+
     return AnimatedContainer(
       duration: Duration(milliseconds: 200),
       padding: EdgeInsets.all(isSelected ? 4 : 0),
@@ -277,13 +300,22 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
               right: -6,
               top: -6,
               child: AnimatedScale(
-                scale: requestCount > 0 ? 1.0 : 0.0,
-                duration: Duration(milliseconds: 200),
+                scale: 1.0, // ✅ FIXED: Always show when count > 0
+                duration: Duration(milliseconds: 300), // Longer animation
+                curve: Curves.elasticOut, // Bouncy animation
                 child: Container(
                   padding: EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     color: EatoTheme.errorColor,
                     borderRadius: BorderRadius.circular(8),
+                    // ✅ ENHANCED: Add subtle shadow to make badge more visible
+                    boxShadow: [
+                      BoxShadow(
+                        color: EatoTheme.errorColor.withOpacity(0.3),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                   constraints: BoxConstraints(
                     minWidth: 16,
