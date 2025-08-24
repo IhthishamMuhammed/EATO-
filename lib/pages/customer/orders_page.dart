@@ -9,10 +9,10 @@ import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/services/CartService.dart';
 import 'package:eato/services/PaymentService.dart';
-import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:eato/widgets/checkout_card_section.dart';
 
 class OrdersPage extends StatefulWidget {
   final bool showBottomNav;
@@ -33,6 +33,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   // Order Options
   DeliveryType _deliveryOption = DeliveryType.pickup;
   PaymentType _paymentMethod = PaymentType.cash;
+  Map<String, String> _cardData = {};
   String _specialInstructions = '';
   DateTime? _scheduledTime;
 
@@ -50,13 +51,11 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
 
   @override
-  @override
   void initState() {
     super.initState();
     _initializeAnimations();
     _loadCartItems();
 
-    // ✅ SIMPLE FIX: Listen to provider changes correctly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CartProvider>(context, listen: false).addListener(() {
         if (mounted) {
@@ -88,7 +87,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
 
     try {
       final items = await CartService.getCartItems();
-      print('🛒 [OrdersPage] Loaded ${items.length} cart items');
+      print('Cart loaded ${items.length} cart items');
 
       setState(() {
         _cartItems = items;
@@ -98,7 +97,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       _updateCartTotals();
       await _checkStoreAvailability();
     } catch (e) {
-      print('❌ [OrdersPage] Error loading cart items: $e');
+      print('Error loading cart items: $e');
       setState(() {
         _cartItems = [];
         _isLoading = false;
@@ -124,10 +123,9 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         }
       }
 
-      print(
-          '📊 [OrdersPage] Cart totals - Items: $_totalCartItems, Value: $_totalCartValue');
+      print('Cart totals - Items: $_totalCartItems, Value: $_totalCartValue');
     } catch (e) {
-      print('❌ [OrdersPage] Error calculating totals: $e');
+      print('Error calculating totals: $e');
       _totalCartItems = 0;
       _totalCartValue = 0.0;
     }
@@ -178,7 +176,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       // Update delivery option based on store availability
       _updateDeliveryOptionBasedOnAvailability();
     } catch (e) {
-      print('❌ Error checking store availability: $e');
+      print('Error checking store availability: $e');
     } finally {
       setState(() {
         _checkingStoreAvailability = false;
@@ -194,7 +192,6 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
     bool allStoresSupportDelivery = _storeAvailability.values
         .every((store) => store['supportsDelivery'] == true);
 
-    // If current option is not supported by all stores, switch to supported option
     if (_deliveryOption == DeliveryType.delivery && !allStoresSupportDelivery) {
       if (allStoresSupportPickup) {
         setState(() {
@@ -237,7 +234,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
 
       await CartService.updateCartItems(_cartItems);
     } catch (e) {
-      print('❌ [OrdersPage] Error updating quantity: $e');
+      print('Error updating quantity: $e');
       _loadCartItems(); // Reload on error
     }
   }
@@ -252,7 +249,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       await CartService.updateCartItems(_cartItems);
       _showSuccessSnackBar('Item removed from cart');
     } catch (e) {
-      print('❌ [OrdersPage] Error removing item: $e');
+      print('Error removing item: $e');
       _loadCartItems(); // Reload on error
     }
   }
@@ -269,7 +266,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       });
       _showSuccessSnackBar('Cart cleared successfully');
     } catch (e) {
-      print('❌ Error clearing cart: $e');
+      print('Error clearing cart: $e');
       _showErrorSnackBar('Failed to clear cart');
     }
   }
@@ -282,6 +279,15 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
     if (_cartItems.isEmpty) {
       _showErrorSnackBar('Your cart is empty');
       return;
+    }
+
+    // Validate card details if card payment is selected
+    if (_paymentMethod == PaymentType.card) {
+      final errors = PaymentService.validatePaymentMethod(PaymentType.card, _cardData);
+      if (errors.isNotEmpty) {
+        _showErrorSnackBar('Please fix the card details before proceeding');
+        return;
+      }
     }
 
     // Validate delivery location for delivery orders
@@ -307,6 +313,33 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         throw Exception('User not logged in');
       }
 
+      // Process payment first if card payment
+      if (_paymentMethod == PaymentType.card) {
+        final calculation = PaymentService.calculateFees(
+          subtotal: _totalCartValue,
+          paymentMethod: _paymentMethod,
+          deliveryMethod: _deliveryOption,
+        );
+
+        final paymentResult = await PaymentService.processPayment(
+          orderId: 'ORDER_${DateTime.now().millisecondsSinceEpoch}',
+          paymentMethod: _paymentMethod,
+          amount: calculation.totalAmount,
+          paymentDetails: _cardData,
+        );
+
+        if (!paymentResult['success']) {
+          if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
+          _showPaymentError(paymentResult);
+          return;
+        }
+
+        // Show payment success for test cards
+        if (paymentResult['testCard'] == true) {
+          _showTestPaymentSuccess(paymentResult);
+        }
+      }
+
       // Place orders with notifications
       final orderIds = await orderProvider.placeOrdersWithNotifications(
         customerId: userProvider.currentUser!.id,
@@ -323,10 +356,10 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         scheduledTime: _scheduledTime,
       );
 
-      Navigator.pop(context); // Close loading dialog
+      if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
 
       if (orderIds.isNotEmpty) {
-        // ✅ FIXED: Properly clear cart after successful order placement
+        // Clear cart after successful order placement
         await CartService.clearCart();
         setState(() {
           _cartItems.clear();
@@ -342,7 +375,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         throw Exception('No orders were created');
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
       _showOrderFailureDialog(e.toString());
     }
   }
@@ -385,10 +418,16 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
-      appBar: EatoComponents.appBar(
-        context: context,
-        title: 'My Cart',
-        titleIcon: Icons.shopping_cart,
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Icon(Icons.shopping_cart, color: EatoTheme.primaryColor),
+            SizedBox(width: 8),
+            Text('My Cart'),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           if (_cartItems.isNotEmpty)
             TextButton(
@@ -437,7 +476,9 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
               margin: EdgeInsets.all(16),
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                gradient: EatoTheme.primaryGradient,
+                gradient: LinearGradient(
+                  colors: [EatoTheme.primaryColor, EatoTheme.primaryColor.withOpacity(0.8)],
+                ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
@@ -526,11 +567,44 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   Widget _buildEmptyCart() {
-    return EatoComponents.emptyState(
-      message: 'Your cart is empty\nAdd some delicious items to get started!',
-      icon: Icons.shopping_cart_outlined,
-      actionText: 'Browse Meals',
-      onActionPressed: () => Navigator.pushNamed(context, '/home'),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shopping_cart_outlined, 
+               size: 80, 
+               color: EatoTheme.textSecondaryColor),
+          SizedBox(height: 16),
+          Text(
+            'Your cart is empty',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: EatoTheme.textPrimaryColor,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Add some delicious items to get started!',
+            style: TextStyle(
+              color: EatoTheme.textSecondaryColor,
+            ),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => Navigator.pushNamed(context, '/home'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EatoTheme.primaryColor,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
+              ),
+            ),
+            child: Text('Browse Meals'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1158,6 +1232,20 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
           ...PaymentType.values
               .map((payment) => _buildPaymentMethodTile(payment)),
 
+          // Show card input when card is selected
+          if (_paymentMethod == PaymentType.card) ...[
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: CheckoutCardSection(
+                onCardDataChanged: (cardData) {
+                  setState(() {
+                    _cardData = cardData;
+                  });
+                },
+              ),
+            ),
+          ],
+
           // Fee savings message
           if (PaymentService.getFeeSavingsMessage(
                   _paymentMethod, _deliveryOption) !=
@@ -1480,7 +1568,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       if (storeId.isNotEmpty && !storeDetails.containsKey(storeId)) {
         storeDetails[storeId] = {
           'name': storeName,
-          'contact': null, // Will be fetched
+          'contact': null,
         };
       }
     }
@@ -1721,10 +1809,18 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
             ],
           ),
           SizedBox(height: 12),
-          EatoComponents.primaryButton(
-            text: 'Place Orders',
+          ElevatedButton.icon(
             onPressed: _placeOrderWithBackend,
-            icon: Icons.shopping_cart_checkout,
+            icon: Icon(Icons.shopping_cart_checkout),
+            label: Text('Place Orders'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: EatoTheme.primaryColor,
+              foregroundColor: Colors.white,
+              minimumSize: Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
         ],
       ),
@@ -1742,13 +1838,11 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       if (await canLaunchUrl(phoneUri)) {
         await launchUrl(phoneUri);
       } else {
-        // Fallback: Copy to clipboard
         await Clipboard.setData(ClipboardData(text: phoneNumber));
         _showInfoSnackBar('Phone number copied: $phoneNumber');
       }
     } catch (e) {
       print('Error launching phone call: $e');
-      // Fallback: Copy to clipboard
       await Clipboard.setData(ClipboardData(text: phoneNumber));
       _showInfoSnackBar('Phone number copied: $phoneNumber');
     }
@@ -1821,11 +1915,14 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                 onPressed: () => Navigator.pop(context, false),
                 child: Text('Cancel'),
               ),
-              EatoComponents.primaryButton(
-                text: 'Clear All',
+              ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                height: 40,
-                width: 100,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: Size(100, 40),
+                ),
+                child: Text('Clear All'),
               ),
             ],
           ),
@@ -1895,11 +1992,14 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                 onPressed: () => Navigator.pop(context, false),
                 child: Text('Cancel'),
               ),
-              EatoComponents.primaryButton(
-                text: 'Confirm',
+              ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                height: 40,
-                width: 100,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: EatoTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: Size(100, 40),
+                ),
+                child: Text('Confirm'),
               ),
             ],
           ),
@@ -1953,7 +2053,7 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
             ),
             SizedBox(height: 8),
             Text(
-              '✅ Placed $orderCount orders successfully',
+              'Placed $orderCount orders successfully',
               style: TextStyle(color: EatoTheme.textSecondaryColor),
             ),
             SizedBox(height: 8),
@@ -1977,10 +2077,14 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
                 ),
                 SizedBox(width: 8),
                 Expanded(
-                  child: EatoComponents.primaryButton(
-                    text: 'Great!',
+                  child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
-                    height: 40,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: EatoTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size(0, 40),
+                    ),
+                    child: Text('Great!'),
                   ),
                 ),
               ],
@@ -2023,13 +2127,51 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
               style: TextStyle(color: EatoTheme.textSecondaryColor),
             ),
             SizedBox(height: 24),
-            EatoComponents.primaryButton(
-              text: 'Try Again',
+            ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              height: 40,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: EatoTheme.primaryColor,
+                foregroundColor: Colors.white,
+                minimumSize: Size(double.infinity, 40),
+              ),
+              child: Text('Try Again'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showTestPaymentSuccess(Map<String, dynamic> result) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Test Payment'),
+        content: Text(result['message'] ?? 'Test payment completed'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaymentError(Map<String, dynamic> result) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Payment Failed'),
+        content: Text(result['message'] ?? 'Payment processing failed'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Try Again'),
+          ),
+        ],
       ),
     );
   }
