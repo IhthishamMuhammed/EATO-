@@ -207,7 +207,7 @@ class NotificationService {
       channelDescription: 'General notifications from Eato app',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@drawable/ic_notification',
+      icon: '@drawable/launcher_icon',
       color: Color(0xFF6A1B9A),
     );
 

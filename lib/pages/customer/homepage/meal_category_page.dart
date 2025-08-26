@@ -1,6 +1,7 @@
 // COMPLETE ELEGANT THEMED meal_category_page.dart
 // Matching EatoTheme with beautiful design, letter icons, and robust image loading
 
+import 'package:eato/widgets/floating_notification_button.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
@@ -60,7 +61,7 @@ class _MealCategoryPageState extends State<MealCategoryPage>
     ],
   };
 
-  // ✅ ELEGANT: Get first letter with themed colors
+  // ✅ Get first letter with themed colors
   Map<String, dynamic> _getCategoryDisplay(String category) {
     // Map categories to appropriate icons and colors
     final categoryIcons = {
@@ -399,334 +400,358 @@ class _MealCategoryPageState extends State<MealCategoryPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  // ✅ ELEGANT HERO: Themed hero section with robust image loading
-                  SliverToBoxAdapter(
-                    child: Container(
-                      height: 280,
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(32),
-                          bottomRight: Radius.circular(32),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: EatoTheme.primaryColor.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(32),
-                          bottomRight: Radius.circular(32),
-                        ),
-                        child: Stack(
-                          children: [
-                            // ✅ ROBUST HERO IMAGE: Multiple fallback options
-                            Positioned.fill(
-                              child: _buildHeroImage(),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      // ✅ ELEGANT HERO: Themed hero section with robust image loading
+                      SliverToBoxAdapter(
+                        child: Container(
+                          height: 280,
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(32),
+                              bottomRight: Radius.circular(32),
                             ),
-
-                            // ✅ ELEGANT OVERLAY: Purple gradient overlay
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      EatoTheme.primaryColor.withOpacity(0.7),
-                                      EatoTheme.primaryDarkColor
-                                          .withOpacity(0.9),
-                                    ],
-                                  ),
-                                ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: EatoTheme.primaryColor.withOpacity(0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
                               ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(32),
+                              bottomRight: Radius.circular(32),
                             ),
+                            child: Stack(
+                              children: [
+                                // ✅ ROBUST HERO IMAGE: Multiple fallback options
+                                Positioned.fill(
+                                  child: _buildHeroImage(),
+                                ),
 
-                            // Header content
-                            Positioned(
-                              top: 20,
-                              left: 20,
-                              right: 20,
-                              child: FadeTransition(
-                                opacity: _fadeAnimation,
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: IconButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        icon: const Icon(
-                                          Icons.arrow_back_ios_new,
-                                          color: Colors.white,
-                                        ),
+                                // ✅ ELEGANT OVERLAY: Purple gradient overlay
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          EatoTheme.primaryColor
+                                              .withOpacity(0.7),
+                                          EatoTheme.primaryDarkColor
+                                              .withOpacity(0.9),
+                                        ],
                                       ),
                                     ),
-                                    const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.access_time,
-                                            color: Colors.white,
-                                            size: 16,
+                                  ),
+                                ),
+
+                                // Header content
+                                Positioned(
+                                  top: 20,
+                                  left: 20,
+                                  right: 20,
+                                  child: FadeTransition(
+                                    opacity: _fadeAnimation,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.white.withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color:
+                                                  Colors.white.withOpacity(0.3),
+                                              width: 1,
+                                            ),
                                           ),
-                                          const SizedBox(width: 6),
+                                          child: IconButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            icon: const Icon(
+                                              Icons.arrow_back_ios_new,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.white.withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color:
+                                                  Colors.white.withOpacity(0.3),
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.access_time,
+                                                color: Colors.white,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _getCurrentTime(),
+                                                style: EatoTheme.bodyMedium
+                                                    .copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                // ✅ ELEGANT TITLE: Beautiful centered title section
+                                Positioned(
+                                  bottom: 40,
+                                  left: 20,
+                                  right: 20,
+                                  child: SlideTransition(
+                                    position: _slideAnimation,
+                                    child: FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: Column(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withOpacity(0.15),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: Colors.white
+                                                    .withOpacity(0.3),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              _getIconForMealTime(
+                                                  widget.mealTime),
+                                              color: Colors.white,
+                                              size: 32,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
                                           Text(
-                                            _getCurrentTime(),
+                                            widget.mealTime ??
+                                                'Food Categories',
+                                            style:
+                                                EatoTheme.headingLarge.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            widget.mealTime != null
+                                                ? 'Choose your ${widget.mealTime!.toLowerCase()} category'
+                                                : 'Explore delicious food categories',
                                             style:
                                                 EatoTheme.bodyMedium.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w500,
+                                              color:
+                                                  Colors.white.withOpacity(0.9),
                                             ),
+                                            textAlign: TextAlign.center,
                                           ),
                                         ],
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
+                          ),
+                        ),
+                      ),
 
-                            // ✅ ELEGANT TITLE: Beautiful centered title section
-                            Positioned(
-                              bottom: 40,
-                              left: 20,
-                              right: 20,
-                              child: SlideTransition(
-                                position: _slideAnimation,
-                                child: FadeTransition(
-                                  opacity: _fadeAnimation,
-                                  child: Column(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          border: Border.all(
-                                            color:
-                                                Colors.white.withOpacity(0.3),
-                                            width: 1,
+                      // ✅ ELEGANT SEARCH: Themed search bar
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color:
+                                        EatoTheme.primaryColor.withOpacity(0.1),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                style: EatoTheme.bodyMedium,
+                                decoration: InputDecoration(
+                                  hintText: 'Search categories...',
+                                  hintStyle: EatoTheme.bodyMedium.copyWith(
+                                    color: EatoTheme.textSecondaryColor,
+                                  ),
+                                  prefixIcon: Icon(
+                                    Icons.search,
+                                    color: EatoTheme.primaryColor,
+                                  ),
+                                  suffixIcon: _searchController.text.isNotEmpty
+                                      ? IconButton(
+                                          icon: Icon(
+                                            Icons.clear,
+                                            color: EatoTheme.textSecondaryColor,
                                           ),
-                                        ),
-                                        child: Icon(
-                                          _getIconForMealTime(widget.mealTime),
-                                          color: Colors.white,
-                                          size: 32,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        widget.mealTime ?? 'Food Categories',
-                                        style: EatoTheme.headingLarge.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        widget.mealTime != null
-                                            ? 'Choose your ${widget.mealTime!.toLowerCase()} category'
-                                            : 'Explore delicious food categories',
-                                        style: EatoTheme.bodyMedium.copyWith(
-                                          color: Colors.white.withOpacity(0.9),
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
+                                          onPressed: () {
+                                            _searchController.clear();
+                                          },
+                                        )
+                                      : null,
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 16,
                                   ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // ✅ ELEGANT SEARCH: Themed search bar
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: EatoTheme.primaryColor.withOpacity(0.1),
-                                blurRadius: 20,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            style: EatoTheme.bodyMedium,
-                            decoration: InputDecoration(
-                              hintText: 'Search categories...',
-                              hintStyle: EatoTheme.bodyMedium.copyWith(
-                                color: EatoTheme.textSecondaryColor,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.search,
-                                color: EatoTheme.primaryColor,
-                              ),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: Icon(
-                                        Icons.clear,
-                                        color: EatoTheme.textSecondaryColor,
-                                      ),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                      },
-                                    )
-                                  : null,
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 16,
-                              ),
-                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // Content
-                  _isLoading
-                      ? SliverToBoxAdapter(
-                          child: Container(
-                            height: 200,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    EatoTheme.primaryColor),
-                              ),
-                            ),
-                          ),
-                        )
-                      : _filteredCategoryItems.isEmpty
+                      // Content
+                      _isLoading
                           ? SliverToBoxAdapter(
                               child: Container(
-                                height: 300,
+                                height: 200,
                                 child: Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(20),
-                                        decoration: BoxDecoration(
-                                          color: EatoTheme.primaryColor
-                                              .withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Icon(
-                                          Icons.search_off,
-                                          size: 48,
-                                          color: EatoTheme.primaryColor,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 20),
-                                      Text(
-                                        _searchController.text.isNotEmpty
-                                            ? 'No categories match your search'
-                                            : widget.mealTime != null
-                                                ? 'No categories available for ${widget.mealTime}'
-                                                : 'No food categories available',
-                                        style: EatoTheme.bodyMedium.copyWith(
-                                          color: EatoTheme.textSecondaryColor,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        EatoTheme.primaryColor),
                                   ),
                                 ),
                               ),
                             )
-                          : SliverPadding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(20, 0, 20, 120),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  childAspectRatio: 0.85,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 16,
-                                ),
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    return AnimatedBuilder(
-                                      animation: _animationController,
-                                      builder: (context, child) {
-                                        final delay = index * 0.1;
-                                        final animationValue =
-                                            Curves.easeOutBack.transform(
-                                          ((_animationController.value - delay)
-                                                      .clamp(0.0, 1.0) /
-                                                  (1.0 - delay))
-                                              .clamp(0.0, 1.0),
-                                        );
-                                        return Transform.scale(
-                                          scale: animationValue,
-                                          child: Opacity(
-                                            opacity: animationValue,
-                                            child: _buildCategoryItem(
-                                                _filteredCategoryItems[index]),
+                          : _filteredCategoryItems.isEmpty
+                              ? SliverToBoxAdapter(
+                                  child: Container(
+                                    height: 300,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(20),
+                                            decoration: BoxDecoration(
+                                              color: EatoTheme.primaryColor
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Icon(
+                                              Icons.search_off,
+                                              size: 48,
+                                              color: EatoTheme.primaryColor,
+                                            ),
                                           ),
+                                          const SizedBox(height: 20),
+                                          Text(
+                                            _searchController.text.isNotEmpty
+                                                ? 'No categories match your search'
+                                                : widget.mealTime != null
+                                                    ? 'No categories available for ${widget.mealTime}'
+                                                    : 'No food categories available',
+                                            style:
+                                                EatoTheme.bodyMedium.copyWith(
+                                              color:
+                                                  EatoTheme.textSecondaryColor,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : SliverPadding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                                  sliver: SliverGrid(
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      childAspectRatio: 0.85,
+                                      crossAxisSpacing: 16,
+                                      mainAxisSpacing: 16,
+                                    ),
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) {
+                                        return AnimatedBuilder(
+                                          animation: _animationController,
+                                          builder: (context, child) {
+                                            final delay = index * 0.1;
+                                            final animationValue =
+                                                Curves.easeOutBack.transform(
+                                              ((_animationController.value -
+                                                              delay)
+                                                          .clamp(0.0, 1.0) /
+                                                      (1.0 - delay))
+                                                  .clamp(0.0, 1.0),
+                                            );
+                                            return Transform.scale(
+                                              scale: animationValue,
+                                              child: Opacity(
+                                                opacity: animationValue,
+                                                child: _buildCategoryItem(
+                                                    _filteredCategoryItems[
+                                                        index]),
+                                              ),
+                                            );
+                                          },
                                         );
                                       },
-                                    );
-                                  },
-                                  childCount: _filteredCategoryItems.length,
+                                      childCount: _filteredCategoryItems.length,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const FloatingNotificationButton(), // ✅ ADD THIS
+        ],
       ),
-
       // ✅ ALWAYS VISIBLE: Bottom Navigation Bar
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,

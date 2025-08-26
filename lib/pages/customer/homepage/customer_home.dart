@@ -6,7 +6,7 @@ import 'package:eato/pages/customer/account_page.dart';
 import 'package:eato/pages/customer/activity_page.dart';
 import 'package:eato/pages/customer/shops_page.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/widgets/floating_notification_button.dart.dart';
+import 'package:eato/widgets/floating_notification_button.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/userProvider.dart';

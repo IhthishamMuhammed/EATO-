@@ -209,21 +209,17 @@ class FoodProvider with ChangeNotifier {
       print(
           '🔍 [FoodProvider] Getting shops with details for meal: $mealTitle in category: $category');
 
-      // First, get all stores
       final storesSnapshot = await _firestore.collection('stores').get();
       List<Map<String, dynamic>> detailedShops = [];
 
-      // For each store, check if they have the specified food
       for (var storeDoc in storesSnapshot.docs) {
         try {
           Store store = Store.fromFirestore(storeDoc);
 
-          // Skip inactive stores
           if (!store.isActive || !(store.isAvailable ?? true)) {
             continue;
           }
 
-          // Get foods from this store that match the meal title and category
           final foodsSnapshot = await _firestore
               .collection('stores')
               .doc(storeDoc.id)
@@ -233,17 +229,16 @@ class FoodProvider with ChangeNotifier {
               .where('isAvailable', isEqualTo: true)
               .get();
 
-          // If this store offers the meal, add it to the result with details
           for (var foodDoc in foodsSnapshot.docs) {
             Food food = Food.fromFirestore(foodDoc);
 
-            // Calculate estimated delivery time (you can customize this logic)
+            // Get food rating data from the food document
+            final foodData = foodDoc.data();
+            final foodRating = (foodData['rating'] as num?)?.toDouble() ?? 0.0;
+            final foodRatingCount = foodData['ratingCount'] as int? ?? 0;
+
             int estimatedDeliveryTime = _calculateDeliveryTime(store);
-
-            // Get store rating (with fallback)
             double storeRating = store.rating ?? 4.0;
-
-            // Check if store offers delivery/pickup
             bool hasDelivery = store.isDelivery ?? true;
             bool hasPickup = store.isPickup ?? true;
 
@@ -259,13 +254,15 @@ class FoodProvider with ChangeNotifier {
               'hasDelivery': hasDelivery,
               'hasPickup': hasPickup,
               'estimatedDeliveryTime': estimatedDeliveryTime,
-              'distance': _calculateDistance(store), // You can implement this
+              'distance': _calculateDistance(store),
               'foodPrice': food.price,
-              'foodPortionPrices':
-                  food.portionPrices, // Use existing portionPrices structure
+              'foodPortionPrices': food.portionPrices,
               'foodImageUrl': food.imageUrl ?? '',
               'foodDescription': food.description ?? '',
-              'isSubscribed': false, // You can implement subscription check
+              'isSubscribed': false,
+              // ADD THESE LINES:
+              'foodRating': foodRating,
+              'foodRatingCount': foodRatingCount,
             });
           }
         } catch (e) {
@@ -274,14 +271,11 @@ class FoodProvider with ChangeNotifier {
         }
       }
 
-      // Sort by rating and delivery time
+      // Rest of your sorting logic...
       detailedShops.sort((a, b) {
-        // Primary sort by rating (highest first)
         int ratingComparison =
             (b['storeRating'] as double).compareTo(a['storeRating'] as double);
         if (ratingComparison != 0) return ratingComparison;
-
-        // Secondary sort by delivery time (fastest first)
         return (a['estimatedDeliveryTime'] as int)
             .compareTo(b['estimatedDeliveryTime'] as int);
       });

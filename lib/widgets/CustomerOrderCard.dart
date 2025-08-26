@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/EatoComponents.dart';
+import 'package:eato/Provider/RatingProvider.dart';
+import 'package:eato/widgets/RatingDialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -13,6 +16,10 @@ class CustomerOrderCard extends StatelessWidget {
   final VoidCallback? onViewDetails;
   final VoidCallback? onCancel;
   final bool canCancel;
+  final String? customerId;
+  final String? customerName;
+  final VoidCallback? onRatingUpdated;
+  final Function(CustomerOrder)? onTriggerRating; // ADD THIS
 
   const CustomerOrderCard({
     Key? key,
@@ -20,6 +27,10 @@ class CustomerOrderCard extends StatelessWidget {
     this.onViewDetails,
     this.onCancel,
     this.canCancel = false,
+    this.customerId,
+    this.customerName,
+    this.onRatingUpdated,
+    this.onTriggerRating,
   }) : super(key: key);
 
   @override
@@ -230,6 +241,27 @@ class CustomerOrderCard extends StatelessWidget {
                             ),
                           ),
                         ),
+
+                      // Show rating status for completed orders
+                      if (_isCompletedOrder(order.status) &&
+                          order.isRated == true)
+                        Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Row(
+                            children: [
+                              Icon(Icons.star, size: 12, color: Colors.amber),
+                              SizedBox(width: 4),
+                              Text(
+                                'Rated',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.amber.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -259,12 +291,22 @@ class CustomerOrderCard extends StatelessWidget {
   }
 
   String _getDisplayOrderNumber() {
-    if (order.orderNumber.isNotEmpty &&
-        order.orderNumber.contains('-') &&
-        order.orderNumber.length >= 11) {
+    // First, try to use the orderNumber field
+    if (order.orderNumber.isNotEmpty && order.orderNumber != order.id) {
       return order.orderNumber;
     }
-    return order.id.substring(0, 8).toUpperCase();
+
+    // If orderNumber is empty or same as ID, check if it's a timestamp fallback
+    if (order.orderNumber.isNotEmpty) {
+      // If it's a pure number (timestamp fallback), format it nicely
+      if (RegExp(r'^\d+$').hasMatch(order.orderNumber)) {
+        return '#${order.orderNumber}';
+      }
+      return order.orderNumber;
+    }
+
+    // Final fallback to truncated ID
+    return '#${order.id.substring(0, 8).toUpperCase()}';
   }
 
   bool _isActiveStatus(OrderStatus status) {
@@ -273,6 +315,12 @@ class CustomerOrderCard extends StatelessWidget {
         status == OrderStatus.preparing ||
         status == OrderStatus.ready ||
         status == OrderStatus.onTheWay;
+  }
+
+  bool _isCompletedOrder(OrderStatus status) {
+    return status == OrderStatus.delivered ||
+        status == OrderStatus.cancelled ||
+        status == OrderStatus.rejected;
   }
 
   Widget _buildCompactContactSection() {
@@ -368,6 +416,7 @@ class CustomerOrderCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Cancel button for pending orders
         if (canCancel) ...[
           Container(
             height: 32,
@@ -414,6 +463,55 @@ class CustomerOrderCard extends StatelessWidget {
           ),
           SizedBox(width: 6),
         ],
+
+        if (order.status == OrderStatus.delivered &&
+            customerId != null &&
+            customerName != null) ...[
+          Container(
+            height: 32,
+            child: OutlinedButton(
+              onPressed: () {
+                if (order.isRated == true) {
+                  _showEditRatingDialog(context);
+                } else {
+                  // Show rating dialog for first-time rating
+                  onTriggerRating?.call(order);
+                }
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: order.isRated == true
+                    ? Colors.amber.shade700
+                    : Colors.green.shade700,
+                side: BorderSide(
+                    color: order.isRated == true
+                        ? Colors.amber.shade300
+                        : Colors.green.shade300),
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size(70, 32),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    order.isRated == true ? Icons.edit : Icons.star_outline,
+                    size: 12,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    order.isRated == true ? 'Edit Rating' : 'Add Rating',
+                    style: TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(width: 6),
+        ],
+
+        // View Details button
         Container(
           height: 32,
           child: ElevatedButton(
@@ -433,16 +531,60 @@ class CustomerOrderCard extends StatelessWidget {
               children: [
                 Icon(Icons.visibility_outlined, size: 12),
                 SizedBox(width: 4),
-                Text(
-                  'Details',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                ),
+                Text('Details',
+                    style:
+                        TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _showEditRatingDialog(BuildContext context) async {
+    if (customerId == null || customerName == null) return;
+
+    try {
+      // FIX 2: Get existing ratings for edit mode
+      final ratingProvider =
+          Provider.of<RatingProvider>(context, listen: false);
+      final existingRatings = await ratingProvider.getExistingRatings(
+        customerId: customerId!,
+        storeId: order.storeId,
+        items: order.items,
+      );
+
+      final result = await showRatingDialog(
+        context: context,
+        order: order,
+        customerId: customerId!,
+        customerName: customerName!,
+        isEditMode: true,
+        existingRatings: existingRatings,
+      );
+
+      if (result == true) {
+        // Call callback to refresh parent widget
+        onRatingUpdated?.call();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Rating updated successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update rating'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _callStore(

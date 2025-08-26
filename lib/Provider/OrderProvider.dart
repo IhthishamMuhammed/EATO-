@@ -165,7 +165,7 @@ class OrderProvider with ChangeNotifier {
           'serviceFee': storeTotal * 0.00,
           'totalAmount': storeTotal +
               (deliveryOption == 'Delivery' ? 50.0 : 0.0) +
-              (storeTotal * 0.05),
+              (storeTotal * 0.00),
           'deliveryOption': deliveryOption,
           'deliveryAddress': deliveryAddress,
           'deliveryLocation': deliveryLocation != null

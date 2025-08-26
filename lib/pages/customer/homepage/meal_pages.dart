@@ -1,6 +1,8 @@
 // FILE: lib/pages/customer/homepage/meal_pages.dart
-// Fixed version with proper method calls and error handling
+// Simplified version without pricing and sorting functionality
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:eato/widgets/floating_notification_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/FoodProvider.dart';
@@ -32,9 +34,8 @@ class _MealPageState extends State<MealPage> {
   bool _isLoading = true;
   String? _error;
   String _searchQuery = '';
-  String _sortBy = 'name'; // name, price, rating
 
-  // ✅ Get effective category title with fallback
+  // Get effective category title with fallback
   String get _effectiveCategoryTitle =>
       widget.categoryTitle ?? 'All Categories';
 
@@ -42,7 +43,7 @@ class _MealPageState extends State<MealPage> {
   void initState() {
     super.initState();
 
-    // ✅ FIXED: Choose the right loading method based on input
+    // Choose the right loading method based on input
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.categoryTitle != null) {
         _loadMealItems();
@@ -54,7 +55,7 @@ class _MealPageState extends State<MealPage> {
     });
   }
 
-  // ✅ IMPROVED: Load meal items from FoodProvider based on specific category
+  // Load meal items from FoodProvider based on specific category
   Future<void> _loadMealItems() async {
     setState(() {
       _isLoading = true;
@@ -62,9 +63,8 @@ class _MealPageState extends State<MealPage> {
     });
 
     try {
-      print(
-          '🍽️ [MealPage] Loading meals for category: $_effectiveCategoryTitle');
-      print('⏰ [MealPage] Meal time filter: ${widget.mealType}');
+      print('Loading meals for category: $_effectiveCategoryTitle');
+      print('Meal time filter: ${widget.mealType}');
 
       // Get FoodProvider instance
       final foodProvider = Provider.of<FoodProvider>(context, listen: false);
@@ -72,18 +72,17 @@ class _MealPageState extends State<MealPage> {
       List<Food> filteredMeals;
 
       if (widget.mealType != null) {
-        // ✅ FIXED: Use the corrected method that gets meals by category AND time
+        // Use the corrected method that gets meals by category AND time
         filteredMeals = await foodProvider.getMealsByCategoryAndTime(
             _effectiveCategoryTitle, widget.mealType);
 
         print(
-            '✅ [MealPage] Found ${filteredMeals.length} meals for $_effectiveCategoryTitle at ${widget.mealType}');
+            'Found ${filteredMeals.length} meals for $_effectiveCategoryTitle at ${widget.mealType}');
       } else {
         // If no meal time specified, get all meals in category
         filteredMeals =
             await foodProvider.getMealsByCategory(_effectiveCategoryTitle);
-        print(
-            'ℹ️ [MealPage] No meal time filter, showing all ${filteredMeals.length} meals');
+        print('No meal time filter, showing all ${filteredMeals.length} meals');
       }
 
       setState(() {
@@ -98,10 +97,10 @@ class _MealPageState extends State<MealPage> {
               'No meals found for $_effectiveCategoryTitle${widget.mealType != null ? ' at ${widget.mealType}' : ''}';
         });
         print(
-            '⚠️ [MealPage] No meals found for $_effectiveCategoryTitle${widget.mealType != null ? ' at ${widget.mealType}' : ''}');
+            'No meals found for $_effectiveCategoryTitle${widget.mealType != null ? ' at ${widget.mealType}' : ''}');
       }
     } catch (e) {
-      print('❌ [MealPage] Error loading meal items: $e');
+      print('Error loading meal items: $e');
       setState(() {
         _isLoading = false;
         _error = 'Failed to load meals: $e';
@@ -109,7 +108,7 @@ class _MealPageState extends State<MealPage> {
     }
   }
 
-  // ✅ FIXED: Special handling for meal time routes (breakfast, lunch, dinner) without category
+  // Special handling for meal time routes (breakfast, lunch, dinner) without category
   Future<void> _loadMealTimeItems() async {
     setState(() {
       _isLoading = true;
@@ -117,14 +116,14 @@ class _MealPageState extends State<MealPage> {
     });
 
     try {
-      print('🍽️ [MealPage] Loading meal time items for: ${widget.mealType}');
+      print('Loading meal time items for: ${widget.mealType}');
 
       // Get FoodProvider instance
       final foodProvider = Provider.of<FoodProvider>(context, listen: false);
 
       // Get all categories first
       final categories = await foodProvider.getAllCategories();
-      print('📂 [MealPage] Found ${categories.length} categories');
+      print('Found ${categories.length} categories');
 
       if (categories.isEmpty) {
         setState(() {
@@ -138,18 +137,17 @@ class _MealPageState extends State<MealPage> {
       List<Food> meals = [];
       for (String category in categories) {
         try {
-          // ✅ FIXED: Use the corrected method with proper error handling
+          // Use the corrected method with proper error handling
           final categoryMeals = await foodProvider.getMealsByCategoryAndTime(
               category, widget.mealType);
 
           // Add first meal as representative for this category
           if (categoryMeals.isNotEmpty) {
             meals.add(categoryMeals.first);
-            print(
-                '✅ [MealPage] Added ${categoryMeals.first.name} from $category');
+            print('Added ${categoryMeals.first.name} from $category');
           }
         } catch (e) {
-          print('⚠️ [MealPage] Error loading meals for category $category: $e');
+          print('Error loading meals for category $category: $e');
           continue;
         }
       }
@@ -164,13 +162,12 @@ class _MealPageState extends State<MealPage> {
         setState(() {
           _error = 'No ${widget.mealType} meals available';
         });
-        print('⚠️ [MealPage] No ${widget.mealType} meals found');
+        print('No ${widget.mealType} meals found');
       } else {
-        print(
-            '✅ [MealPage] Loaded ${meals.length} representative ${widget.mealType} meals');
+        print('Loaded ${meals.length} representative ${widget.mealType} meals');
       }
     } catch (e) {
-      print('❌ [MealPage] Error loading meal time items: $e');
+      print('Error loading meal time items: $e');
       setState(() {
         _isLoading = false;
         _error = 'Failed to load ${widget.mealType} meals: $e';
@@ -178,7 +175,7 @@ class _MealPageState extends State<MealPage> {
     }
   }
 
-  // ✅ NEW: Load all available meals when no specific filter is applied
+  // Load all available meals when no specific filter is applied
   Future<void> _loadAllMealItems() async {
     setState(() {
       _isLoading = true;
@@ -186,7 +183,7 @@ class _MealPageState extends State<MealPage> {
     });
 
     try {
-      print('🍽️ [MealPage] Loading all available meals');
+      print('Loading all available meals');
 
       final foodProvider = Provider.of<FoodProvider>(context, listen: false);
 
@@ -199,7 +196,7 @@ class _MealPageState extends State<MealPage> {
           final categoryMeals = await foodProvider.getMealsByCategory(category);
           allMeals.addAll(categoryMeals);
         } catch (e) {
-          print('⚠️ [MealPage] Error loading meals for category $category: $e');
+          print('Error loading meals for category $category: $e');
           continue;
         }
       }
@@ -216,9 +213,9 @@ class _MealPageState extends State<MealPage> {
         _isLoading = false;
       });
 
-      print('✅ [MealPage] Loaded ${_mealItems.length} unique meals');
+      print('Loaded ${_mealItems.length} unique meals');
     } catch (e) {
-      print('❌ [MealPage] Error loading all meals: $e');
+      print('Error loading all meals: $e');
       setState(() {
         _isLoading = false;
         _error = 'Failed to load meals: $e';
@@ -226,7 +223,7 @@ class _MealPageState extends State<MealPage> {
     }
   }
 
-  // ✅ IMPROVED: Search functionality
+  // Search functionality
   void _performSearch(String query) {
     setState(() {
       _searchQuery = query;
@@ -246,26 +243,6 @@ class _MealPageState extends State<MealPage> {
     });
   }
 
-  // ✅ IMPROVED: Sort functionality
-  void _sortMeals(String sortBy) {
-    setState(() {
-      _sortBy = sortBy;
-      switch (sortBy) {
-        case 'name':
-          _filteredMealItems.sort((a, b) => a.name.compareTo(b.name));
-          break;
-        case 'price':
-          _filteredMealItems.sort((a, b) => a.price.compareTo(b.price));
-          break;
-        case 'category':
-          _filteredMealItems.sort((a, b) => a.category.compareTo(b.category));
-          break;
-        default:
-          break;
-      }
-    });
-  }
-
   // Navigate to shop category page
   void _selectMealType(Food meal) {
     Navigator.push(
@@ -278,14 +255,14 @@ class _MealPageState extends State<MealPage> {
         ),
       ),
     ).then((selectedTabIndex) {
-      // ✅ Handle navigation back from ShopCategoryPage
+      // Handle navigation back from ShopCategoryPage
       if (selectedTabIndex != null && selectedTabIndex is int) {
         Navigator.pop(context, selectedTabIndex);
       }
     });
   }
 
-  // ✅ IMPROVED: Refresh functionality
+  // Refresh functionality
   Future<void> _refreshData() async {
     if (widget.categoryTitle != null) {
       await _loadMealItems();
@@ -294,22 +271,6 @@ class _MealPageState extends State<MealPage> {
     } else {
       await _loadAllMealItems();
     }
-  }
-
-  // ✅ Get price display text with portion support using existing portionPrices structure
-  String _getPriceDisplayText(Food meal) {
-    if (meal.portionPrices.isNotEmpty) {
-      // Find the cheapest portion
-      double minPrice =
-          meal.portionPrices.values.reduce((a, b) => a < b ? a : b);
-
-      if (meal.portionPrices.length > 1) {
-        return 'From ₹${minPrice.toStringAsFixed(2)}';
-      } else {
-        return '₹${minPrice.toStringAsFixed(2)}';
-      }
-    }
-    return '₹${meal.price.toStringAsFixed(2)}';
   }
 
   @override
@@ -323,58 +284,51 @@ class _MealPageState extends State<MealPage> {
           widget.categoryTitle ?? widget.mealType ?? 'All Meals',
           style: EatoTheme.headingMedium.copyWith(color: Colors.black),
         ),
-        actions: [
-          // Sort button
-          PopupMenuButton<String>(
-            onSelected: _sortMeals,
-            icon: const Icon(Icons.sort, color: Colors.black),
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'name', child: Text('Sort by Name')),
-              const PopupMenuItem(value: 'price', child: Text('Sort by Price')),
-              const PopupMenuItem(
-                  value: 'category', child: Text('Sort by Category')),
-            ],
-          ),
-        ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search meals...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+          Column(
+            children: [
+              // Search Bar
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search meals...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                  onChanged: _performSearch,
                 ),
               ),
-              onChanged: _performSearch,
-            ),
-          ),
 
-          // Content
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                    ),
-                  )
-                : _error != null
-                    ? _buildErrorWidget()
-                    : _filteredMealItems.isEmpty
-                        ? _buildEmptyWidget()
-                        : _buildMealsList(),
+              // Content
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.purple),
+                        ),
+                      )
+                    : _error != null
+                        ? _buildErrorWidget()
+                        : _filteredMealItems.isEmpty
+                            ? _buildEmptyWidget()
+                            : _buildMealsList(),
+              ),
+            ],
           ),
+          const FloatingNotificationButton(),
         ],
       ),
       bottomNavigationBar: widget.showBottomNav
@@ -550,19 +504,7 @@ class _MealPageState extends State<MealPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
-
-                    // ✅ UPDATED: New price display logic with portion support
-                    Text(
-                      _getPriceDisplayText(meal),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Text(
                       meal.description ?? 'Delicious ${meal.name}',
                       style: TextStyle(

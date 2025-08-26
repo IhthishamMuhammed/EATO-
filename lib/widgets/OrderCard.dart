@@ -13,6 +13,10 @@ class OrderCard extends StatelessWidget {
   final bool showProgress;
   final bool isProviderView;
 
+  // ADD THESE - This is what's missing in your original
+  final Function(String orderId, OrderStatus newStatus)? onStatusUpdate;
+  final bool isUpdating;
+
   const OrderCard({
     Key? key,
     required this.order,
@@ -20,6 +24,9 @@ class OrderCard extends StatelessWidget {
     this.actionButtons,
     this.showProgress = false,
     this.isProviderView = false,
+    // These are the key additions:
+    this.onStatusUpdate,
+    this.isUpdating = false,
   }) : super(key: key);
 
   @override
@@ -35,33 +42,23 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Column(
           children: [
-            // Order header with status
             _buildOrderHeader(),
-
-            // Main content
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Order items - highlighted
                   _buildOrderItems(),
                   SizedBox(height: 8),
-
-                  // Special instructions (if any)
                   if (order.specialInstructions != null &&
                       order.specialInstructions!.isNotEmpty) ...[
                     _buildSpecialInstructions(),
                     SizedBox(height: 8),
                   ],
-
-                  // Total amount
                   _buildTotalAmount(),
                 ],
               ),
             ),
-
-            // Bottom buttons
             _buildBottomButtons(context),
           ],
         ),
@@ -81,14 +78,10 @@ class OrderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.receipt_outlined,
-            size: 16,
-            color: EatoTheme.primaryColor,
-          ),
+          Icon(Icons.receipt_outlined, size: 16, color: EatoTheme.primaryColor),
           SizedBox(width: 6),
           Text(
-            'Order #${order.id.substring(0, 8)}',
+            'Order ${_getDisplayOrderNumber()}',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: EatoTheme.primaryColor,
@@ -111,13 +104,11 @@ class OrderCard extends StatelessWidget {
   }
 
   Widget _buildStatusWidget() {
-    // Don't show "On the Way" status for pickup orders
     OrderStatus displayStatus = order.status;
     if (order.deliveryOption == 'Pickup' &&
         order.status == OrderStatus.onTheWay) {
       displayStatus = OrderStatus.ready;
     }
-
     return OrderStatusWidget(status: displayStatus);
   }
 
@@ -137,11 +128,8 @@ class OrderCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.restaurant_menu,
-                size: 16,
-                color: EatoTheme.primaryColor,
-              ),
+              Icon(Icons.restaurant_menu,
+                  size: 16, color: EatoTheme.primaryColor),
               SizedBox(width: 6),
               Text(
                 'Items (${order.items.length})',
@@ -172,9 +160,7 @@ class OrderCard extends StatelessWidget {
                           child: Text(
                             item.foodName,
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                                fontSize: 14, fontWeight: FontWeight.w500),
                           ),
                         ),
                         if (item.variation != null)
@@ -225,10 +211,7 @@ class OrderCard extends StatelessWidget {
           Expanded(
             child: Text(
               order.specialInstructions!,
-              style: TextStyle(
-                color: Colors.amber[700],
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.amber[700], fontSize: 12),
             ),
           ),
         ],
@@ -242,10 +225,7 @@ class OrderCard extends StatelessWidget {
       children: [
         Text(
           'Total Amount',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         ),
         Text(
           'Rs. ${order.totalAmount.toStringAsFixed(2)}',
@@ -275,27 +255,16 @@ class OrderCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Main action buttons
           if (showProgress) ...[
             Row(
               children: [
-                // Mark Ready button
-                Expanded(
-                  child: _buildCustomButton(
-                    text: 'Mark Ready',
-                    onPressed: onTap,
-                    icon: Icons.check_circle_outline,
-                    backgroundColor: EatoTheme.primaryColor,
-                    textColor: Colors.white,
-                    height: 40,
-                  ),
-                ),
+                // THE FIX: Proper update button
+                Expanded(child: _buildUpdateButton()),
                 SizedBox(width: 8),
-                // View Details button
                 Expanded(
                   child: _buildCustomButton(
                     text: 'View Details',
-                    onPressed: onTap,
+                    onPressed: () => _showOrderDetails(context),
                     icon: Icons.visibility_outlined,
                     backgroundColor: Colors.transparent,
                     textColor: EatoTheme.primaryColor,
@@ -303,12 +272,8 @@ class OrderCard extends StatelessWidget {
                     height: 40,
                   ),
                 ),
-
-                // Add compact action buttons even when showProgress is true
                 if (isProviderView) ...[
                   SizedBox(width: 8),
-
-                  // Call button - show if phone number exists
                   if (order.customerPhone.isNotEmpty)
                     _buildCompactActionButton(
                       context: context,
@@ -317,14 +282,10 @@ class OrderCard extends StatelessWidget {
                           context, order.customerPhone, order.customerName),
                       color: Colors.green,
                     ),
-
-                  // Spacing between buttons if both exist
                   if (order.customerPhone.isNotEmpty &&
                       order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     SizedBox(width: 6),
-
-                  // Directions button - show only for delivery orders with address
                   if (order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     _buildCompactActionButton(
@@ -338,14 +299,12 @@ class OrderCard extends StatelessWidget {
               ],
             ),
           ] else ...[
-            // Bottom row with View Details and action buttons
             Row(
               children: [
-                // View Details button
                 Expanded(
                   child: _buildCustomButton(
                     text: 'View Details',
-                    onPressed: onTap,
+                    onPressed: () => _showOrderDetails(context),
                     icon: Icons.visibility_outlined,
                     backgroundColor: Colors.transparent,
                     textColor: EatoTheme.primaryColor,
@@ -353,12 +312,8 @@ class OrderCard extends StatelessWidget {
                     height: 40,
                   ),
                 ),
-
-                // Compact action buttons for provider view
                 if (isProviderView) ...[
                   SizedBox(width: 8),
-
-                  // Call button - show if phone number exists
                   if (order.customerPhone.isNotEmpty)
                     _buildCompactActionButton(
                       context: context,
@@ -367,14 +322,10 @@ class OrderCard extends StatelessWidget {
                           context, order.customerPhone, order.customerName),
                       color: Colors.green,
                     ),
-
-                  // Spacing between buttons if both exist
                   if (order.customerPhone.isNotEmpty &&
                       order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     SizedBox(width: 6),
-
-                  // Directions button - show only for delivery orders with address
                   if (order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     _buildCompactActionButton(
@@ -393,7 +344,70 @@ class OrderCard extends StatelessWidget {
     );
   }
 
-  // Compact round action button
+  // THE MAIN FIX: Proper update button that actually works
+  Widget _buildUpdateButton() {
+    if (_isOrderCompleted(order.status)) {
+      return SizedBox.shrink();
+    }
+
+    String buttonText;
+    IconData buttonIcon;
+    Color buttonColor;
+    OrderStatus? nextStatus;
+
+    switch (order.status) {
+      case OrderStatus.pending:
+      case OrderStatus.confirmed:
+        buttonText = 'Start Preparing';
+        buttonIcon = Icons.restaurant;
+        buttonColor = EatoTheme.primaryColor;
+        nextStatus = OrderStatus.preparing;
+        break;
+      case OrderStatus.preparing:
+        buttonText = 'Mark Ready';
+        buttonIcon = Icons.check_circle_outline;
+        buttonColor = EatoTheme.infoColor;
+        nextStatus = OrderStatus.ready;
+        break;
+      case OrderStatus.ready:
+        if (order.deliveryOption == 'Pickup') {
+          buttonText = 'Mark Picked Up';
+          buttonIcon = Icons.check;
+          buttonColor = EatoTheme.successColor;
+          nextStatus = OrderStatus.delivered;
+        } else {
+          buttonText = 'Out for Delivery';
+          buttonIcon = Icons.directions_bike;
+          buttonColor = Colors.indigo;
+          nextStatus = OrderStatus.onTheWay;
+        }
+        break;
+      case OrderStatus.onTheWay:
+        buttonText = 'Mark Delivered';
+        buttonIcon = Icons.check;
+        buttonColor = EatoTheme.successColor;
+        nextStatus = OrderStatus.delivered;
+        break;
+      default:
+        return SizedBox.shrink();
+    }
+
+    return _buildCustomButton(
+      text: isUpdating ? 'Updating...' : buttonText,
+      onPressed: isUpdating || nextStatus == null
+          ? null
+          : () {
+              print('🔥 OrderCard: Updating order ${order.id} to $nextStatus');
+              onStatusUpdate?.call(order.id, nextStatus!);
+            },
+      icon: isUpdating ? null : buttonIcon,
+      backgroundColor: buttonColor,
+      textColor: Colors.white,
+      height: 40,
+      isLoading: isUpdating,
+    );
+  }
+
   Widget _buildCompactActionButton({
     required BuildContext context,
     required IconData icon,
@@ -409,17 +423,650 @@ class OrderCard extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(16),
-          child: Icon(
-            icon,
-            size: 16,
-            color: color,
+          child: Icon(icon, size: 16, color: color),
+        ),
+      ),
+    );
+  }
+
+  // FIXED: Show complete order details in modal
+  void _showOrderDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: EdgeInsets.only(top: 8, bottom: 4),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Text(
+                      'Order Details',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: EatoTheme.primaryColor,
+                      ),
+                    ),
+                    Spacer(),
+                    IconButton(
+                      onPressed: () => Navigator.pop(modalContext),
+                      icon: Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              // COMPLETE ORDER DETAILS CONTENT
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Order Header Section
+                      _buildDetailSection(
+                        'Order Information',
+                        Icons.receipt_long,
+                        Column(
+                          children: [
+                            _buildDetailRow(
+                                'Order ID', _getDisplayOrderNumber()),
+                            _buildDetailRow(
+                                'Order Time',
+                                DateFormat('MMM dd, yyyy • h:mm a')
+                                    .format(order.orderTime)),
+                            _buildDetailRow(
+                                'Status',
+                                order.status
+                                    .toString()
+                                    .split('.')
+                                    .last
+                                    .toUpperCase()),
+                            _buildDetailRow('Store', order.storeName),
+                            _buildDetailRow(
+                                'Delivery Method', order.deliveryOption),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Customer Information
+                      _buildDetailSection(
+                        'Customer Information',
+                        Icons.person,
+                        Column(
+                          children: [
+                            _buildDetailRow('Name', order.customerName),
+                            if (order.customerPhone.isNotEmpty) ...[
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: _buildDetailRow(
+                                          'Phone', order.customerPhone)),
+                                  if (isProviderView)
+                                    IconButton(
+                                      icon: Icon(Icons.phone,
+                                          color: Colors.green),
+                                      onPressed: () => _callCustomer(
+                                          modalContext,
+                                          order.customerPhone,
+                                          order.customerName),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            _buildDetailRow(
+                                'Payment Method', order.paymentMethod),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Complete Order Items
+                      _buildDetailSection(
+                        'Order Items (${order.items.length})',
+                        Icons.restaurant_menu,
+                        Column(
+                          children: order.items
+                              .map((item) => Container(
+                                    margin: EdgeInsets.only(bottom: 12),
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.grey.shade200),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Food Image placeholder
+                                        Container(
+                                          width: 50,
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            color: EatoTheme.primaryColor
+                                                .withOpacity(0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Icon(
+                                            Icons.fastfood,
+                                            color: EatoTheme.primaryColor,
+                                            size: 24,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                item.foodName,
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              if (item.variation != null) ...[
+                                                SizedBox(height: 4),
+                                                Text(
+                                                  'Variation: ${item.variation}',
+                                                  style: TextStyle(
+                                                    color: EatoTheme
+                                                        .textSecondaryColor,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                              if (item.specialInstructions !=
+                                                      null &&
+                                                  item.specialInstructions!
+                                                      .isNotEmpty) ...[
+                                                SizedBox(height: 4),
+                                                Container(
+                                                  padding: EdgeInsets.all(6),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.amber
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            4),
+                                                  ),
+                                                  child: Text(
+                                                    'Note: ${item.specialInstructions}',
+                                                    style: TextStyle(
+                                                      color: Colors.amber[700],
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                              SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    'Rs. ${item.price.toStringAsFixed(2)}',
+                                                    style: TextStyle(
+                                                      color: EatoTheme
+                                                          .textSecondaryColor,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    ' × ${item.quantity}',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  Spacer(),
+                                                  Text(
+                                                    'Rs. ${item.totalPrice.toStringAsFixed(2)}',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: EatoTheme
+                                                          .primaryColor,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Order Summary
+                      _buildDetailSection(
+                        'Order Summary',
+                        Icons.receipt,
+                        Column(
+                          children: [
+                            _buildSummaryRow('Subtotal', order.subtotal),
+                            if (order.deliveryFee > 0)
+                              _buildSummaryRow(
+                                  'Delivery Fee', order.deliveryFee),
+                            if (order.serviceFee > 0)
+                              _buildSummaryRow('Service Fee', order.serviceFee),
+                            Divider(height: 24),
+                            _buildSummaryRow('Total Amount', order.totalAmount,
+                                isTotal: true),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Delivery Information
+                      if (order.deliveryOption == 'Delivery') ...[
+                        _buildDetailSection(
+                          'Delivery Information',
+                          Icons.location_on,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: _buildDetailRow(
+                                          'Address', order.deliveryAddress)),
+                                  if (isProviderView &&
+                                      order.deliveryAddress.isNotEmpty)
+                                    IconButton(
+                                      icon: Icon(Icons.directions,
+                                          color: Colors.blue),
+                                      onPressed: () => _openDirections(
+                                          modalContext, order.deliveryAddress),
+                                    ),
+                                ],
+                              ),
+                              if (order.scheduledTime != null)
+                                _buildDetailRow(
+                                    'Scheduled Time',
+                                    DateFormat('MMM dd, yyyy • h:mm a')
+                                        .format(order.scheduledTime!)),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ],
+
+                      // Special Instructions
+                      if (order.specialInstructions != null &&
+                          order.specialInstructions!.isNotEmpty) ...[
+                        _buildDetailSection(
+                          'Special Instructions',
+                          Icons.note_outlined,
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.amber.withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              order.specialInstructions!,
+                              style: TextStyle(
+                                color: Colors.amber[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ],
+
+                      // Order Timeline
+                      _buildDetailSection(
+                        'Order Timeline',
+                        Icons.timeline,
+                        Column(
+                          children: [
+                            _buildTimelineItem(
+                                'Order Placed', order.orderTime, true),
+                            if (order.confirmedTime != null)
+                              _buildTimelineItem('Order Confirmed',
+                                  order.confirmedTime!, true),
+                            if (order.readyTime != null)
+                              _buildTimelineItem(
+                                  'Order Ready', order.readyTime!, true),
+                            if (order.deliveredTime != null)
+                              _buildTimelineItem(
+                                order.deliveryOption == "Pickup"
+                                    ? "Order Picked Up"
+                                    : "Order Delivered",
+                                order.deliveredTime!,
+                                true,
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      // Action Buttons for Provider View
+                      if (isProviderView &&
+                          !_isOrderCompleted(order.status)) ...[
+                        _buildDetailSection(
+                          'Order Actions',
+                          Icons.settings,
+                          Column(
+                            children: _getDetailActionButtons(modalContext),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // Custom button builder
+  Widget _buildDetailSection(String title, IconData icon, Widget child) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: EatoTheme.primaryColor, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: EatoTheme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: EatoTheme.textSecondaryColor,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(String label, double amount, {bool isTotal = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
+              fontSize: isTotal ? 16 : 14,
+              color: isTotal ? Colors.black : EatoTheme.textSecondaryColor,
+            ),
+          ),
+          Text(
+            'Rs. ${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: isTotal ? 18 : 16,
+              color: isTotal ? EatoTheme.primaryColor : Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem(String title, DateTime time, bool isCompleted) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color:
+                  isCompleted ? EatoTheme.successColor : Colors.grey.shade300,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.check,
+              size: 14,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isCompleted ? Colors.black : Colors.grey,
+                  ),
+                ),
+                Text(
+                  DateFormat('MMM dd • h:mm a').format(time),
+                  style: TextStyle(
+                    color: EatoTheme.textSecondaryColor,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _getDetailActionButtons(BuildContext context) {
+    List<Widget> buttons = [];
+
+    switch (order.status) {
+      case OrderStatus.pending:
+      case OrderStatus.confirmed:
+        buttons.add(_buildDetailActionButton(
+          context,
+          'Start Preparing',
+          Icons.restaurant,
+          EatoTheme.primaryColor,
+          OrderStatus.preparing,
+        ));
+        break;
+      case OrderStatus.preparing:
+        buttons.add(_buildDetailActionButton(
+          context,
+          'Mark as Ready',
+          Icons.check_circle_outline,
+          Colors.blue,
+          OrderStatus.ready,
+        ));
+        break;
+      case OrderStatus.ready:
+        if (order.deliveryOption == 'Pickup') {
+          buttons.add(_buildDetailActionButton(
+            context,
+            'Mark as Picked Up',
+            Icons.check,
+            EatoTheme.successColor,
+            OrderStatus.delivered,
+          ));
+        } else {
+          buttons.add(_buildDetailActionButton(
+            context,
+            'Out for Delivery',
+            Icons.directions_bike,
+            Colors.indigo,
+            OrderStatus.onTheWay,
+          ));
+        }
+        break;
+      case OrderStatus.onTheWay:
+        buttons.add(_buildDetailActionButton(
+          context,
+          'Mark as Delivered',
+          Icons.check,
+          EatoTheme.successColor,
+          OrderStatus.delivered,
+        ));
+        break;
+      default:
+        break;
+    }
+
+    // Add contact buttons
+    if (order.customerPhone.isNotEmpty ||
+        (order.deliveryOption == 'Delivery' &&
+            order.deliveryAddress.isNotEmpty)) {
+      buttons.add(SizedBox(height: 12));
+
+      Row contactButtons = Row(
+        children: [
+          if (order.customerPhone.isNotEmpty)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _callCustomer(
+                    context, order.customerPhone, order.customerName),
+                icon: Icon(Icons.phone),
+                label: Text('Call Customer'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          if (order.customerPhone.isNotEmpty &&
+              order.deliveryOption == 'Delivery' &&
+              order.deliveryAddress.isNotEmpty)
+            SizedBox(width: 12),
+          if (order.deliveryOption == 'Delivery' &&
+              order.deliveryAddress.isNotEmpty)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    _openDirections(context, order.deliveryAddress),
+                icon: Icon(Icons.directions),
+                label: Text('Get Directions'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      );
+
+      buttons.add(contactButtons);
+    }
+
+    return buttons;
+  }
+
+  Widget _buildDetailActionButton(BuildContext context, String title,
+      IconData icon, Color color, OrderStatus status) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 8),
+      child: ElevatedButton.icon(
+        onPressed: isUpdating
+            ? null
+            : () {
+                Navigator.pop(context); // Close modal first
+                onStatusUpdate?.call(order.id, status);
+              },
+        icon: isUpdating
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Icon(icon),
+        label: Text(isUpdating ? 'Updating...' : title),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCustomButton({
     required String text,
     required VoidCallback? onPressed,
@@ -428,6 +1075,7 @@ class OrderCard extends StatelessWidget {
     Color textColor = Colors.white,
     Color? borderColor,
     double height = 36,
+    bool isLoading = false,
   }) {
     return Container(
       height: height,
@@ -439,9 +1087,7 @@ class OrderCard extends StatelessWidget {
           side: borderColor != null
               ? BorderSide(color: borderColor, width: 1)
               : null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: backgroundColor == Colors.transparent ? 0 : 2,
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
@@ -449,17 +1095,22 @@ class OrderCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) ...[
+            if (isLoading) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child:
+                    CircularProgressIndicator(strokeWidth: 2, color: textColor),
+              ),
+              SizedBox(width: 8),
+            ] else if (icon != null) ...[
               Icon(icon, size: 16),
               SizedBox(width: 6),
             ],
             Flexible(
               child: Text(
                 text,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -469,15 +1120,30 @@ class OrderCard extends StatelessWidget {
     );
   }
 
+  String _getDisplayOrderNumber() {
+    if (order.orderNumber.isNotEmpty && order.orderNumber != order.id) {
+      if (RegExp(r'^\d+$').hasMatch(order.orderNumber)) {
+        return '#${order.orderNumber}';
+      }
+      return order.orderNumber;
+    }
+    return '#${order.id.substring(0, 8).toUpperCase()}';
+  }
+
   String _formatTime(DateTime time) {
     return DateFormat('h:mm a').format(time);
+  }
+
+  bool _isOrderCompleted(OrderStatus status) {
+    return status == OrderStatus.delivered ||
+        status == OrderStatus.cancelled ||
+        status == OrderStatus.rejected;
   }
 
   Future<void> _openDirections(BuildContext context, String address) async {
     try {
       final Uri mapsUri = Uri.parse(
           'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(address)}');
-
       if (await canLaunchUrl(mapsUri)) {
         await launchUrl(mapsUri);
       } else {
@@ -498,7 +1164,6 @@ class OrderCard extends StatelessWidget {
       BuildContext context, String phoneNumber, String customerName) async {
     try {
       final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
-
       if (await canLaunchUrl(phoneUri)) {
         await launchUrl(phoneUri);
       } else {
@@ -513,13 +1178,6 @@ class OrderCard extends StatelessWidget {
       }
     } catch (e) {
       await Clipboard.setData(ClipboardData(text: phoneNumber));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Phone number copied: $phoneNumber'),
-          backgroundColor: EatoTheme.primaryColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     }
   }
 }
