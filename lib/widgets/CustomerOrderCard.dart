@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/EatoComponents.dart';
 import 'package:eato/Provider/RatingProvider.dart';
 import 'package:eato/widgets/RatingDialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

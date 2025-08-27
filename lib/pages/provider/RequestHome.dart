@@ -1,3 +1,4 @@
+import 'package:eato/widgets/store_availability_fab.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/OrderProvider.dart';
@@ -143,15 +144,17 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
   }
 
   Future<void> _declineRequest(OrderRequest request) async {
-    final reason = await _showDeclineReasonDialog();
-    if (reason == null || reason.isEmpty) return;
+    // Show confirmation dialog before declining
+    final confirmed = await _showDeclineConfirmationDialog();
+    if (!confirmed) return;
 
     setState(() => _processingRequests.add(request.id));
 
     try {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      // Use a default reason since meal providers don't need to specify
       await orderProvider.rejectOrderRequest(
-          request.id, request.orderId, reason);
+          request.id, request.orderId, 'Declined by restaurant');
 
       _showSuccessSnackBar('Order request declined');
     } catch (e) {
@@ -161,44 +164,23 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
     }
   }
 
-  Future<String?> _showDeclineReasonDialog() async {
-    final TextEditingController reasonController = TextEditingController();
-
-    return await showDialog<String>(
+  Future<bool> _showDeclineConfirmationDialog() async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Decline Order'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Please provide a reason for declining this order:'),
-            SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              decoration: InputDecoration(
-                hintText: 'e.g., Out of ingredients, Too busy, etc.',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              maxLines: 3,
-            ),
-          ],
+        title: Text('Decline Order Request'),
+        content: Text(
+          'Are you sure you want to decline this order request? This action cannot be undone.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: Text('Cancel'),
             style: EatoTheme.textButtonStyle,
           ),
           ElevatedButton(
-            onPressed: () {
-              final reason = reasonController.text.trim();
-              if (reason.isNotEmpty) {
-                Navigator.pop(context, reason);
-              }
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: EatoTheme.errorColor,
               foregroundColor: Colors.white,
@@ -208,6 +190,7 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
         ],
       ),
     );
+    return result ?? false;
   }
 
   void _showNavigateToOrdersDialog() {
@@ -407,11 +390,21 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
 
         return Scaffold(
           appBar: _buildAppBar(orderProvider),
-          body: orderProvider.isLoading
-              ? Center(
-                  child:
-                      CircularProgressIndicator(color: EatoTheme.primaryColor))
-              : _buildRequestsContent(orderProvider),
+          body: Stack(
+            children: [
+              // Existing body content
+              orderProvider.isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                          color: EatoTheme.primaryColor))
+                  : _buildRequestsContent(orderProvider),
+
+              // Add the floating availability button
+              StoreAvailabilityFAB(
+                storeId: storeProvider.userStore!.id,
+              ),
+            ],
+          ),
         );
       },
     );

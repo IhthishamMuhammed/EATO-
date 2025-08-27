@@ -2,6 +2,8 @@
 // Enhanced Profile Page with Customer Account UI design pattern
 
 import 'dart:typed_data';
+import 'package:eato/Provider/StoreProvider.dart';
+import 'package:eato/widgets/store_availability_fab.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -12,7 +14,6 @@ import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io' as io;
-
 import 'ShopDetailsSection.dart';
 import 'package:eato/EatoComponents.dart';
 
@@ -747,252 +748,268 @@ class _ProfilePageState extends State<ProfilePage> {
         title: 'Profile',
         titleIcon: Icons.person,
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: EatoTheme.primaryColor))
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Profile Section with gradient background (like customer)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24.0),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            EatoTheme.primaryColor.withOpacity(0.1),
-                            EatoTheme.accentColor.withOpacity(0.05),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: EatoTheme.primaryColor.withOpacity(0.1),
-                            spreadRadius: 1,
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 50,
-                                backgroundColor:
-                                    EatoTheme.primaryColor.withOpacity(0.2),
-                                child: user.profileImageUrl?.isNotEmpty == true
-                                    ? ClipOval(
-                                        child: Image.network(
-                                          user.profileImageUrl!,
-                                          width: 100,
-                                          height: 100,
-                                          fit: BoxFit.cover,
-                                          loadingBuilder: (context, child,
-                                              loadingProgress) {
-                                            if (loadingProgress == null)
-                                              return child;
-                                            return Center(
-                                              child: CircularProgressIndicator(
-                                                value: loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                    : null,
-                                                strokeWidth: 2,
-                                                color: EatoTheme.primaryColor,
-                                              ),
-                                            );
-                                          },
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Icon(
-                                              Icons.person,
-                                              size: 50,
-                                              color: EatoTheme.primaryColor,
-                                            );
-                                          },
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.person,
-                                        size: 50,
-                                        color: EatoTheme.primaryColor,
-                                      ),
+      body: Stack(
+        children: [
+          _isLoading
+              ? Center(
+                  child:
+                      CircularProgressIndicator(color: EatoTheme.primaryColor))
+              : SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Profile Section with gradient background (like customer)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24.0),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                EatoTheme.primaryColor.withOpacity(0.1),
+                                EatoTheme.accentColor.withOpacity(0.05),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                spreadRadius: 1,
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
                               ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      _changeProfilePicture(userProvider),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: EatoTheme.primaryColor,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                          color: Colors.white, width: 2),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Stack(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 50,
+                                    backgroundColor:
+                                        EatoTheme.primaryColor.withOpacity(0.2),
+                                    child: user.profileImageUrl?.isNotEmpty ==
+                                            true
+                                        ? ClipOval(
+                                            child: Image.network(
+                                              user.profileImageUrl!,
+                                              width: 100,
+                                              height: 100,
+                                              fit: BoxFit.cover,
+                                              loadingBuilder: (context, child,
+                                                  loadingProgress) {
+                                                if (loadingProgress == null)
+                                                  return child;
+                                                return Center(
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    value: loadingProgress
+                                                                .expectedTotalBytes !=
+                                                            null
+                                                        ? loadingProgress
+                                                                .cumulativeBytesLoaded /
+                                                            loadingProgress
+                                                                .expectedTotalBytes!
+                                                        : null,
+                                                    strokeWidth: 2,
+                                                    color:
+                                                        EatoTheme.primaryColor,
+                                                  ),
+                                                );
+                                              },
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Icon(
+                                                  Icons.person,
+                                                  size: 50,
+                                                  color: EatoTheme.primaryColor,
+                                                );
+                                              },
+                                            ),
+                                          )
+                                        : Icon(
+                                            Icons.person,
+                                            size: 50,
+                                            color: EatoTheme.primaryColor,
+                                          ),
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () =>
+                                          _changeProfilePicture(userProvider),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: EatoTheme.primaryColor,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                              color: Colors.white, width: 2),
+                                        ),
+                                        child: const Icon(
+                                          Icons.camera_alt,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
                                     ),
-                                    child: const Icon(
-                                      Icons.camera_alt,
-                                      color: Colors.white,
-                                      size: 16,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                user.name,
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user.email,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              if (user.phoneNumber?.isNotEmpty == true) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  user.phoneNumber!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                              if (user.address?.isNotEmpty == true) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  user.address!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              // User Role Badge
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      EatoTheme.primaryColor,
+                                      EatoTheme.accentColor
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: EatoTheme.primaryColor
+                                          .withOpacity(0.3),
+                                      blurRadius: 6,
+                                      offset: Offset(0, 2),
                                     ),
+                                  ],
+                                ),
+                                child: Text(
+                                  user.userType,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            user.name,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.email,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          if (user.phoneNumber?.isNotEmpty == true) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              user.phoneNumber!,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                          if (user.address?.isNotEmpty == true) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              user.address!,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          // User Role Badge
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  EatoTheme.primaryColor,
-                                  EatoTheme.accentColor
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      EatoTheme.primaryColor.withOpacity(0.3),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              user.userType,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Account Actions (Customer style)
-                    Column(
-                      children: [
-                        // Edit Profile
-                        _buildActionButton(
-                          'Edit Profile',
-                          'Update your personal information',
-                          Icons.edit_outlined,
-                          Colors.blue.shade100,
-                          Colors.blue.shade700,
-                          () => _showEditProfileDialog(userProvider),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Change Password
-                        _buildActionButton(
-                          'Change Password',
-                          'Update your account password',
-                          Icons.lock_outline,
-                          Colors.amber.shade100,
-                          Colors.amber.shade700,
-                          _showChangePasswordDialog,
                         ),
 
                         const SizedBox(height: 24),
 
-                        // Store Details Section (for providers only)
-                        if (user.userType
-                            .toLowerCase()
-                            .contains('provider')) ...[
-                          Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[50],
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(color: Colors.grey[200]!),
+                        // Account Actions (Customer style)
+                        Column(
+                          children: [
+                            // Edit Profile
+                            _buildActionButton(
+                              'Edit Profile',
+                              'Update your personal information',
+                              Icons.edit_outlined,
+                              Colors.blue.shade100,
+                              Colors.blue.shade700,
+                              () => _showEditProfileDialog(userProvider),
                             ),
-                            child: ShopDetailsSection(
-                              currentUser: widget.currentUser,
-                              onLoadingChanged: _onLoadingChanged,
-                              onShowSnackBar: _showSnackBar,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
 
-                        // Logout Button
-                        _buildActionButton(
-                          'Logout',
-                          'Sign out from your account',
-                          Icons.logout,
-                          Colors.red.shade100,
-                          Colors.red.shade700,
-                          _showLogoutConfirmationDialog,
+                            const SizedBox(height: 12),
+
+                            // Change Password
+                            _buildActionButton(
+                              'Change Password',
+                              'Update your account password',
+                              Icons.lock_outline,
+                              Colors.amber.shade100,
+                              Colors.amber.shade700,
+                              _showChangePasswordDialog,
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Store Details Section (for providers only)
+                            if (user.userType
+                                .toLowerCase()
+                                .contains('provider')) ...[
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: ShopDetailsSection(
+                                  currentUser: widget.currentUser,
+                                  onLoadingChanged: _onLoadingChanged,
+                                  onShowSnackBar: _showSnackBar,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+
+                            // Logout Button
+                            _buildActionButton(
+                              'Logout',
+                              'Sign out from your account',
+                              Icons.logout,
+                              Colors.red.shade100,
+                              Colors.red.shade700,
+                              _showLogoutConfirmationDialog,
+                            ),
+                          ],
                         ),
+
+                        const SizedBox(height: 100), // Space for bottom nav
                       ],
                     ),
-
-                    const SizedBox(height: 100), // Space for bottom nav
-                  ],
+                  ),
                 ),
-              ),
+          if (user.userType.toLowerCase().contains('provider'))
+            Consumer<StoreProvider>(
+              builder: (context, storeProvider, _) {
+                return StoreAvailabilityFAB(
+                  storeId: storeProvider.userStore?.id ?? '',
+                );
+              },
             ),
+        ],
+      ),
     );
   }
 }

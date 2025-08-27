@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:eato/services/notification_helper.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'dart:async';
@@ -18,6 +17,10 @@ class _FloatingNotificationButtonState
   List<Map<String, dynamic>> _notifications = [];
   int _unreadNotifications = 0;
   StreamSubscription<List<Map<String, dynamic>>>? _notificationSubscription;
+
+  // Track recently deleted/updated notifications to filter them from stream
+  final Set<String> _recentlyDeletedIds = {};
+  final Set<String> _recentlyMarkedReadIds = {};
 
   @override
   void initState() {
@@ -52,15 +55,31 @@ class _FloatingNotificationButtonState
     _notificationSubscription =
         NotificationHelper.getNotificationStream().listen((notifications) {
       if (mounted) {
-        print('Stream received ${notifications.length} notifications');
+        print('📡 Stream received ${notifications.length} notifications');
+
+        // Filter out recently deleted notifications from stream data
+        List<Map<String, dynamic>> filteredNotifications = notifications
+            .where((n) => !_recentlyDeletedIds.contains(n['id']))
+            .toList();
+
+        // Apply recent "mark as read" updates to stream data
+        for (var notification in filteredNotifications) {
+          if (_recentlyMarkedReadIds.contains(notification['id'])) {
+            notification['isRead'] = true;
+          }
+        }
+
+        print(
+            '📡 After filtering: ${filteredNotifications.length} notifications');
+
         setState(() {
-          _notifications = _sortNotifications(notifications);
+          _notifications = _sortNotifications(filteredNotifications);
           _unreadNotifications =
-              notifications.where((n) => !n['isRead']).length;
+              _notifications.where((n) => !n['isRead']).length;
         });
       }
     }, onError: (error) {
-      print('Stream error: $error');
+      print('❌ Stream error: $error');
     });
   }
 
@@ -98,11 +117,18 @@ class _FloatingNotificationButtonState
     );
   }
 
-  // IMMEDIATE delete notification - UI updates instantly
-  void _deleteNotificationImmediately(String notificationId) {
+  // IMPROVED delete notification - prevents stream override
+  void _deleteNotificationImmediately(String notificationId) async {
     if (!mounted) return;
 
-    print('Deleting notification immediately: $notificationId');
+    print('🗑️ Deleting notification immediately: $notificationId');
+
+    // Add to recently deleted set to filter from stream
+    _recentlyDeletedIds.add(notificationId);
+
+    // PAUSE the stream subscription to prevent it from overriding our UI
+    _notificationSubscription?.pause();
+    print('⏸️ Stream paused for delete operation');
 
     // Update UI INSTANTLY
     setState(() {
@@ -110,20 +136,46 @@ class _FloatingNotificationButtonState
       _unreadNotifications = _notifications.where((n) => !n['isRead']).length;
     });
 
-    // Delete from Firebase in background - no waiting
-    NotificationHelper.deleteNotification(notificationId).catchError((e) {
-      print('Error deleting notification: $e');
+    try {
+      // Delete from Firebase
+      await NotificationHelper.deleteNotification(notificationId);
+      print('✅ Firebase delete completed');
+
+      // Wait for Firebase to propagate the change
+      await Future.delayed(Duration(milliseconds: 1000));
+
       if (mounted) {
-        _loadNotifications(); // Only reload on error
+        // RESUME the stream subscription
+        _notificationSubscription?.resume();
+        print('▶️ Stream resumed after delete');
+
+        // Clear from recently deleted after a delay to ensure stream sync
+        Future.delayed(Duration(milliseconds: 2000), () {
+          _recentlyDeletedIds.remove(notificationId);
+          print('🧹 Cleared $notificationId from recently deleted filter');
+        });
       }
-    });
+    } catch (e) {
+      print('❌ Error deleting notification: $e');
+      if (mounted) {
+        // Remove from recently deleted on error
+        _recentlyDeletedIds.remove(notificationId);
+        // Resume stream even on error
+        _notificationSubscription?.resume();
+        _loadNotifications(); // Reload on error
+      }
+    }
   }
 
-  // IMMEDIATE mark as read - UI updates instantly
-  void _markAsReadImmediately(String notificationId) {
+  // IMPROVED mark as read - prevents stream override
+  void _markAsReadImmediately(String notificationId) async {
     if (!mounted) return;
 
-    print('Marking notification as read immediately: $notificationId');
+    print('📖 Marking notification as read immediately: $notificationId');
+
+    // PAUSE the stream subscription to prevent it from overriding our UI
+    _notificationSubscription?.pause();
+    print('⏸️ Stream paused for mark read operation');
 
     // Update UI INSTANTLY
     setState(() {
@@ -140,13 +192,27 @@ class _FloatingNotificationButtonState
       _unreadNotifications = _notifications.where((n) => !n['isRead']).length;
     });
 
-    // Update Firebase in background - no waiting
-    NotificationHelper.markNotificationAsRead(notificationId).catchError((e) {
-      print('Error marking notification as read: $e');
+    try {
+      // Update Firebase
+      await NotificationHelper.markNotificationAsRead(notificationId);
+      print('✅ Firebase mark read completed');
+
+      // Wait for Firebase to propagate the change
+      await Future.delayed(Duration(milliseconds: 800));
+
       if (mounted) {
-        _loadNotifications(); // Only reload on error
+        // RESUME the stream subscription
+        _notificationSubscription?.resume();
+        print('▶️ Stream resumed after mark read');
       }
-    });
+    } catch (e) {
+      print('❌ Error marking notification as read: $e');
+      if (mounted) {
+        // Resume stream even on error
+        _notificationSubscription?.resume();
+        _loadNotifications(); // Reload on error
+      }
+    }
   }
 
   void _deleteAllNotifications() async {
@@ -176,6 +242,10 @@ class _FloatingNotificationButtonState
     );
 
     if (confirm == true) {
+      // PAUSE the stream subscription
+      _notificationSubscription?.pause();
+      print('⏸️ Stream paused for delete all operation');
+
       // Store notifications for background deletion
       final notificationsToDelete =
           List<Map<String, dynamic>>.from(_notifications);
@@ -186,22 +256,40 @@ class _FloatingNotificationButtonState
         _unreadNotifications = 0;
       });
 
-      // Delete from Firebase in background
-      Future.wait(notificationsToDelete
-              .map((notification) =>
-                  NotificationHelper.deleteNotification(notification['id']))
-              .toList())
-          .catchError((e) {
-        print('Error deleting all notifications: $e');
+      try {
+        // Delete from Firebase in background
+        await Future.wait(notificationsToDelete
+            .map((notification) =>
+                NotificationHelper.deleteNotification(notification['id']))
+            .toList());
+
+        print('✅ All notifications deleted from Firebase');
+
+        // Wait for Firebase to propagate
+        await Future.delayed(Duration(milliseconds: 1500));
+
         if (mounted) {
+          // RESUME the stream subscription
+          _notificationSubscription?.resume();
+          print('▶️ Stream resumed after delete all');
+        }
+      } catch (e) {
+        print('❌ Error deleting all notifications: $e');
+        if (mounted) {
+          // Resume stream even on error
+          _notificationSubscription?.resume();
           _loadNotifications(); // Reload on error
         }
-      });
+      }
     }
   }
 
-  void _markAllAsRead() {
+  void _markAllAsRead() async {
     if (_notifications.isEmpty) return;
+
+    // PAUSE the stream subscription
+    _notificationSubscription?.pause();
+    print('⏸️ Stream paused for mark all read operation');
 
     // Update UI IMMEDIATELY
     setState(() {
@@ -216,13 +304,27 @@ class _FloatingNotificationButtonState
       _unreadNotifications = 0;
     });
 
-    // Update Firebase in background
-    NotificationHelper.markAllNotificationsAsRead().catchError((e) {
-      print('Error marking all as read: $e');
+    try {
+      // Update Firebase in background
+      await NotificationHelper.markAllNotificationsAsRead();
+      print('✅ All notifications marked as read in Firebase');
+
+      // Wait for Firebase to propagate
+      await Future.delayed(Duration(milliseconds: 800));
+
       if (mounted) {
+        // RESUME the stream subscription
+        _notificationSubscription?.resume();
+        print('▶️ Stream resumed after mark all read');
+      }
+    } catch (e) {
+      print('❌ Error marking all as read: $e');
+      if (mounted) {
+        // Resume stream even on error
+        _notificationSubscription?.resume();
         _loadNotifications(); // Reload on error
       }
-    });
+    }
   }
 
   @override
@@ -273,6 +375,7 @@ class _FloatingNotificationButtonState
     );
   }
 
+  // Rest of your build methods remain the same...
   Widget _buildNotificationSheet() {
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,

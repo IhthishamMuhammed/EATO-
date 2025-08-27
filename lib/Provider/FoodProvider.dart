@@ -237,7 +237,6 @@ class FoodProvider with ChangeNotifier {
             final foodRating = (foodData['rating'] as num?)?.toDouble() ?? 0.0;
             final foodRatingCount = foodData['ratingCount'] as int? ?? 0;
 
-            int estimatedDeliveryTime = _calculateDeliveryTime(store);
             double storeRating = store.rating ?? 4.0;
             bool hasDelivery = store.isDelivery ?? true;
             bool hasPickup = store.isPickup ?? true;
@@ -253,8 +252,7 @@ class FoodProvider with ChangeNotifier {
               'storeContact': store.contact ?? '',
               'hasDelivery': hasDelivery,
               'hasPickup': hasPickup,
-              'estimatedDeliveryTime': estimatedDeliveryTime,
-              'distance': _calculateDistance(store),
+
               'foodPrice': food.price,
               'foodPortionPrices': food.portionPrices,
               'foodImageUrl': food.imageUrl ?? '',
@@ -451,30 +449,6 @@ class FoodProvider with ChangeNotifier {
     } catch (e) {
       print('Error testing customer food retrieval: $e');
     }
-  }
-
-// Helper method to calculate estimated delivery time
-  int _calculateDeliveryTime(Store store) {
-    // You can customize this logic based on:
-    // - Store location vs customer location
-    // - Current order volume
-    // - Time of day
-    // - Store's average preparation time
-
-    // For now, return a random time between 20-45 minutes
-    return 20 +
-        (store.name.length % 25); // Simple pseudo-random based on store name
-  }
-
-// Helper method to calculate distance (placeholder)
-  double _calculateDistance(Store store) {
-    // You can implement actual distance calculation here using:
-    // - Customer's current location
-    // - Store's location (store.location)
-    // - Google Maps API or similar
-
-    // For now, return a placeholder distance
-    return 1.5 + (store.name.length % 30) / 10; // Simple pseudo-distance
   }
 
   // Update an existing food
@@ -1108,41 +1082,6 @@ class FoodProvider with ChangeNotifier {
     } catch (e) {
       print('ERROR in debugMealCategoryIssue: $e');
     }
-  }
-// Enhanced method to get shops with better sorting options
-
-// Helper methods for enhanced shop details
-  double _calculateMockDistance(dynamic coordinates) {
-    // Mock distance calculation - replace with actual geolocation logic
-    if (coordinates == null) return 2.5;
-
-    // Simple mock based on some coordinate math
-    if (coordinates is Map) {
-      final lat = coordinates['latitude'] ?? 6.9271;
-      final lng = coordinates['longitude'] ?? 79.8612;
-      return ((lat.abs() + lng.abs()) % 5.0) + 0.5;
-    }
-
-    return 2.5;
-  }
-
-  double _calculateAvailabilityScore(Store store, Food food) {
-    // Calculate a score based on various factors
-    double score = 0.0;
-
-    // Rating contributes 40%
-    score += (store.rating ?? 3.0) * 0.4;
-
-    // Price contributes 30% (lower price = higher score)
-    score += (100 - food.price.clamp(0, 100)) / 100 * 0.3;
-
-    // Pickup vs delivery contributes 20%
-    score += store.isPickup ? 0.2 : 0.15;
-
-    // Random factor for variety 10%
-    score += (food.name.hashCode % 10) / 100.0;
-
-    return score.clamp(0.0, 5.0);
   }
 
 // Enhanced sorting method with more options

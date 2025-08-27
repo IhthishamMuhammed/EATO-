@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
-import 'package:eato/widgets/CustomerOrderCard.dart'; // Import the new card
+import 'package:eato/widgets/CustomerOrderCard.dart';
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/Order.dart';

@@ -1,3 +1,4 @@
+// ProviderMainNavigation.dart - FIXED VERSION
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -30,9 +31,11 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
   late PageController _pageController;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  bool _isDataInitialized = false;
-  bool _isTransitioning = false;
 
+  // ✅ FIX: Add proper loading states
+  bool _isDataInitialized = false;
+  bool _isInitializing = true;
+  String? _initError;
   String? _storeId;
 
   @override
@@ -41,7 +44,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
 
-    // Animation controller for smooth transitions
     _animationController = AnimationController(
       duration: Duration(milliseconds: 300),
       vsync: this,
@@ -55,7 +57,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       curve: Curves.easeInOut,
     ));
 
-    // Initialize data immediately, not in post frame callback
+    // ✅ FIX: Initialize data immediately and wait
     _initializeProviderData();
   }
 
@@ -66,78 +68,77 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
     super.dispose();
   }
 
+  // ✅ FIX: Proper async initialization with error handling
   Future<void> _initializeProviderData() async {
     if (_isDataInitialized) return;
 
     try {
       print('🔧 [ProviderMainNavigation] Initializing provider data...');
 
+      setState(() {
+        _isInitializing = true;
+        _initError = null;
+      });
+
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-      // Ensure store data is available
+      // ✅ STEP 1: Ensure store data is loaded
       if (storeProvider.userStore == null) {
         print('📦 [ProviderMainNavigation] Fetching user store...');
         await storeProvider.fetchUserStore(widget.currentUser);
       }
 
-      if (storeProvider.userStore != null) {
-        final storeId = storeProvider.userStore!.id;
-        _storeId = storeId; // ADD THIS LINE - Set the _storeId variable
-        print('🏪 [ProviderMainNavigation] Store ID: $storeId');
-
-        // Rest of your existing code...
-        orderProvider.listenToStoreOrders(storeId);
-        orderProvider.listenToStoreOrderRequests(storeId);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {
-              _isDataInitialized = true;
-            });
-            print('✅ [ProviderMainNavigation] Data initialization complete');
-          }
-        });
-      } else {
-        print('❌ [ProviderMainNavigation] No store found for user');
+      // ✅ STEP 2: Verify store was found
+      if (storeProvider.userStore == null) {
+        throw Exception('No store found for user ${widget.currentUser.name}');
       }
-    } catch (e) {
-      print('❌ [ProviderMainNavigation] Error initializing provider data: $e');
+
+      final storeId = storeProvider.userStore!.id;
+      _storeId = storeId;
+
+      print(
+          '✅ [StoreProvider] Found store: $storeId (${storeProvider.userStore!.name})');
+
+      // ✅ STEP 3: Initialize orders for this store
+      await orderProvider.fetchOrdersForStore(storeId);
+      print('📋 [OrderProvider] Orders initialized for store: $storeId');
+
+      // ✅ STEP 4: Mark as initialized
+      if (mounted) {
+        setState(() {
+          _isDataInitialized = true;
+          _isInitializing = false;
+          _initError = null;
+        });
+        print('✅ [ProviderMainNavigation] Data initialization complete');
+      }
+    } catch (e, stackTrace) {
+      print('❌ [ProviderMainNavigation] Initialization failed: $e');
+      print('Stack trace: $stackTrace');
+
+      if (mounted) {
+        setState(() {
+          _isDataInitialized = false;
+          _isInitializing = false;
+          _initError = e.toString();
+        });
+      }
     }
   }
 
-  void _onTabTapped(int index) {
-    if (index == _currentIndex || _isTransitioning) return;
-
+  // ✅ FIX: Retry initialization on error
+  void _retryInitialization() {
     setState(() {
-      _isTransitioning = true;
+      _isDataInitialized = false;
+      _isInitializing = true;
+      _initError = null;
     });
-
-    // Smooth transition with fade effect
-    _animationController.forward().then((_) {
-      setState(() {
-        _currentIndex = index;
-      });
-
-      // Smooth page transition
-      _pageController
-          .animateToPage(
-        index,
-        duration: Duration(milliseconds: 350),
-        curve: Curves.easeInOutCubic,
-      )
-          .then((_) {
-        _animationController.reverse().then((_) {
-          setState(() {
-            _isTransitioning = false;
-          });
-        });
-      });
-    });
+    _initializeProviderData();
   }
 
   void _onPageChanged(int index) {
-    if (!_isTransitioning) {
+    if (!_isInitializing && _isDataInitialized) {
       setState(() {
         _currentIndex = index;
       });
@@ -146,6 +147,102 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   @override
   Widget build(BuildContext context) {
+    // ✅ FIX: Show loading screen while initializing
+    if (_isInitializing) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(EatoTheme.primaryColor),
+              ),
+              SizedBox(height: 24),
+              Text(
+                'Setting up your store...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'This won\'t take long',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ✅ FIX: Show error screen with retry option
+    if (_initError != null) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Colors.red[400],
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Something went wrong',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  _initError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: _retryInitialization,
+                  icon: Icon(Icons.refresh),
+                  label: Text('Try Again'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: EatoTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ✅ FIX: Only show main navigation when fully initialized
+    if (!_isDataInitialized) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Text('Initializing...'),
+        ),
+      );
+    }
+
     return Scaffold(
       body: AnimatedBuilder(
         animation: _fadeAnimation,
@@ -153,18 +250,11 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           return PageView(
             controller: _pageController,
             onPageChanged: _onPageChanged,
-            physics: BouncingScrollPhysics(), // Enable smooth swiping
+            physics: BouncingScrollPhysics(),
             children: [
-              // Orders Page (Index 0)
               _buildOrdersPage(),
-
-              // Requests Page (Index 1)
               _buildRequestsPage(),
-
-              // Menu/Provider Home Page (Index 2)
               _buildMenuPage(),
-
-              // Profile Page (Index 3)
               _buildProfilePage(),
             ],
           );
@@ -192,149 +282,69 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   Widget _buildBottomNavigationBar() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('order_requests')
-          .where('storeId', isEqualTo: _storeId!)
-          .where('status', isEqualTo: 'pending')
-          .snapshots(),
+      stream: _storeId != null
+          ? FirebaseFirestore.instance
+              .collection('order_requests')
+              .where('storeId', isEqualTo: _storeId!)
+              .where('status', isEqualTo: 'pending')
+              .snapshots()
+          : Stream.empty(),
       builder: (context, snapshot) {
         final requestCount = snapshot.data?.docs.length ?? 0;
 
-        return AnimatedContainer(
-          duration: Duration(milliseconds: 200),
+        print(
+            '🎯 [ProviderMainNavigation] Building badge with count: $requestCount');
+
+        return Container(
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 0,
+                color: Colors.black.withOpacity(0.1),
                 blurRadius: 10,
-                offset: const Offset(0, -2),
+                offset: Offset(0, -2),
               ),
             ],
           ),
           child: BottomNavigationBar(
-            currentIndex: _currentIndex,
-            onTap: _onTabTapped,
-            selectedItemColor: EatoTheme.primaryColor,
-            unselectedItemColor: EatoTheme.textLightColor,
             type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            selectedFontSize: 12,
-            unselectedFontSize: 12,
-            iconSize: 24,
-            mouseCursor: SystemMouseCursors.click,
+            backgroundColor: Colors.white,
+            selectedItemColor: EatoTheme.primaryColor,
+            unselectedItemColor: Colors.grey[600],
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              _pageController.animateToPage(
+                index,
+                duration: Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
             items: [
               BottomNavigationBarItem(
-                icon: _buildTabIcon(Icons.receipt_outlined, 0),
-                activeIcon: _buildTabIcon(Icons.receipt, 0),
+                icon: Icon(Icons.receipt_long),
                 label: 'Orders',
               ),
               BottomNavigationBarItem(
-                icon: _buildRequestsTabIcon(requestCount, false, 1),
-                activeIcon: _buildRequestsTabIcon(requestCount, true, 1),
+                icon: requestCount > 0
+                    ? Badge(
+                        label: Text('$requestCount'),
+                        child: Icon(Icons.notifications),
+                      )
+                    : Icon(Icons.notifications_none),
                 label: 'Requests',
               ),
               BottomNavigationBarItem(
-                icon: _buildTabIcon(Icons.restaurant_menu_outlined, 2),
-                activeIcon: _buildTabIcon(Icons.restaurant_menu, 2),
+                icon: Icon(Icons.restaurant_menu),
                 label: 'Menu',
               ),
               BottomNavigationBarItem(
-                icon: _buildTabIcon(Icons.person_outline, 3),
-                activeIcon: _buildTabIcon(Icons.person, 3),
+                icon: Icon(Icons.person),
                 label: 'Profile',
               ),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildTabIcon(IconData icon, int index) {
-    final isSelected = _currentIndex == index;
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 200),
-      padding: EdgeInsets.all(isSelected ? 4 : 0),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? EatoTheme.primaryColor.withOpacity(0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(
-        icon,
-        color: isSelected ? EatoTheme.primaryColor : EatoTheme.textLightColor,
-      ),
-    );
-  }
-
-  Widget _buildRequestsTabIcon(int requestCount, bool isActive, int index) {
-    final isSelected = _currentIndex == index;
-
-    // ✅ DEBUG: Print each time the badge is rebuilt
-    print(
-        '🎯 [ProviderMainNavigation] Building badge with count: $requestCount');
-
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 200),
-      padding: EdgeInsets.all(isSelected ? 4 : 0),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? EatoTheme.primaryColor.withOpacity(0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(
-            isActive ? Icons.notifications : Icons.notifications_outlined,
-            color:
-                isSelected ? EatoTheme.primaryColor : EatoTheme.textLightColor,
-          ),
-          if (requestCount > 0)
-            Positioned(
-              right: -6,
-              top: -6,
-              child: AnimatedScale(
-                scale: 1.0, // ✅ FIXED: Always show when count > 0
-                duration: Duration(milliseconds: 300), // Longer animation
-                curve: Curves.elasticOut, // Bouncy animation
-                child: Container(
-                  padding: EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: EatoTheme.errorColor,
-                    borderRadius: BorderRadius.circular(8),
-                    // ✅ ENHANCED: Add subtle shadow to make badge more visible
-                    boxShadow: [
-                      BoxShadow(
-                        color: EatoTheme.errorColor.withOpacity(0.3),
-                        blurRadius: 4,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                  constraints: BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: Text(
-                    requestCount > 99 ? '99+' : '$requestCount',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }

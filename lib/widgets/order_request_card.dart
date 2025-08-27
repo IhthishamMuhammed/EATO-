@@ -20,172 +20,278 @@ class OrderRequestCard extends StatelessWidget {
     required this.onViewDetails,
   }) : super(key: key);
 
+  String _getPaymentIcon(String paymentMethod) {
+    if (paymentMethod.toLowerCase().contains('cash')) {
+      return '💵';
+    } else if (paymentMethod.toLowerCase().contains('card')) {
+      return '💳';
+    }
+    return '💰';
+  }
+
+  Color _getPaymentColor(String paymentMethod) {
+    if (paymentMethod.toLowerCase().contains('cash')) {
+      return Colors.green;
+    } else if (paymentMethod.toLowerCase().contains('card')) {
+      return Colors.blue;
+    }
+    return EatoTheme.primaryColor;
+  }
+
+  String _getDeliveryIcon(String deliveryOption) {
+    if (deliveryOption.toLowerCase().contains('delivery')) {
+      return '🚗';
+    } else if (deliveryOption.toLowerCase().contains('pickup')) {
+      return '🏪';
+    }
+    return '📦';
+  }
+
+  Color _getDeliveryColor(String deliveryOption) {
+    if (deliveryOption.toLowerCase().contains('delivery')) {
+      return Colors.orange;
+    } else if (deliveryOption.toLowerCase().contains('pickup')) {
+      return EatoTheme.primaryColor;
+    }
+    return EatoTheme.primaryColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      elevation: 2,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      elevation: 3,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: EatoTheme.primaryColor.withOpacity(0.05),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_active,
-                    color: EatoTheme.primaryColor, size: 16),
-                SizedBox(width: 6),
-                Text(
-                  'New Order Request',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: EatoTheme.primaryColor,
-                    fontSize: 13,
-                  ),
-                ),
-                Spacer(),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: EatoTheme.warningColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'PENDING',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Content
-          if (order != null)
-            Padding(
-              padding: const EdgeInsets.all(12.0),
+      child: order != null
+          ? Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Order items list
-                  Container(
-                    padding: EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: EatoTheme.primaryColor.withOpacity(0.03),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: EatoTheme.primaryColor.withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.restaurant_menu,
-                              size: 16,
-                              color: EatoTheme.primaryColor,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Items (${order!.items.length})',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: EatoTheme.primaryColor,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                  // Header Row - Customer & Status
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: EatoTheme.primaryColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
-                        SizedBox(height: 8),
-                        ...order!.items
-                            .map((item) => Padding(
-                                  padding: EdgeInsets.only(bottom: 3),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 4,
-                                        height: 4,
-                                        decoration: BoxDecoration(
-                                          color: EatoTheme.primaryColor,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          item.foodName,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: EatoTheme.primaryColor
-                                              .withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          'x${item.quantity}',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: EatoTheme.primaryColor,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ))
-                            .toList(),
-                        SizedBox(height: 8),
-                        Divider(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Icon(
+                          Icons.person,
+                          color: EatoTheme.primaryColor,
+                          size: 20,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total Amount',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                            Text(
-                              'Rs. ${order!.totalAmount.toStringAsFixed(2)}',
+                              order!.customerName,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: EatoTheme.primaryColor,
                               ),
                             ),
+                            if (order!.customerPhone.isNotEmpty)
+                              Text(
+                                order!.customerPhone,
+                                style: TextStyle(
+                                  color: EatoTheme.textSecondaryColor,
+                                  fontSize: 13,
+                                ),
+                              ),
                           ],
+                        ),
+                      ),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: EatoTheme.warningColor,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'NEW REQUEST',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 16),
+
+                  // Essential Info Row
+                  Row(
+                    children: [
+                      // Delivery Type
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _getDeliveryColor(order!.deliveryOption)
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _getDeliveryColor(order!.deliveryOption)
+                                  .withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _getDeliveryIcon(order!.deliveryOption),
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  order!.deliveryOption,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                    color: _getDeliveryColor(
+                                        order!.deliveryOption),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(width: 8),
+
+                      // Payment Method
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _getPaymentColor(order!.paymentMethod)
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _getPaymentColor(order!.paymentMethod)
+                                  .withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _getPaymentIcon(order!.paymentMethod),
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  order!.paymentMethod
+                                      .replaceAll(' Payment', '')
+                                      .replaceAll('on Delivery', ''),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                    color:
+                                        _getPaymentColor(order!.paymentMethod),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(width: 8),
+
+                      // Total Amount
+                      Expanded(
+                        flex: 1,
+                        child: Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: EatoTheme.primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Rs. ${order!.totalAmount.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: EatoTheme.primaryColor,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 12),
+
+                  // Order Summary
+                  Container(
+                    padding: EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.restaurant_menu,
+                          size: 16,
+                          color: EatoTheme.textSecondaryColor,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          '${order!.items.length} item${order!.items.length > 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            color: EatoTheme.textSecondaryColor,
+                          ),
+                        ),
+                        Spacer(),
+                        Text(
+                          order!.items
+                                  .take(2)
+                                  .map((item) => item.foodName)
+                                  .join(', ') +
+                              (order!.items.length > 2 ? '...' : ''),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: EatoTheme.textSecondaryColor,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: 8),
 
-                  // Accept/Decline buttons
+                  SizedBox(height: 16),
+
+                  // Action Buttons
                   Row(
                     children: [
                       Expanded(
@@ -195,7 +301,7 @@ class OrderRequestCard extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: EatoTheme.errorColor,
                             foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                            padding: EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -219,7 +325,7 @@ class OrderRequestCard extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: EatoTheme.successColor,
                             foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 12),
+                            padding: EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -228,18 +334,19 @@ class OrderRequestCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  SizedBox(height: 12),
 
-                  // View Details button
+                  SizedBox(height: 8),
+
+                  // View Details Button
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
                       onPressed: onViewDetails,
-                      child: Text('View Details'),
+                      child: Text('View Full Details'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: EatoTheme.primaryColor,
                         side: BorderSide(color: EatoTheme.primaryColor),
-                        padding: EdgeInsets.symmetric(vertical: 12),
+                        padding: EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -249,15 +356,12 @@ class OrderRequestCard extends StatelessWidget {
                 ],
               ),
             )
-          else
-            Padding(
-              padding: const EdgeInsets.all(12.0),
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Center(
                 child: CircularProgressIndicator(color: EatoTheme.primaryColor),
               ),
             ),
-        ],
-      ),
     );
   }
 }

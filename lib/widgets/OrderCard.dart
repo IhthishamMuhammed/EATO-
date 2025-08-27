@@ -1121,12 +1121,21 @@ class OrderCard extends StatelessWidget {
   }
 
   String _getDisplayOrderNumber() {
+    // First, try to use the orderNumber field
     if (order.orderNumber.isNotEmpty && order.orderNumber != order.id) {
+      return order.orderNumber;
+    }
+
+    // If orderNumber is empty or same as ID, check if it's a timestamp fallback
+    if (order.orderNumber.isNotEmpty) {
+      // If it's a pure number (timestamp fallback), format it nicely
       if (RegExp(r'^\d+$').hasMatch(order.orderNumber)) {
         return '#${order.orderNumber}';
       }
       return order.orderNumber;
     }
+
+    // Final fallback to truncated ID
     return '#${order.id.substring(0, 8).toUpperCase()}';
   }
 
