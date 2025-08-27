@@ -1,4 +1,4 @@
-// ProviderMainNavigation.dart - FIXED VERSION
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -38,6 +38,8 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
   String? _initError;
   String? _storeId;
 
+  String? _storeId;
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +59,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       curve: Curves.easeInOut,
     ));
 
-    // ✅ FIX: Initialize data immediately and wait
+
     _initializeProviderData();
   }
 
@@ -75,10 +77,12 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
     try {
       print('🔧 [ProviderMainNavigation] Initializing provider data...');
 
+
       setState(() {
         _isInitializing = true;
         _initError = null;
       });
+
 
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
@@ -88,6 +92,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
         print('📦 [ProviderMainNavigation] Fetching user store...');
         await storeProvider.fetchUserStore(widget.currentUser);
       }
+
 
       // ✅ STEP 2: Verify store was found
       if (storeProvider.userStore == null) {
@@ -124,6 +129,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           _initError = e.toString();
         });
       }
+
     }
   }
 
@@ -282,6 +288,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   Widget _buildBottomNavigationBar() {
     return StreamBuilder<QuerySnapshot>(
+
       stream: _storeId != null
           ? FirebaseFirestore.instance
               .collection('order_requests')
@@ -296,6 +303,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
             '🎯 [ProviderMainNavigation] Building badge with count: $requestCount');
 
         return Container(
+
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -308,6 +316,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           ),
           child: BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
+
             backgroundColor: Colors.white,
             selectedItemColor: EatoTheme.primaryColor,
             unselectedItemColor: Colors.grey[600],
@@ -319,6 +328,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
                 curve: Curves.easeInOut,
               );
             },
+
             items: [
               BottomNavigationBarItem(
                 icon: Icon(Icons.receipt_long),
@@ -347,4 +357,5 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       },
     );
   }
+
 }

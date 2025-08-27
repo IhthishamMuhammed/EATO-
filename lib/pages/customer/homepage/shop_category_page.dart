@@ -1,7 +1,9 @@
 // FILE: lib/pages/customer/shop_category_page.dart
 // Fixed version with updated methods and cart confirmation modal
 
+
 import 'package:eato/widgets/floating_notification_button.dart';
+
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';

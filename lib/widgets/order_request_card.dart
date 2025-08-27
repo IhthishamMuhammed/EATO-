@@ -20,6 +20,7 @@ class OrderRequestCard extends StatelessWidget {
     required this.onViewDetails,
   }) : super(key: key);
 
+
   String _getPaymentIcon(String paymentMethod) {
     if (paymentMethod.toLowerCase().contains('cash')) {
       return '💵';
@@ -292,6 +293,7 @@ class OrderRequestCard extends StatelessWidget {
                   SizedBox(height: 16),
 
                   // Action Buttons
+
                   Row(
                     children: [
                       Expanded(
@@ -301,7 +303,9 @@ class OrderRequestCard extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: EatoTheme.errorColor,
                             foregroundColor: Colors.white,
+
                             padding: EdgeInsets.symmetric(vertical: 10),
+
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -325,7 +329,9 @@ class OrderRequestCard extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: EatoTheme.successColor,
                             foregroundColor: Colors.white,
+
                             padding: EdgeInsets.symmetric(vertical: 10),
+
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -335,18 +341,22 @@ class OrderRequestCard extends StatelessWidget {
                     ],
                   ),
 
+
                   SizedBox(height: 8),
 
                   // View Details Button
+
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
                       onPressed: onViewDetails,
+
                       child: Text('View Full Details'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: EatoTheme.primaryColor,
                         side: BorderSide(color: EatoTheme.primaryColor),
                         padding: EdgeInsets.symmetric(vertical: 8),
+
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -356,12 +366,16 @@ class OrderRequestCard extends StatelessWidget {
                 ],
               ),
             )
+
           : Padding(
               padding: const EdgeInsets.all(16.0),
+
               child: Center(
                 child: CircularProgressIndicator(color: EatoTheme.primaryColor),
               ),
             ),
+
+
     );
   }
 }

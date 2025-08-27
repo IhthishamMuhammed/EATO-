@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
+
 import 'package:eato/widgets/CustomerOrderCard.dart';
+
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/Order.dart';
@@ -219,12 +221,14 @@ class _ActivityPageState extends State<ActivityPage>
         canCancel: _canCancelOrder(orders[index]),
         onViewDetails: () => _showOrderDetailsDialog(orders[index]),
         onCancel: () => _showCancelOrderDialog(orders[index]),
+
         customerId: currentUser?.id,
         customerName: currentUser?.name,
         onRatingUpdated: () {
           setState(() {});
         },
         onTriggerRating: _manuallyTriggerRating, // ADD THIS LINE
+
       ),
     );
   }
@@ -691,11 +695,13 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
+
   void _manuallyTriggerRating(CustomerOrder order) {
     print('🔥 Manually triggering rating for order: ${order.id}');
     _processedOrdersForRating.remove(order.id); // Reset processing state
     _checkAndShowRatingDialog(order);
   }
+
 
   String _getDisplayOrderNumber(CustomerOrder order) {
     // If orderNumber exists and looks like a proper sequential number, use it

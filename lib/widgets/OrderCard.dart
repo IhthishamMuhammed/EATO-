@@ -42,14 +42,18 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Column(
           children: [
+
             _buildOrderHeader(),
+
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
                   _buildOrderItems(),
                   SizedBox(height: 8),
+
                   if (order.specialInstructions != null &&
                       order.specialInstructions!.isNotEmpty) ...[
                     _buildSpecialInstructions(),
@@ -59,6 +63,8 @@ class OrderCard extends StatelessWidget {
                 ],
               ),
             ),
+
+
             _buildBottomButtons(context),
           ],
         ),
@@ -78,10 +84,12 @@ class OrderCard extends StatelessWidget {
       ),
       child: Row(
         children: [
+
           Icon(Icons.receipt_outlined, size: 16, color: EatoTheme.primaryColor),
           SizedBox(width: 6),
           Text(
             'Order ${_getDisplayOrderNumber()}',
+
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: EatoTheme.primaryColor,
@@ -128,8 +136,10 @@ class OrderCard extends StatelessWidget {
         children: [
           Row(
             children: [
+
               Icon(Icons.restaurant_menu,
                   size: 16, color: EatoTheme.primaryColor),
+
               SizedBox(width: 6),
               Text(
                 'Items (${order.items.length})',
@@ -153,6 +163,7 @@ class OrderCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: EatoTheme.primaryColor,
                             shape: BoxShape.circle,
+
                           ),
                         ),
                         SizedBox(width: 8),
@@ -187,6 +198,7 @@ class OrderCard extends StatelessWidget {
                             ),
                           ),
                         ),
+
                       ],
                     ),
                   ))
@@ -211,7 +223,9 @@ class OrderCard extends StatelessWidget {
           Expanded(
             child: Text(
               order.specialInstructions!,
+
               style: TextStyle(color: Colors.amber[700], fontSize: 12),
+
             ),
           ),
         ],
@@ -225,7 +239,9 @@ class OrderCard extends StatelessWidget {
       children: [
         Text(
           'Total Amount',
+
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+
         ),
         Text(
           'Rs. ${order.totalAmount.toStringAsFixed(2)}',
@@ -255,6 +271,7 @@ class OrderCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+
           if (showProgress) ...[
             Row(
               children: [
@@ -265,6 +282,7 @@ class OrderCard extends StatelessWidget {
                   child: _buildCustomButton(
                     text: 'View Details',
                     onPressed: () => _showOrderDetails(context),
+
                     icon: Icons.visibility_outlined,
                     backgroundColor: Colors.transparent,
                     textColor: EatoTheme.primaryColor,
@@ -272,8 +290,10 @@ class OrderCard extends StatelessWidget {
                     height: 40,
                   ),
                 ),
+
                 if (isProviderView) ...[
                   SizedBox(width: 8),
+
                   if (order.customerPhone.isNotEmpty)
                     _buildCompactActionButton(
                       context: context,
@@ -282,10 +302,12 @@ class OrderCard extends StatelessWidget {
                           context, order.customerPhone, order.customerName),
                       color: Colors.green,
                     ),
+
                   if (order.customerPhone.isNotEmpty &&
                       order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     SizedBox(width: 6),
+
                   if (order.deliveryOption == 'Delivery' &&
                       order.deliveryAddress.isNotEmpty)
                     _buildCompactActionButton(
@@ -298,6 +320,7 @@ class OrderCard extends StatelessWidget {
                 ],
               ],
             ),
+
           ] else ...[
             Row(
               children: [
@@ -340,6 +363,7 @@ class OrderCard extends StatelessWidget {
             ),
           ],
         ],
+
       ),
     );
   }
@@ -428,6 +452,7 @@ class OrderCard extends StatelessWidget {
       ),
     );
   }
+
 
   // FIXED: Show complete order details in modal
   void _showOrderDetails(BuildContext context) {
@@ -1189,4 +1214,5 @@ class OrderCard extends StatelessWidget {
       await Clipboard.setData(ClipboardData(text: phoneNumber));
     }
   }
+
 }

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import 'package:provider/provider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/widgets/OrderStatusWidget.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:eato/Provider/RatingProvider.dart';
 import 'package:eato/widgets/RatingDialog.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -15,10 +17,12 @@ class CustomerOrderCard extends StatelessWidget {
   final VoidCallback? onViewDetails;
   final VoidCallback? onCancel;
   final bool canCancel;
+
   final String? customerId;
   final String? customerName;
   final VoidCallback? onRatingUpdated;
   final Function(CustomerOrder)? onTriggerRating; // ADD THIS
+
 
   const CustomerOrderCard({
     Key? key,
@@ -26,10 +30,12 @@ class CustomerOrderCard extends StatelessWidget {
     this.onViewDetails,
     this.onCancel,
     this.canCancel = false,
+
     this.customerId,
     this.customerName,
     this.onRatingUpdated,
     this.onTriggerRating,
+
   }) : super(key: key);
 
   @override
@@ -241,6 +247,7 @@ class CustomerOrderCard extends StatelessWidget {
                           ),
                         ),
 
+
                       // Show rating status for completed orders
                       if (_isCompletedOrder(order.status) &&
                           order.isRated == true)
@@ -261,6 +268,7 @@ class CustomerOrderCard extends StatelessWidget {
                             ],
                           ),
                         ),
+
                     ],
                   ),
                 ),
@@ -290,6 +298,7 @@ class CustomerOrderCard extends StatelessWidget {
   }
 
   String _getDisplayOrderNumber() {
+
     // First, try to use the orderNumber field
     if (order.orderNumber.isNotEmpty && order.orderNumber != order.id) {
       return order.orderNumber;
@@ -306,6 +315,7 @@ class CustomerOrderCard extends StatelessWidget {
 
     // Final fallback to truncated ID
     return '#${order.id.substring(0, 8).toUpperCase()}';
+
   }
 
   bool _isActiveStatus(OrderStatus status) {
@@ -316,11 +326,13 @@ class CustomerOrderCard extends StatelessWidget {
         status == OrderStatus.onTheWay;
   }
 
+
   bool _isCompletedOrder(OrderStatus status) {
     return status == OrderStatus.delivered ||
         status == OrderStatus.cancelled ||
         status == OrderStatus.rejected;
   }
+
 
   Widget _buildCompactContactSection() {
     return FutureBuilder<DocumentSnapshot>(
@@ -415,7 +427,9 @@ class CustomerOrderCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+
         // Cancel button for pending orders
+
         if (canCancel) ...[
           Container(
             height: 32,
@@ -462,6 +476,7 @@ class CustomerOrderCard extends StatelessWidget {
           ),
           SizedBox(width: 6),
         ],
+
 
         if (order.status == OrderStatus.delivered &&
             customerId != null &&
@@ -511,6 +526,7 @@ class CustomerOrderCard extends StatelessWidget {
         ],
 
         // View Details button
+
         Container(
           height: 32,
           child: ElevatedButton(
@@ -530,6 +546,7 @@ class CustomerOrderCard extends StatelessWidget {
               children: [
                 Icon(Icons.visibility_outlined, size: 12),
                 SizedBox(width: 4),
+
                 Text('Details',
                     style:
                         TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
@@ -585,6 +602,7 @@ class CustomerOrderCard extends StatelessWidget {
       );
     }
   }
+
 
   Future<void> _callStore(
       BuildContext context, String phoneNumber, String storeName) async {
