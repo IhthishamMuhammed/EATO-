@@ -1,7 +1,9 @@
 // FILE: lib/pages/customer/shop_category_page.dart
 // Fixed version with updated methods and cart confirmation modal
 
-import 'package:eato/widgets/floating_notification_button.dart.dart';
+
+import 'package:eato/widgets/floating_notification_button.dart';
+
 import 'package:flutter/material.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -41,8 +43,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     "Price: Low to High",
     "Price: High to Low",
     "Rating",
-    "Distance",
-    "Fastest Delivery"
   ];
 
   @override
@@ -114,33 +114,42 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
 
       switch (filter) {
         case "Price: Low to High":
-          _shopItems.sort((a, b) =>
-              (a['foodPrice'] as double).compareTo(b['foodPrice'] as double));
+          _shopItems.sort((a, b) {
+            final priceA = (a['foodPrice'] as num?)?.toDouble() ?? 0.0;
+            final priceB = (b['foodPrice'] as num?)?.toDouble() ?? 0.0;
+            return priceA.compareTo(priceB);
+          });
           break;
+
         case "Price: High to Low":
-          _shopItems.sort((a, b) =>
-              (b['foodPrice'] as double).compareTo(a['foodPrice'] as double));
+          _shopItems.sort((a, b) {
+            final priceA = (a['foodPrice'] as num?)?.toDouble() ?? 0.0;
+            final priceB = (b['foodPrice'] as num?)?.toDouble() ?? 0.0;
+            return priceB.compareTo(priceA);
+          });
           break;
+
         case "Rating":
-          _shopItems.sort((a, b) => (b['storeRating'] as double)
-              .compareTo(a['storeRating'] as double));
+          _shopItems.sort((a, b) {
+            final ratingA = (a['storeRating'] as num?)?.toDouble() ?? 0.0;
+            final ratingB = (b['storeRating'] as num?)?.toDouble() ?? 0.0;
+            return ratingB.compareTo(ratingA); // Highest rating first
+          });
           break;
-        case "Distance":
-          _shopItems.sort((a, b) =>
-              (a['distance'] as double).compareTo(b['distance'] as double));
-          break;
-        case "Fastest Delivery":
-          _shopItems.sort((a, b) => (a['estimatedDeliveryTime'] as int)
-              .compareTo(b['estimatedDeliveryTime'] as int));
-          break;
+
         default: // Best Match
           _shopItems.sort((a, b) {
             // Sort by rating first, then by delivery time
-            int ratingComparison = (b['storeRating'] as double)
-                .compareTo(a['storeRating'] as double);
+            final ratingA = (a['storeRating'] as num?)?.toDouble() ?? 0.0;
+            final ratingB = (b['storeRating'] as num?)?.toDouble() ?? 0.0;
+            final deliveryA =
+                (a['estimatedDeliveryTime'] as num?)?.toInt() ?? 999;
+            final deliveryB =
+                (b['estimatedDeliveryTime'] as num?)?.toInt() ?? 999;
+
+            int ratingComparison = ratingB.compareTo(ratingA);
             if (ratingComparison != 0) return ratingComparison;
-            return (a['estimatedDeliveryTime'] as int)
-                .compareTo(b['estimatedDeliveryTime'] as int);
+            return deliveryA.compareTo(deliveryB);
           });
           break;
       }
@@ -437,10 +446,12 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     final storeId = shopItem['storeId'] as String;
     final storeName = shopItem['storeName'] as String;
     final storeRating = shopItem['storeRating'] as double;
-    final estimatedTime = shopItem['estimatedDeliveryTime'] as int;
-    final distance = shopItem['distance'] as double;
     final foodPrice = shopItem['foodPrice'] as double;
     final isSubscribed = _subscriptionStatus[storeId] ?? false;
+
+    // Get rating from shopItem data instead of Food object
+    final foodRating = (shopItem['foodRating'] as num?)?.toDouble() ?? 0.0;
+    final foodRatingCount = shopItem['foodRatingCount'] as int? ?? 0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -488,7 +499,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                 ),
                 const SizedBox(width: 12),
 
-                // Store Info
+                // Store Info - UPDATED: Removed time and distance
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,19 +517,12 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                             storeRating.toStringAsFixed(1),
                             style: EatoTheme.bodySmall,
                           ),
-                          const SizedBox(width: 16),
-                          Icon(Icons.access_time, color: Colors.grey, size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            '${estimatedTime} min',
-                            style: EatoTheme.bodySmall,
-                          ),
-                          const SizedBox(width: 16),
-                          Icon(Icons.location_on, color: Colors.grey, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${distance.toStringAsFixed(1)} km',
-                            style: EatoTheme.bodySmall,
+                            '(Store)',
+                            style: EatoTheme.bodySmall.copyWith(
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
@@ -542,7 +546,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
 
           const Divider(height: 1),
 
-          // Food Item
+          // Food Item - UPDATED: Show food rating
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -578,7 +582,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                 ),
                 const SizedBox(width: 12),
 
-                // Food Info
+                // Food Info - UPDATED: Show food rating
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,6 +594,46 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                         ),
                       ),
                       const SizedBox(height: 4),
+
+                      // Food Rating - NEW
+                      if (foodRatingCount > 0) ...[
+                        Row(
+                          children: [
+                            Icon(Icons.star, color: Colors.orange, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              foodRating.toStringAsFixed(1),
+                              style: EatoTheme.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '($foodRatingCount ${foodRatingCount == 1 ? 'rating' : 'ratings'})',
+                              style: EatoTheme.bodySmall.copyWith(
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Icon(Icons.star_border,
+                                color: Colors.grey, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              'No ratings yet',
+                              style: EatoTheme.bodySmall.copyWith(
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+
                       if (food.description != null &&
                           food.description!.isNotEmpty)
                         Text(
@@ -602,7 +646,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        '₹${foodPrice.toStringAsFixed(2)}',
+                        'Rs.${foodPrice.toStringAsFixed(2)}',
                         style: EatoTheme.bodyMedium.copyWith(
                           color: EatoTheme.primaryColor,
                           fontWeight: FontWeight.bold,
@@ -612,7 +656,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                   ),
                 ),
 
-                // ✅ FIXED: Add to Cart button shows modal instead of direct addition
+                // Add to Cart button
                 ElevatedButton(
                   onPressed: () => _addToCart(shopItem),
                   style: ElevatedButton.styleFrom(

@@ -161,11 +161,13 @@ class OrderProvider with ChangeNotifier {
           'providerId': providerId,
           'items': orderItems,
           'subtotal': storeTotal,
-          'deliveryFee': deliveryOption == 'Delivery' ? 50.0 : 0.0,
-          'serviceFee': storeTotal * 0.00,
-          'totalAmount': storeTotal +
-              (deliveryOption == 'Delivery' ? 50.0 : 0.0) +
-              (storeTotal * 0.05),
+
+          'deliveryFee':
+              0.0, // SET TO 0 - was: deliveryOption == 'Delivery' ? 50.0 : 0.0
+          'serviceFee': 0.0, // SET TO 0 - was: storeTotal * 0.00 (already 0)
+          'totalAmount':
+              storeTotal, // SIMPLIFIED - was: storeTotal + deliveryFee + serviceFee
+
           'deliveryOption': deliveryOption,
           'deliveryAddress': deliveryAddress,
           'deliveryLocation': deliveryLocation != null
@@ -182,7 +184,6 @@ class OrderProvider with ChangeNotifier {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         };
-
         // Save order to Firestore
         await orderRef.set(orderData);
         orderIds.add(orderId);
@@ -705,6 +706,41 @@ class OrderProvider with ChangeNotifier {
       );
     } catch (e) {
       print('❌ Error sending new restaurant notification: $e');
+    }
+  }
+
+  Future<void> fetchOrdersForStore(String storeId) async {
+    if (storeId.isEmpty) {
+      print('❌ Cannot fetch orders: storeId is empty');
+      return;
+    }
+
+    try {
+      print('📋 Fetching orders for store: $storeId');
+
+      final ordersSnapshot = await _firestore
+          .collection('orders')
+          .where('storeId', isEqualTo: storeId)
+          .orderBy('orderTime', descending: true)
+          .get();
+
+      _providerOrders.clear();
+      for (var doc in ordersSnapshot.docs) {
+        try {
+          final order = CustomerOrder.fromFirestore(doc);
+          _providerOrders.add(order);
+        } catch (e) {
+          print('⚠️ Skipping invalid order ${doc.id}: $e');
+          continue; // Skip invalid orders instead of crashing
+        }
+      }
+
+      notifyListeners();
+      print('✅ Loaded ${_providerOrders.length} orders');
+    } catch (e) {
+      print('❌ Error fetching orders: $e');
+      _setError('Error fetching orders: $e');
+      // Don't throw - let the UI handle empty state gracefully
     }
   }
 

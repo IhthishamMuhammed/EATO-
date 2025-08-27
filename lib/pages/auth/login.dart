@@ -230,7 +230,7 @@ class _LoginPageState extends State<LoginPage>
         // Check mounted before successful login navigation
         if (!mounted) return;
 
-        _handleSuccessfulLogin(userProvider.currentUser, context);
+        await _handleSuccessfulLogin(userProvider.currentUser, context);
       }
     } catch (e) {
       // Only handle error if still mounted
@@ -363,7 +363,7 @@ class _LoginPageState extends State<LoginPage>
 
         if (_verifyRoleMatches(
             userProvider.currentUser?.userType, widget.role)) {
-          _handleSuccessfulLogin(userProvider.currentUser, context);
+          await _handleSuccessfulLogin(userProvider.currentUser, context);
         } else {
           throw Exception("This account doesn't match your selected role.");
         }
@@ -423,7 +423,8 @@ class _LoginPageState extends State<LoginPage>
     return result;
   }
 
-  void _handleSuccessfulLogin(CustomUser? user, BuildContext context) {
+  Future<void> _handleSuccessfulLogin(
+      CustomUser? user, BuildContext context) async {
     if (user == null) {
       if (mounted) {
         setState(() {
@@ -435,7 +436,6 @@ class _LoginPageState extends State<LoginPage>
 
     if (!mounted) return;
 
-    // Add debug logging
     print(
         '🎯 Login success - User type: ${user.userType}, Expected role: ${widget.role}');
 
@@ -446,6 +446,15 @@ class _LoginPageState extends State<LoginPage>
         (route) => false,
       );
     } else {
+      // ✅ ADD: Small delay to ensure providers are ready
+      await Future.delayed(Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      // ✅ ADD: Ensure user provider is set before navigation
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      userProvider.setCurrentUser(user);
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(

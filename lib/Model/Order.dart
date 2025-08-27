@@ -114,6 +114,8 @@ class CustomerOrder {
   final double totalAmount;
   final OrderStatus status;
   final String deliveryOption; // 'Delivery' or 'Pickup'
+  final bool? isRated;
+  final DateTime? ratedAt;
 
   // Enhanced location support
   final String deliveryAddress; // Keep for backward compatibility
@@ -153,6 +155,8 @@ class CustomerOrder {
     this.readyTime,
     this.deliveredTime,
     this.rejectionReason,
+    this.isRated,
+    this.ratedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -180,6 +184,8 @@ class CustomerOrder {
       'readyTime': readyTime?.toIso8601String(),
       'deliveredTime': deliveredTime?.toIso8601String(),
       'rejectionReason': rejectionReason,
+      'isRated': isRated,
+      'ratedAt': ratedAt?.toIso8601String(),
     };
   }
 
@@ -224,6 +230,10 @@ class CustomerOrder {
           ? DateTime.parse(data['deliveredTime'])
           : null,
       rejectionReason: data['rejectionReason'],
+      isRated: data['isRated'] as bool?,
+      ratedAt: data['ratedAt'] != null
+          ? (data['ratedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -287,6 +297,8 @@ class CustomerOrder {
     DateTime? readyTime,
     DateTime? deliveredTime,
     String? rejectionReason,
+    bool? isRated,
+    DateTime? ratedAt,
   }) {
     return CustomerOrder(
       id: id ?? this.id,
@@ -313,6 +325,8 @@ class CustomerOrder {
       readyTime: readyTime ?? this.readyTime,
       deliveredTime: deliveredTime ?? this.deliveredTime,
       rejectionReason: rejectionReason ?? this.rejectionReason,
+      isRated: isRated ?? this.isRated,
+      ratedAt: ratedAt ?? this.ratedAt,
     );
   }
 }

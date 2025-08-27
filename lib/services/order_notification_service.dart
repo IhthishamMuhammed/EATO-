@@ -62,7 +62,7 @@ class OrderNotificationService {
         userId: providerId,
         title: '🔔 New Order Received!',
         body:
-            'New order from $customerName - ₹${totalAmount.toStringAsFixed(2)}',
+            'New order from $customerName - Rs.${totalAmount.toStringAsFixed(2)}',
         data: {
           'type': 'new_order',
           'orderId': orderId,

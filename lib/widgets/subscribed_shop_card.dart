@@ -1,5 +1,5 @@
 // FILE: lib/widgets/subscribed_shop_card.dart
-// Compact subscribed shop card widget using EatoTheme
+// Modified to match ShopCard size and fix button visibility
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -20,38 +20,34 @@ class SubscribedShopCard extends StatelessWidget {
     required this.onUnsubscribe,
   }) : super(key: key);
 
-  String _getTimeAgo(String? subscribedAt) {
-    if (subscribedAt == null) return 'recently';
-
-    try {
-      final subscribedDate = DateTime.parse(subscribedAt);
-      final now = DateTime.now();
-      final difference = now.difference(subscribedDate);
-
-      if (difference.inDays > 0) {
-        return '${difference.inDays}d ago';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours}h ago';
-      } else {
-        return '${difference.inMinutes}m ago';
-      }
-    } catch (e) {
-      return 'recently';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: EatoTheme.primaryColor.withOpacity(0.3)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Colors.grey.shade50,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: EatoTheme.primaryColor.withOpacity(0.4),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            spreadRadius: 1,
+            spreadRadius: 0,
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -60,41 +56,67 @@ class SubscribedShopCard extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Shop image - smaller
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: shop.imageUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          imageUrl: shop.imageUrl,
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            width: 50,
-                            height: 50,
-                            color: Colors.grey[300],
-                            child:
-                                const CircularProgressIndicator(strokeWidth: 2),
+                // Shop image - same size as ShopCard
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: shop.imageUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: shop.imageUrl,
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              width: 70,
+                              height: 70,
+                              color: Colors.grey[300],
+                              child: const CircularProgressIndicator(
+                                  strokeWidth: 2),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 70,
+                              height: 70,
+                              decoration: BoxDecoration(
+                                color: EatoTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.store,
+                                size: 35,
+                                color: EatoTheme.primaryColor,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: EatoTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.store,
+                              size: 35,
+                              color: EatoTheme.primaryColor,
+                            ),
                           ),
-                          errorWidget: (context, url, error) => Container(
-                            width: 50,
-                            height: 50,
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.store, size: 25),
-                          ),
-                        )
-                      : Container(
-                          width: 50,
-                          height: 50,
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.store, size: 25),
-                        ),
+                  ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
 
                 // Shop details
                 Expanded(
@@ -106,31 +128,44 @@ class SubscribedShopCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               shop.name,
-                              style: EatoTheme.bodyMedium.copyWith(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: EatoTheme.textPrimaryColor,
+                                letterSpacing: -0.2,
                               ),
                             ),
                           ),
-                          // Compact subscribed badge
+                          // Subscribed badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: EatoTheme.primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: EatoTheme.primaryColor),
+                              gradient: LinearGradient(
+                                colors: [
+                                  EatoTheme.primaryColor.withOpacity(0.1),
+                                  EatoTheme.primaryColor.withOpacity(0.05),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: EatoTheme.primaryColor,
+                                width: 1.5,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.favorite,
-                                    size: 10, color: EatoTheme.primaryColor),
-                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.favorite,
+                                  size: 14,
+                                  color: EatoTheme.primaryColor,
+                                ),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Subscribed',
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: EatoTheme.primaryColor,
                                   ),
@@ -141,21 +176,11 @@ class SubscribedShopCard extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
 
-                      // Compact shop stats
+                      // Stats row WITHOUT rating and time
                       Row(
                         children: [
-                          const Icon(Icons.star, size: 14, color: Colors.amber),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${(shop.rating ?? 0.0).toStringAsFixed(1)}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
                           Icon(Icons.people,
                               size: 14, color: EatoTheme.primaryColor),
                           const SizedBox(width: 2),
@@ -167,32 +192,73 @@ class SubscribedShopCard extends StatelessWidget {
                               color: EatoTheme.primaryColor,
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
+                          Icon(Icons.restaurant_menu,
+                              size: 14, color: EatoTheme.successColor),
+                          const SizedBox(width: 2),
                           Text(
-                            _getTimeAgo(shopData['subscribedAt']),
+                            '${shopData['totalFoodItems'] ?? 0}',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: EatoTheme.textSecondaryColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: EatoTheme.successColor,
                             ),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 6),
 
+                      // Delivery mode badge
                       Row(
                         children: [
-                          Icon(Icons.location_on,
-                              size: 12, color: EatoTheme.textSecondaryColor),
-                          const SizedBox(width: 2),
-                          Expanded(
-                            child: Text(
-                              shop.location ?? 'Location not specified',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: EatoTheme.textSecondaryColor,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: shop.isPickup
+                                    ? [
+                                        EatoTheme.successColor,
+                                        EatoTheme.successColor.withOpacity(0.8)
+                                      ]
+                                    : [
+                                        EatoTheme.infoColor,
+                                        EatoTheme.infoColor.withOpacity(0.8)
+                                      ],
                               ),
-                              overflow: TextOverflow.ellipsis,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (shop.isPickup
+                                          ? EatoTheme.successColor
+                                          : EatoTheme.infoColor)
+                                      .withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  shop.isPickup
+                                      ? Icons.store
+                                      : Icons.delivery_dining,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  shop.isPickup ? 'Pickup' : 'Delivery',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -204,14 +270,14 @@ class SubscribedShopCard extends StatelessWidget {
             ),
           ),
 
-          // Compact action buttons
+          // Action buttons - View Menu and Unsubscribe
           Container(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
             decoration: BoxDecoration(
               color: EatoTheme.backgroundColor,
               borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
               ),
             ),
             child: Row(
@@ -227,13 +293,22 @@ class SubscribedShopCard extends StatelessWidget {
                       ),
                       minimumSize: const Size(0, 32),
                     ),
-                    child: Text(
-                      'View Menu',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.restaurant_menu,
+                            size: 16, color: Colors.white),
+                        SizedBox(width: 6),
+                        Text(
+                          'View Menu',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

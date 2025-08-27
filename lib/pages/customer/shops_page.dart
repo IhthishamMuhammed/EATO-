@@ -7,11 +7,12 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
 import 'package:eato/widgets/shop_card.dart';
-import 'package:eato/widgets/subscribed_shop_card.dart';
+
 import 'package:eato/services/firebase_subscription_service.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'package:eato/pages/customer/shop_menu_modal.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
+import 'package:eato/services/shop_analytics_service.dart';
 
 class ShopsPage extends StatefulWidget {
   final bool showBottomNav;
@@ -32,6 +33,7 @@ class _ShopsPageState extends State<ShopsPage>
   String? _error;
   Map<String, bool> _subscriptionStatus = {};
   bool _isDisposed = false;
+  Map<String, Map<String, dynamic>> _shopAnalytics = {};
 
   // Add this variable at the top of your class
   bool _showSearchBar = false;
@@ -127,6 +129,19 @@ class _ShopsPageState extends State<ShopsPage>
         });
       }
 
+      // Load analytics for all shops
+      if (shops.isNotEmpty) {
+        final shopIds = shops.map((shop) => shop.id).toList();
+        final analytics =
+            await ShopAnalyticsService.batchLoadShopAnalytics(shopIds);
+
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _shopAnalytics = analytics;
+          });
+        }
+      }
+
       // Load subscription status for all shops
       await _loadSubscriptionStatus();
 
@@ -153,19 +168,49 @@ class _ShopsPageState extends State<ShopsPage>
 
       final subscribedShops =
           await FirebaseSubscriptionService.getSubscribedShops();
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _subscribedShops = subscribedShops;
-        });
 
-        print(
-            '✅ [ShopsPage] Loaded ${subscribedShops.length} subscribed shops');
+      // Load analytics for subscribed shops to get subscriber count and food items
+      final subscribedShopIds =
+          subscribedShops.map((shop) => shop['shopId'] as String).toList();
+
+      if (subscribedShopIds.isNotEmpty) {
+        final analytics = await ShopAnalyticsService.batchLoadShopAnalytics(
+            subscribedShopIds);
+
+        // Enhance subscribed shops with analytics data
+        final enhancedShops = subscribedShops.map((shop) {
+          final shopId = shop['shopId'] as String;
+          final shopAnalytics = analytics[shopId] ?? {};
+
+          return {
+            ...shop,
+            'subscriberCount': shopAnalytics['subscriberCount'] ?? 0,
+            'totalFoodItems': shopAnalytics['totalFoodItems'] ?? 0,
+          };
+        }).toList();
+
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _subscribedShops = enhancedShops;
+          });
+          print(
+              '✅ [ShopsPage] Loaded ${enhancedShops.length} subscribed shops with analytics');
+        }
+      } else {
+        if (mounted && !_isDisposed) {
+          setState(() {
+            _subscribedShops = [];
+          });
+          print('✅ [ShopsPage] No subscribed shops found');
+        }
       }
     } catch (e) {
       print('❌ [ShopsPage] Error loading subscribed shops: $e');
-      setState(() {
-        _subscribedShops = [];
-      });
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _subscribedShops = [];
+        });
+      }
     }
   }
 
@@ -659,6 +704,7 @@ class _ShopsPageState extends State<ShopsPage>
         itemBuilder: (context, index) {
           final shop = shopsToShow[index];
           final isSubscribed = _subscriptionStatus[shop.id] ?? false;
+          final analytics = _shopAnalytics[shop.id] ?? {};
 
           return ShopCard(
             shop: shop,
@@ -666,6 +712,8 @@ class _ShopsPageState extends State<ShopsPage>
             showSubscribeButton: true,
             onSubscriptionToggle: () => _toggleSubscription(shop),
             onViewMenu: () => _viewShopMenu(shop),
+            subscriberCount: analytics['subscriberCount'],
+            totalFoodItems: analytics['totalFoodItems'],
           );
         },
       ),
@@ -748,8 +796,15 @@ class _ShopsPageState extends State<ShopsPage>
         itemCount: _subscribedShops.length,
         itemBuilder: (context, index) {
           final shopData = _subscribedShops[index];
+          final shopId = shopData['shopId'] ?? '';
+          final analytics = _shopAnalytics[shopId] ?? {};
+
+          // Add analytics data to shopData
+          final enhancedShopData = Map<String, dynamic>.from(shopData);
+          enhancedShopData['totalFoodItems'] = analytics['totalFoodItems'] ?? 0;
+
           final shop = Store(
-            id: shopData['shopId'] ?? '',
+            id: shopId,
             name: shopData['shopName'] ?? 'Unknown Shop',
             contact: shopData['shopContact'] ?? '',
             deliveryMode: _parseDeliveryMode(shopData),
@@ -762,11 +817,14 @@ class _ShopsPageState extends State<ShopsPage>
             rating: (shopData['shopRating'] ?? 0.0).toDouble(),
           );
 
-          return SubscribedShopCard(
+          return ShopCard(
             shop: shop,
-            shopData: shopData,
+            isSubscribed: true,
+            showSubscribeButton: true,
+            onSubscriptionToggle: () => _unsubscribeFromShop(shop),
             onViewMenu: () => _viewShopMenu(shop),
-            onUnsubscribe: () => _unsubscribeFromShop(shop),
+            subscriberCount: shopData['subscriberCount'],
+            totalFoodItems: shopData['totalFoodItems'],
           );
         },
       ),

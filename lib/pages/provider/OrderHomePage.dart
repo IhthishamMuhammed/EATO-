@@ -13,6 +13,7 @@ import 'package:eato/widgets/OrderProgressIndicator.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'package:eato/widgets/store_availability_fab.dart';
 
 class OrderHomePage extends StatefulWidget {
   final CustomUser currentUser;
@@ -79,29 +80,24 @@ class _OrderHomePageState extends State<OrderHomePage>
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-      // Ensure store data is available
+      // ✅ ADD THIS NULL CHECK
       if (storeProvider.userStore == null) {
-        await storeProvider.fetchUserStore(widget.currentUser);
+        print('⚠️ Store data not available, retrying...');
+        await Future.delayed(Duration(milliseconds: 1000));
+        if (storeProvider.userStore == null) {
+          await storeProvider.fetchUserStore(widget.currentUser);
+        }
+
+        if (storeProvider.userStore == null) {
+          throw Exception('Store data not available');
+        }
       }
 
-      if (storeProvider.userStore != null) {
-        final storeId = storeProvider.userStore!.id;
-
-        // Stop any existing listeners
-        _stopRealTimeUpdates();
-
-        // Start real-time listeners
-        orderProvider.listenToStoreOrders(storeId);
-
-        // Setup periodic refresh for reliability
-        _refreshTimer = Timer.periodic(Duration(seconds: 30), (_) {
-          if (mounted) _refreshOrders();
-        });
-
-        _isInitialized = true;
-      }
+      final storeId = storeProvider.userStore!.id; // Now safe to use !
+      // ... rest of function
     } catch (e) {
-      _showErrorSnackBar('Failed to initialize: $e');
+      print('❌ OrderHomePage initialization failed: $e');
+      // Handle error appropriately
     }
   }
 
@@ -248,11 +244,21 @@ class _OrderHomePageState extends State<OrderHomePage>
 
         return Scaffold(
           appBar: _buildAppBar(orderProvider),
-          body: orderProvider.isLoading
-              ? Center(
-                  child:
-                      CircularProgressIndicator(color: EatoTheme.primaryColor))
-              : _buildOrdersContent(orderProvider),
+          body: Stack(
+            children: [
+              // Existing content
+              orderProvider.isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                          color: EatoTheme.primaryColor))
+                  : _buildOrdersContent(orderProvider),
+
+              // Add the floating availability button
+              StoreAvailabilityFAB(
+                storeId: storeProvider.userStore!.id,
+              ),
+            ],
+          ),
         );
       },
     );

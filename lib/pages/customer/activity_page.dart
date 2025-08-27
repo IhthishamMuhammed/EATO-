@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:eato/widgets/bottom_nav_bar.dart';
-import 'package:eato/widgets/CustomerOrderCard.dart'; // Import the new card
+
+import 'package:eato/widgets/CustomerOrderCard.dart';
+
 import 'package:eato/Provider/OrderProvider.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/Model/Order.dart';
@@ -12,6 +14,8 @@ import 'package:eato/EatoComponents.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:eato/Provider/RatingProvider.dart';
+import 'package:eato/widgets/RatingDialog.dart';
 
 class ActivityPage extends StatefulWidget {
   final bool showBottomNav;
@@ -29,6 +33,9 @@ class _ActivityPageState extends State<ActivityPage>
   bool _isLoading = false;
   String? _error;
 
+  final Set<String> _processedOrdersForRating = {};
+  bool _isRatingDialogShowing = false;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -37,6 +44,11 @@ class _ActivityPageState extends State<ActivityPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _initializeOrders();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        print('Activity page initialized and mounted');
+      }
+    });
   }
 
   Future<void> _initializeOrders() async {
@@ -161,9 +173,12 @@ class _ActivityPageState extends State<ActivityPage>
   }
 
   Widget _buildContent() {
-    return Consumer<OrderProvider>(
-      builder: (context, orderProvider, _) {
+    return Consumer2<OrderProvider, RatingProvider>(
+      builder: (context, orderProvider, ratingProvider, _) {
         final allOrders = orderProvider.customerOrders;
+
+        // FIX 1: Process rating dialogs only once per order with proper checks
+        _processNewlyDeliveredOrders(allOrders);
 
         if (allOrders.isEmpty) {
           return EatoComponents.emptyState(
@@ -195,6 +210,9 @@ class _ActivityPageState extends State<ActivityPage>
       );
     }
 
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final currentUser = userProvider.currentUser;
+
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: orders.length,
@@ -203,6 +221,14 @@ class _ActivityPageState extends State<ActivityPage>
         canCancel: _canCancelOrder(orders[index]),
         onViewDetails: () => _showOrderDetailsDialog(orders[index]),
         onCancel: () => _showCancelOrderDialog(orders[index]),
+
+        customerId: currentUser?.id,
+        customerName: currentUser?.name,
+        onRatingUpdated: () {
+          setState(() {});
+        },
+        onTriggerRating: _manuallyTriggerRating, // ADD THIS LINE
+
       ),
     );
   }
@@ -239,9 +265,8 @@ class _ActivityPageState extends State<ActivityPage>
         status == OrderStatus.onTheWay;
   }
 
-  // Customer can only cancel BEFORE provider confirms (only pending orders)
   bool _canCancelOrder(CustomerOrder order) {
-    return order.status == OrderStatus.pending; // Only pending, NOT confirmed
+    return order.status == OrderStatus.pending;
   }
 
   Future<void> _showCancelOrderDialog(CustomerOrder order) async {
@@ -305,6 +330,92 @@ class _ActivityPageState extends State<ActivityPage>
         _showSnackBar('Order cancelled successfully', Colors.orange);
       } catch (e) {
         _showSnackBar('Failed to cancel order', Colors.red);
+      }
+    }
+  }
+
+  Future<void> _checkAndShowRatingDialog(CustomerOrder order) async {
+    if (_isRatingDialogShowing) return; // Prevent multiple dialogs
+
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final currentUser = userProvider.currentUser;
+
+    if (currentUser == null) {
+      print('❌ No current user for rating dialog');
+      return;
+    }
+
+    try {
+      _isRatingDialogShowing = true;
+      print('🎯 Showing rating dialog for order: ${order.id}');
+
+      final ratingProvider =
+          Provider.of<RatingProvider>(context, listen: false);
+      final existingRatings = await ratingProvider.checkExistingRatings(
+        currentUser.id,
+        order.storeId,
+        order.items,
+      );
+
+      // Check if any items haven't been rated
+      final hasUnratedItems = existingRatings.values.any((rated) => !rated);
+
+      print('🎯 Has unrated items: $hasUnratedItems');
+
+      if (hasUnratedItems && mounted) {
+        final result = await showRatingDialog(
+          context: context,
+          order: order,
+          customerId: currentUser.id,
+          customerName: currentUser.name,
+        );
+
+        print('🎯 Rating dialog result: $result');
+
+        // If user completed rating, refresh the order list
+        if (result == true && mounted) {
+          // The order will be updated automatically through the listener
+          setState(() {
+            // Remove from processed set so it can be processed again if needed
+            _processedOrdersForRating.remove(order.id);
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Error showing rating dialog: $e');
+    } finally {
+      _isRatingDialogShowing = false;
+    }
+  }
+
+  void _processNewlyDeliveredOrders(List<CustomerOrder> orders) {
+    if (_isRatingDialogShowing || !mounted) return;
+
+    // Only process if we're currently on the Activity page
+    if (ModalRoute.of(context)?.settings.name != '/activity' &&
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+
+    for (var order in orders) {
+      if (order.status == OrderStatus.delivered &&
+          (order.isRated != true) &&
+          !_processedOrdersForRating.contains(order.id)) {
+        print(
+            'Found unrated delivered order: ${order.id}, isRated: ${order.isRated}');
+        _processedOrdersForRating.add(order.id);
+
+        // Show dialog after a short delay
+        Future.delayed(Duration(milliseconds: 2000), () {
+          if (mounted &&
+              !_isRatingDialogShowing &&
+              ModalRoute.of(context)?.isCurrent == true) {
+            print('Attempting to show rating dialog for order: ${order.id}');
+            _checkAndShowRatingDialog(order);
+          }
+        });
+
+        break;
       }
     }
   }
@@ -583,6 +694,14 @@ class _ActivityPageState extends State<ActivityPage>
       ),
     );
   }
+
+
+  void _manuallyTriggerRating(CustomerOrder order) {
+    print('🔥 Manually triggering rating for order: ${order.id}');
+    _processedOrdersForRating.remove(order.id); // Reset processing state
+    _checkAndShowRatingDialog(order);
+  }
+
 
   String _getDisplayOrderNumber(CustomerOrder order) {
     // If orderNumber exists and looks like a proper sequential number, use it

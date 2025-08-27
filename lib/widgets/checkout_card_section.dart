@@ -2,11 +2,10 @@
 import 'package:flutter/material.dart';
 import 'stripe_card_input_widget.dart';
 import '../services/PaymentService.dart';
-import '../EatoComponents.dart';
 
 class CheckoutCardSection extends StatefulWidget {
   final Function(Map<String, String>) onCardDataChanged;
-  
+
   const CheckoutCardSection({
     Key? key,
     required this.onCardDataChanged,
@@ -28,10 +27,11 @@ class _CheckoutCardSectionState extends State<CheckoutCardSection> {
         PaymentType.card,
         cardData,
       );
-      
-      _testCardInfo = PaymentService.getTestCardInfo(cardData['cardNumber'] ?? '');
+
+      _testCardInfo =
+          PaymentService.getTestCardInfo(cardData['cardNumber'] ?? '');
     });
-    
+
     widget.onCardDataChanged(cardData);
   }
 
@@ -44,7 +44,7 @@ class _CheckoutCardSectionState extends State<CheckoutCardSection> {
           onCardDataChanged: _handleCardDataChanged,
           showTestCards: true,
         ),
-        
+
         // Show test card info
         if (_testCardInfo != null) ...[
           SizedBox(height: 12),
@@ -72,7 +72,7 @@ class _CheckoutCardSectionState extends State<CheckoutCardSection> {
             ),
           ),
         ],
-        
+
         // Show validation errors
         if (_validationErrors.isNotEmpty) ...[
           SizedBox(height: 12),

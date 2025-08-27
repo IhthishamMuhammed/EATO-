@@ -1,14 +1,15 @@
 // File: lib/pages/provider/ProviderHomePage.dart
 // Modified version without bottom navigation bar
 
+import 'package:eato/widgets/store_availability_fab.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/FoodProvider.dart';
 import 'package:eato/Provider/StoreProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:eato/pages/provider/AddFoodPage.dart';
-import 'package:eato/pages/provider/EditFoodPage.dart';
+
+import 'package:eato/pages/provider/AddEditFoodPage.dart';
 import 'package:eato/Model/Food&Store.dart';
 import 'dart:async';
 
@@ -141,8 +142,10 @@ class _ProviderHomePageState extends State<ProviderHomePage>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddFoodPage(
+        builder: (context) => AddEditFoodPage(
           storeId: storeId,
+          preSelectedMealTime:
+              _selectedMealTime.toLowerCase(), // Pre-select current tab
         ),
       ),
     ).then((_) {
@@ -157,9 +160,10 @@ class _ProviderHomePageState extends State<ProviderHomePage>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EditFoodPage(
+        builder: (context) => AddEditFoodPage(
+          // Changed from EditFoodPage
           storeId: storeId,
-          food: food,
+          food: food, // Non-null food triggers edit mode
         ),
       ),
     ).then((_) {
@@ -269,9 +273,7 @@ class _ProviderHomePageState extends State<ProviderHomePage>
           IconButton(
             icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
             onPressed: () {
-              // You can add search functionality here if needed
-              // For now, since you have the FoodFilterSearchWidget below,
-              // you could scroll to it or show a message
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Use the search bar below to search foods'),
@@ -289,13 +291,26 @@ class _ProviderHomePageState extends State<ProviderHomePage>
           tabs: _mealTimes.map((mealTime) => Tab(text: mealTime)).toList(),
         ),
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: EatoTheme.primaryColor))
-          : storeProvider.userStore == null
-              ? _buildNoStoreView()
-              : _buildFoodListView(foodProvider),
+      body: Stack(
+        children: [
+          // Existing body content
+          _isLoading
+              ? Center(
+                  child:
+                      CircularProgressIndicator(color: EatoTheme.primaryColor))
+              : storeProvider.userStore == null
+                  ? _buildNoStoreView()
+                  : _buildFoodListView(foodProvider),
+
+          // Add the floating availability button
+          if (storeProvider.userStore != null)
+            StoreAvailabilityFAB(
+              storeId: storeProvider.userStore!.id,
+            ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "add_food_fab", // Add unique heroTag to avoid conflicts
         onPressed: _navigateToAddFood,
         backgroundColor: EatoTheme.primaryColor,
         child: const Icon(Icons.add),
@@ -336,7 +351,7 @@ class _ProviderHomePageState extends State<ProviderHomePage>
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AddFoodPage(
+                  builder: (context) => AddEditFoodPage(
                     storeId: storeId,
                   ),
                 ),

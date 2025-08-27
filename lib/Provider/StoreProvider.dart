@@ -21,113 +21,26 @@ class StoreProvider with ChangeNotifier {
       _errorMessage = null;
       notifyListeners();
 
-      print('🔍 [StoreProvider] Fetching store for user: ${currentUser.id}');
-
-      // FIXED: Query the top-level stores collection by ownerUid
+      // ✅ FIX: Query top-level stores collection
       final storesSnapshot = await FirebaseFirestore.instance
-          .collection('stores') // ✅ NEW TOP-LEVEL STRUCTURE
+          .collection('stores') // Use top-level collection
           .where('ownerUid', isEqualTo: currentUser.id)
           .limit(1)
           .get();
 
       if (storesSnapshot.docs.isNotEmpty) {
-        // User has a store - use the ACTUAL document ID
         final storeDoc = storesSnapshot.docs.first;
         userStore = Store.fromFirestore(storeDoc);
         _store = userStore;
-
-        print(
-            '✅ [StoreProvider] Found store: ${storeDoc.id} (${userStore!.name})');
       } else {
-        // Check if store exists in old location (for backward compatibility)
-        print(
-            'ℹ️ [StoreProvider] No store found in new structure, checking old location...');
-
-        final oldStoreRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.id)
-            .collection('stores')
-            .doc(currentUser.id);
-
-        final oldStoreSnapshot = await oldStoreRef.get();
-
-        if (oldStoreSnapshot.exists) {
-          print('📦 [StoreProvider] Found store in old location, migrating...');
-
-          // Migrate the store to new location
-          final data = oldStoreSnapshot.data() as Map<String, dynamic>;
-          data['ownerUid'] = currentUser.id;
-          data['isActive'] = data['isActive'] ?? true;
-          data['createdAt'] = FieldValue.serverTimestamp();
-
-          // Create store in new location
-          final newStoreRef = await FirebaseFirestore.instance
-              .collection('stores') // ✅ TOP-LEVEL COLLECTION
-              .add(data);
-
-          // FIXED: Create Store object with proper DeliveryMode handling
-          DeliveryMode deliveryMode = DeliveryMode.pickup; // Default
-
-          // Handle backward compatibility for delivery mode
-          if (data['deliveryMode'] != null) {
-            deliveryMode =
-                DeliveryModeExtension.fromString(data['deliveryMode']);
-          } else if (data['isPickup'] != null) {
-            // Convert old boolean to new enum
-            deliveryMode =
-                data['isPickup'] ? DeliveryMode.pickup : DeliveryMode.delivery;
-          }
-
-          userStore = Store(
-            id: newStoreRef.id, // ✅ ACTUAL FIRESTORE DOCUMENT ID
-            name: data['name'] ?? '',
-            contact: data['contact'] ?? '',
-            deliveryMode:
-                deliveryMode, // ✅ FIXED: Use deliveryMode instead of isPickup
-            imageUrl: data['imageUrl'] ?? '',
-            foods: [],
-            location: data['location'],
-            latitude: data['latitude']?.toDouble(),
-            longitude: data['longitude']?.toDouble(),
-            ownerUid: currentUser.id,
-            isActive: true,
-            isAvailable: data['isAvailable'] ?? true,
-            rating: data['rating']?.toDouble(),
-          );
-
-          _store = userStore;
-
-          // Migrate foods to new location
-          final foodsSnapshot = await oldStoreRef.collection('foods').get();
-          if (foodsSnapshot.docs.isNotEmpty) {
-            final batch = FirebaseFirestore.instance.batch();
-
-            for (var foodDoc in foodsSnapshot.docs) {
-              final foodRef = FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(newStoreRef.id) // ✅ NEW STRUCTURE
-                  .collection('foods')
-                  .doc(foodDoc.id);
-              batch.set(foodRef, foodDoc.data());
-            }
-
-            await batch.commit();
-            print(
-                '✅ [StoreProvider] Migrated ${foodsSnapshot.docs.length} foods to new structure');
-          }
-
-          // Delete old store after successful migration
-          await oldStoreRef.delete();
-          print('🗑️ [StoreProvider] Deleted old store structure');
-        } else {
-          userStore = null;
-          _store = null;
-          print('ℹ️ [StoreProvider] No store found for user');
-        }
+        // ✅ ADD: Handle case where no store exists
+        print('⚠️ No store found for user: ${currentUser.id}');
+        userStore = null;
+        _store = null;
       }
     } catch (e) {
-      _errorMessage = 'Error fetching store data: $e';
-      print('❌ [StoreProvider] $_errorMessage');
+      print('❌ StoreProvider fetchUserStore error: $e');
+      _errorMessage = e.toString();
       userStore = null;
       _store = null;
     } finally {
