@@ -948,7 +948,6 @@ class CartService {
   static Future<Map<String, dynamic>> getCartStatistics() async {
     try {
       final cartItems = await getCartItems();
-      final now = DateTime.now();
 
       Map<String, int> itemsByStore = {};
       Map<String, double> valueByStore = {};

@@ -237,25 +237,22 @@ class FoodProvider with ChangeNotifier {
             final foodRating = (foodData['rating'] as num?)?.toDouble() ?? 0.0;
             final foodRatingCount = foodData['ratingCount'] as int? ?? 0;
 
-            double storeRating = store.rating ?? 4.0;
-            bool hasDelivery = store.isDelivery ?? true;
-            bool hasPickup = store.isPickup ?? true;
+            bool hasDelivery = store.isDelivery;
+            bool hasPickup = store.isPickup;
 
             detailedShops.add({
               'store': store,
               'food': food,
               'storeId': store.id,
               'storeName': store.name,
-              'storeRating': storeRating,
-              'storeImageUrl': store.imageUrl ?? '',
+              'storeImageUrl': store.imageUrl,
               'storeLocation': store.location ?? 'Location not specified',
-              'storeContact': store.contact ?? '',
+              'storeContact': store.contact,
               'hasDelivery': hasDelivery,
               'hasPickup': hasPickup,
-
               'foodPrice': food.price,
               'foodPortionPrices': food.portionPrices,
-              'foodImageUrl': food.imageUrl ?? '',
+              'foodImageUrl': food.imageUrl,
               'foodDescription': food.description ?? '',
               'isSubscribed': false,
               // ADD THESE LINES:
@@ -269,14 +266,8 @@ class FoodProvider with ChangeNotifier {
         }
       }
 
-      // Rest of your sorting logic...
-      detailedShops.sort((a, b) {
-        int ratingComparison =
-            (b['storeRating'] as double).compareTo(a['storeRating'] as double);
-        if (ratingComparison != 0) return ratingComparison;
-        return (a['estimatedDeliveryTime'] as int)
-            .compareTo(b['estimatedDeliveryTime'] as int);
-      });
+      detailedShops.sort((a, b) =>
+          (a['storeName'] as String).compareTo(b['storeName'] as String));
 
       _isLoading = false;
       notifyListeners();
@@ -1083,6 +1074,7 @@ class FoodProvider with ChangeNotifier {
       print('ERROR in debugMealCategoryIssue: $e');
     }
   }
+// Enhanced method to get shops with better sorting options
 
 // Enhanced sorting method with more options
   void sortShopsBy(List<Map<String, dynamic>> shops, String sortBy) {

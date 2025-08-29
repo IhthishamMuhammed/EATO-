@@ -1,5 +1,6 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:eato/pages/auth/login.dart';
+import 'package:eato/pages/provider/StoreSetupPage.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:eato/Provider/OrderProvider.dart';
@@ -37,8 +38,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
   bool _isInitializing = true;
   String? _initError;
   String? _storeId;
-
-  String? _storeId;
+  bool _needsStoreSetup = false; // ✅ NEW: Track if store setup is needed
 
   @override
   void initState() {
@@ -59,7 +59,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       curve: Curves.easeInOut,
     ));
 
-
     _initializeProviderData();
   }
 
@@ -70,33 +69,39 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
     super.dispose();
   }
 
-  // ✅ FIX: Proper async initialization with error handling
+  // ✅ FIX: Proper async initialization with store setup handling
   Future<void> _initializeProviderData() async {
     if (_isDataInitialized) return;
 
     try {
       print('🔧 [ProviderMainNavigation] Initializing provider data...');
 
-
       setState(() {
         _isInitializing = true;
         _initError = null;
+        _needsStoreSetup = false;
       });
-
 
       final storeProvider = Provider.of<StoreProvider>(context, listen: false);
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-      // ✅ STEP 1: Ensure store data is loaded
-      if (storeProvider.userStore == null) {
-        print('📦 [ProviderMainNavigation] Fetching user store...');
-        await storeProvider.fetchUserStore(widget.currentUser);
-      }
+      // ✅ STEP 1: Check if user has a store
+      print('📦 [ProviderMainNavigation] Checking for user store...');
+      await storeProvider.fetchUserStore(widget.currentUser);
 
-
-      // ✅ STEP 2: Verify store was found
+      // ✅ STEP 2: Handle missing store case
       if (storeProvider.userStore == null) {
-        throw Exception('No store found for user ${widget.currentUser.name}');
+        print(
+            '⚠️ [ProviderMainNavigation] No store found - redirecting to setup');
+
+        if (mounted) {
+          setState(() {
+            _needsStoreSetup = true;
+            _isInitializing = false;
+            _isDataInitialized = false;
+          });
+        }
+        return; // Exit early - don't proceed with order initialization
       }
 
       final storeId = storeProvider.userStore!.id;
@@ -115,6 +120,7 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           _isDataInitialized = true;
           _isInitializing = false;
           _initError = null;
+          _needsStoreSetup = false;
         });
         print('✅ [ProviderMainNavigation] Data initialization complete');
       }
@@ -127,20 +133,68 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           _isDataInitialized = false;
           _isInitializing = false;
           _initError = e.toString();
+          _needsStoreSetup = false;
         });
       }
-
     }
   }
 
-  // ✅ FIX: Retry initialization on error
-  void _retryInitialization() {
+  // ✅ NEW: Navigate to store setup
+  void _navigateToStoreSetup() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StoreSetupPage(currentUser: widget.currentUser),
+      ),
+    ).then((_) {
+      // Refresh data after returning from store setup
+      _retryInitialization();
+    });
+  }
+
+  // ✅ FIX: Retry initialization with better error handling
+  void _retryInitialization() async {
     setState(() {
       _isDataInitialized = false;
       _isInitializing = true;
       _initError = null;
+      _needsStoreSetup = false;
     });
-    _initializeProviderData();
+
+    try {
+      final storeProvider = Provider.of<StoreProvider>(context, listen: false);
+      await storeProvider.fetchUserStore(widget.currentUser);
+
+      if (storeProvider.userStore == null) {
+        // Show message and redirect to setup
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No store found. Please set up your store first.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          setState(() {
+            _needsStoreSetup = true;
+            _isInitializing = false;
+            _isDataInitialized = false;
+          });
+        }
+        return;
+      }
+
+      // Continue with normal initialization
+      _initializeProviderData();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _initError = e.toString();
+          _isInitializing = false;
+        });
+      }
+    }
   }
 
   void _onPageChanged(int index) {
@@ -153,6 +207,85 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   @override
   Widget build(BuildContext context) {
+    // ✅ NEW: Show store setup screen
+    if (_needsStoreSetup) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: Text('Setup Your Store'),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LoginPage(role: 'mealprovider'),
+                ),
+              );
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.store_outlined,
+                  size: 80,
+                  color: EatoTheme.primaryColor,
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Welcome to Eato!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Let\'s set up your store to start receiving orders from customers.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: _navigateToStoreSetup,
+                  icon: Icon(Icons.add_business),
+                  label: Text('Set Up My Store'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: EatoTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    textStyle:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: _retryInitialization,
+                  child: Text('I Already Have a Store'),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: EatoTheme.primaryColor),
+                    foregroundColor: EatoTheme.primaryColor,
+                    padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // ✅ FIX: Show loading screen while initializing
     if (_isInitializing) {
       return Scaffold(
@@ -232,6 +365,14 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
                 ),
+                SizedBox(height: 12),
+                TextButton(
+                  onPressed: _navigateToStoreSetup,
+                  child: Text('Set Up New Store Instead'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: EatoTheme.primaryColor,
+                  ),
+                ),
               ],
             ),
           ),
@@ -288,7 +429,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
 
   Widget _buildBottomNavigationBar() {
     return StreamBuilder<QuerySnapshot>(
-
       stream: _storeId != null
           ? FirebaseFirestore.instance
               .collection('order_requests')
@@ -303,7 +443,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
             '🎯 [ProviderMainNavigation] Building badge with count: $requestCount');
 
         return Container(
-
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -316,7 +455,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
           ),
           child: BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
-
             backgroundColor: Colors.white,
             selectedItemColor: EatoTheme.primaryColor,
             unselectedItemColor: Colors.grey[600],
@@ -328,7 +466,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
                 curve: Curves.easeInOut,
               );
             },
-
             items: [
               BottomNavigationBarItem(
                 icon: Icon(Icons.receipt_long),
@@ -357,5 +494,4 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       },
     );
   }
-
 }

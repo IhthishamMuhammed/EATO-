@@ -1206,14 +1206,4 @@ class _PhoneVerificationPageState extends State<PhoneVerificationPage>
       ),
     );
   }
-
-// Also add this method to help with focus management
-  void _focusOnFirstEmptyField() {
-    for (int i = 0; i < 6; i++) {
-      if (_codeControllers[i].text.isEmpty) {
-        FocusScope.of(context).requestFocus(_focusNodes[i]);
-        break;
-      }
-    }
-  }
 }

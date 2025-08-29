@@ -31,7 +31,8 @@ class ShopCategoryPage extends StatefulWidget {
   State<ShopCategoryPage> createState() => _ShopCategoryPageState();
 }
 
-class _ShopCategoryPageState extends State<ShopCategoryPage> {
+class _ShopCategoryPageState extends State<ShopCategoryPage>
+    with AutomaticKeepAliveClientMixin {
   bool _isLoading = true;
   List<Map<String, dynamic>> _shopItems = [];
   String _selectedFilter = "Best Match";
@@ -44,6 +45,9 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     "Price: High to Low",
     "Rating",
   ];
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -59,16 +63,42 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
     });
 
     try {
-      print(
-          '📄 [ShopCategoryPage] Loading shops for ${widget.mealTitle} in ${widget.categoryTitle}');
+      print('Loading shops for ${widget.mealTitle} in ${widget.categoryTitle}');
 
       final foodProvider = Provider.of<FoodProvider>(context, listen: false);
-
-      // ✅ FIXED: Use the new method that returns detailed shop information
-      final shops = await foodProvider.getShopsForMealWithDetails(
+      final allShops = await foodProvider.getShopsForMealWithDetails(
           widget.mealTitle, widget.categoryTitle);
 
-      print('✅ [ShopCategoryPage] Loaded ${shops.length} shops');
+      // Group shops by storeId to remove duplicates from multiple meal times
+      final Map<String, Map<String, dynamic>> uniqueShops = {};
+
+      for (var shopItem in allShops) {
+        final storeId = shopItem['storeId'] as String;
+        final food = shopItem['food'] as Food;
+
+        if (uniqueShops.containsKey(storeId)) {
+          // Store already exists, combine meal times if needed
+          final existingFood = uniqueShops[storeId]!['food'] as Food;
+          final existingMealTimes =
+              uniqueShops[storeId]!['mealTimes'] as List<String>? ??
+                  [existingFood.time];
+
+          // Add new meal time if not already included
+          if (!existingMealTimes.contains(food.time)) {
+            existingMealTimes.add(food.time);
+            uniqueShops[storeId]!['mealTimes'] = existingMealTimes;
+          }
+        } else {
+          // New store, add with meal time info
+          shopItem['mealTimes'] = [food.time];
+          uniqueShops[storeId] = shopItem;
+        }
+      }
+
+      // Convert back to list
+      final shops = uniqueShops.values.toList();
+
+      print('Loaded ${shops.length} unique shops (removed duplicates)');
 
       // Load subscription status for each shop
       await _loadSubscriptionStatuses(shops);
@@ -84,7 +114,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
         });
       }
     } catch (e) {
-      print('❌ [ShopCategoryPage] Error loading shops: $e');
+      print('Error loading shops: $e');
       setState(() {
         _isLoading = false;
         _error = 'Failed to load restaurants: $e';
@@ -131,26 +161,16 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
 
         case "Rating":
           _shopItems.sort((a, b) {
-            final ratingA = (a['storeRating'] as num?)?.toDouble() ?? 0.0;
-            final ratingB = (b['storeRating'] as num?)?.toDouble() ?? 0.0;
-            return ratingB.compareTo(ratingA); // Highest rating first
+            final ratingA = (a['foodRating'] as num?)?.toDouble() ?? 0.0;
+            final ratingB = (b['foodRating'] as num?)?.toDouble() ?? 0.0;
+            return ratingB.compareTo(ratingA); // Sort by food rating instead
           });
           break;
 
         default: // Best Match
-          _shopItems.sort((a, b) {
-            // Sort by rating first, then by delivery time
-            final ratingA = (a['storeRating'] as num?)?.toDouble() ?? 0.0;
-            final ratingB = (b['storeRating'] as num?)?.toDouble() ?? 0.0;
-            final deliveryA =
-                (a['estimatedDeliveryTime'] as num?)?.toInt() ?? 999;
-            final deliveryB =
-                (b['estimatedDeliveryTime'] as num?)?.toInt() ?? 999;
-
-            int ratingComparison = ratingB.compareTo(ratingA);
-            if (ratingComparison != 0) return ratingComparison;
-            return deliveryA.compareTo(deliveryB);
-          });
+          // Simple alphabetical sort since we removed store rating
+          _shopItems.sort((a, b) =>
+              (a['storeName'] as String).compareTo(b['storeName'] as String));
           break;
       }
     });
@@ -166,7 +186,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
       await EatoComponents.showAddToCartModal(
         context: context,
         foodName: food.name,
-        foodImage: food.imageUrl ?? '',
+        foodImage: food.imageUrl,
         basePrice: food.price,
         portionPrices: food.portionPrices,
         description: food.description,
@@ -178,13 +198,13 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
           await CartService.addToCart(
             foodId: food.id,
             foodName: food.name,
-            foodImage: food.imageUrl ?? '',
+            foodImage: food.imageUrl,
             price: effectivePrice,
             quantity: quantity,
             shopId: store.id,
             shopName: store.name,
             variation: portion.isNotEmpty ? portion : null,
-            specialInstructions: instructions ?? '',
+            specialInstructions: instructions,
           );
         },
       );
@@ -264,6 +284,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -319,7 +340,7 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                   : _shopItems.isEmpty
                       ? _buildEmptyWidget()
                       : _buildShopsList(),
-          const FloatingNotificationButton(),
+          const EnhancedFloatingNotificationButton(),
         ],
       ),
       bottomNavigationBar: widget.showBottomNav
@@ -441,11 +462,10 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
   }
 
   Widget _buildShopCard(Map<String, dynamic> shopItem) {
-    final store = shopItem['store'] as Store;
     final food = shopItem['food'] as Food;
     final storeId = shopItem['storeId'] as String;
     final storeName = shopItem['storeName'] as String;
-    final storeRating = shopItem['storeRating'] as double;
+
     final foodPrice = shopItem['foodPrice'] as double;
     final isSubscribed = _subscriptionStatus[storeId] ?? false;
 
@@ -509,23 +529,6 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                         style: EatoTheme.headingSmall,
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.star, color: Colors.amber, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            storeRating.toStringAsFixed(1),
-                            style: EatoTheme.bodySmall,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '(Store)',
-                            style: EatoTheme.bodySmall.copyWith(
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -554,9 +557,9 @@ class _ShopCategoryPageState extends State<ShopCategoryPage> {
                 // Food Image
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: food.imageUrl != null && food.imageUrl!.isNotEmpty
+                  child: food.imageUrl.isNotEmpty
                       ? CachedNetworkImage(
-                          imageUrl: food.imageUrl!,
+                          imageUrl: food.imageUrl,
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,

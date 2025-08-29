@@ -283,7 +283,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
 
     // Validate card details if card payment is selected
     if (_paymentMethod == PaymentType.card) {
-      final errors = PaymentService.validatePaymentMethod(PaymentType.card, _cardData);
+      final errors =
+          PaymentService.validatePaymentMethod(PaymentType.card, _cardData);
       if (errors.isNotEmpty) {
         _showErrorSnackBar('Please fix the card details before proceeding');
         return;
@@ -329,7 +330,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         );
 
         if (!paymentResult['success']) {
-          if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
+          if (Navigator.canPop(context))
+            Navigator.pop(context); // Close loading dialog
           _showPaymentError(paymentResult);
           return;
         }
@@ -356,7 +358,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         scheduledTime: _scheduledTime,
       );
 
-      if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
+      if (Navigator.canPop(context))
+        Navigator.pop(context); // Close loading dialog
 
       if (orderIds.isNotEmpty) {
         // Clear cart after successful order placement
@@ -375,7 +378,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
         throw Exception('No orders were created');
       }
     } catch (e) {
-      if (Navigator.canPop(context)) Navigator.pop(context); // Close loading dialog
+      if (Navigator.canPop(context))
+        Navigator.pop(context); // Close loading dialog
       _showOrderFailureDialog(e.toString());
     }
   }
@@ -477,7 +481,10 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [EatoTheme.primaryColor, EatoTheme.primaryColor.withOpacity(0.8)],
+                  colors: [
+                    EatoTheme.primaryColor,
+                    EatoTheme.primaryColor.withOpacity(0.8)
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -571,9 +578,8 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shopping_cart_outlined, 
-               size: 80, 
-               color: EatoTheme.textSecondaryColor),
+          Icon(Icons.shopping_cart_outlined,
+              size: 80, color: EatoTheme.textSecondaryColor),
           SizedBox(height: 16),
           Text(
             'Your cart is empty',
@@ -1190,12 +1196,6 @@ class _OrdersPageState extends State<OrdersPage> with TickerProviderStateMixin {
   }
 
   Widget _buildPaymentMethod() {
-    final calculation = PaymentService.calculateFees(
-      subtotal: _totalCartValue,
-      paymentMethod: _paymentMethod,
-      deliveryMethod: _deliveryOption,
-    );
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,

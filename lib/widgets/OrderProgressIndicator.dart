@@ -41,7 +41,6 @@ class OrderProgressIndicator extends StatelessWidget {
         Row(
           children: steps.asMap().entries.map((entry) {
             final index = entry.key;
-            final step = entry.value;
             final isActive = index <= currentIndex;
             final isCurrent = index == currentIndex;
 

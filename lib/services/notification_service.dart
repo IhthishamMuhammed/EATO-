@@ -187,27 +187,14 @@ class NotificationService {
 
     if (notification == null) return;
 
-    // Determine notification channel based on message type
-    String channelId = 'eato_notifications';
-    if (data.containsKey('type')) {
-      switch (data['type']) {
-        case 'order_update':
-          channelId = 'order_updates';
-          break;
-        case 'promotion':
-          channelId = 'promotions';
-          break;
-      }
-    }
-
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-      'eato_notifications', // channel ID
-      'Eato Notifications', // channel name
+      'eato_notifications',
+      'Eato Notifications',
       channelDescription: 'General notifications from Eato app',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@drawable/launcher_icon',
+      icon: '@mipmap/launcher_icon', // Change this line
       color: Color(0xFF6A1B9A),
     );
 
@@ -222,26 +209,6 @@ class NotificationService {
       platformDetails,
       payload: _createPayload(data),
     );
-  }
-
-  // ✅ Get notification actions based on message type
-  static List<AndroidNotificationAction>? _getNotificationActions(
-      Map<String, dynamic> data) {
-    if (data['type'] == 'order_update') {
-      return [
-        const AndroidNotificationAction(
-          'view_order',
-          'View Order',
-          showsUserInterface: true,
-        ),
-        const AndroidNotificationAction(
-          'track_order',
-          'Track',
-          showsUserInterface: true,
-        ),
-      ];
-    }
-    return null;
   }
 
   // ✅ Handle notification tap

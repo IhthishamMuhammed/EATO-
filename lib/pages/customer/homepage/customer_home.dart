@@ -205,7 +205,7 @@ class _CustomerHomePageState extends State<CustomerHomePage>
         ),
 
         // Floating notification button - appears on all pages
-        FloatingNotificationButton(),
+        EnhancedFloatingNotificationButton(),
       ],
     );
   }
