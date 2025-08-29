@@ -254,6 +254,7 @@ class _ProviderHomePageState extends State<ProviderHomePage>
           IconButton(
             icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
             onPressed: () {
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Use the search bar below to search foods'),

@@ -285,6 +285,7 @@ class OrderCard extends StatelessWidget {
                     height: 40,
                   ),
                 ),
+
                 if (isProviderView) ...[
                   SizedBox(width: 8),
                   if (order.customerPhone.isNotEmpty)

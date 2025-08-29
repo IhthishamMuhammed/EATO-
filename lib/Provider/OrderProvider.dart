@@ -196,11 +196,13 @@ class OrderProvider with ChangeNotifier {
           'providerId': providerId,
           'items': orderItems,
           'subtotal': storeTotal,
+
           'deliveryFee':
               0.0, // SET TO 0 - was: deliveryOption == 'Delivery' ? 50.0 : 0.0
           'serviceFee': 0.0, // SET TO 0 - was: storeTotal * 0.00 (already 0)
           'totalAmount':
               storeTotal, // SIMPLIFIED - was: storeTotal + deliveryFee + serviceFee
+
           'deliveryOption': deliveryOption,
           'deliveryAddress': deliveryAddress,
           'deliveryLocation': deliveryLocation != null

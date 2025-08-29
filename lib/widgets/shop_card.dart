@@ -1,5 +1,4 @@
-// FILE: lib/widgets/shop_card.dart
-// Enhanced shop card widget with subscriber count and food items count
+
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -54,12 +53,16 @@ class ShopCard extends StatelessWidget {
         border: Border.all(
           color: isSubscribed
               ? EatoTheme.primaryColor.withOpacity(0.4)
+
               : Colors.black.withOpacity(0.15),
+
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
+
             color: Colors.black.withOpacity(0.1),
+
             spreadRadius: 0,
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -75,10 +78,12 @@ class ShopCard extends StatelessWidget {
       child: Column(
         children: [
           Padding(
+
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 // Shop image with enhanced styling
+
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
@@ -95,8 +100,10 @@ class ShopCard extends StatelessWidget {
                     child: shop.imageUrl.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl: shop.imageUrl,
+
                             width: 70,
                             height: 70,
+
                             fit: BoxFit.cover,
                             placeholder: (context, url) => Container(
                               width: 70,
@@ -114,7 +121,9 @@ class ShopCard extends StatelessWidget {
                               ),
                               child: Icon(
                                 Icons.store,
+
                                 size: 35,
+
                                 color: EatoTheme.primaryColor,
                               ),
                             ),
@@ -135,9 +144,11 @@ class ShopCard extends StatelessWidget {
                   ),
                 ),
 
+
                 const SizedBox(width: 16),
 
                 // Shop details with enhanced layout
+
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,8 +159,10 @@ class ShopCard extends StatelessWidget {
                             child: Text(
                               shop.name,
                               style: TextStyle(
+
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
+
                                 color: EatoTheme.textPrimaryColor,
                                 letterSpacing: -0.2,
                               ),
@@ -161,7 +174,9 @@ class ShopCard extends StatelessWidget {
                               onTap: onSubscriptionToggle,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
+
                                     horizontal: 10, vertical: 4),
+
                                 decoration: BoxDecoration(
                                   gradient: isSubscribed
                                       ? LinearGradient(
@@ -178,7 +193,9 @@ class ShopCard extends StatelessWidget {
                                             Colors.grey.withOpacity(0.05),
                                           ],
                                         ),
+
                                   borderRadius: BorderRadius.circular(12),
+
                                   border: Border.all(
                                     color: isSubscribed
                                         ? EatoTheme.primaryColor
@@ -193,16 +210,20 @@ class ShopCard extends StatelessWidget {
                                       isSubscribed
                                           ? Icons.favorite
                                           : Icons.favorite_border,
+
                                       size: 14,
+
                                       color: isSubscribed
                                           ? EatoTheme.primaryColor
                                           : Colors.grey.shade600,
                                     ),
+
                                     const SizedBox(width: 4),
                                     Text(
                                       isSubscribed ? 'Subscribed' : 'Subscribe',
                                       style: TextStyle(
                                         fontSize: 11,
+
                                         fontWeight: FontWeight.w600,
                                         color: isSubscribed
                                             ? EatoTheme.primaryColor
@@ -216,9 +237,11 @@ class ShopCard extends StatelessWidget {
                         ],
                       ),
 
+
                       const SizedBox(height: 6),
 
                       // Stats row with rating, subscriber count, and food items
+
                       Row(
                         children: [
                           // Rating badge
@@ -249,6 +272,7 @@ class ShopCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                           ],
+
 
                           // Subscriber count badge
                           if (subscriberCount != null) ...[
@@ -310,17 +334,22 @@ class ShopCard extends StatelessWidget {
                               ),
                             ),
                           ],
+
                         ],
                       ),
 
                       const SizedBox(height: 6),
 
+
                       // Delivery mode badge
+
                       Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
+
                                 horizontal: 10, vertical: 4),
+
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: shop.isPickup
@@ -349,6 +378,7 @@ class ShopCard extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
+
                                   _getDeliveryModeIcon(shop
                                       .deliveryMode), // ✅ Handles all three modes
                                   size: 12,
@@ -356,11 +386,14 @@ class ShopCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 4),
                                 // Fixed code
+
                                 Text(
                                   _getDeliveryModeText(
                                       shop), // ✅ This will show Pickup/Delivery/Both correctly
                                   style: TextStyle(
+
                                     fontSize: 10,
+
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
                                   ),
@@ -376,6 +409,7 @@ class ShopCard extends StatelessWidget {
               ],
             ),
           ),
+
           // Replace the bottom Container with this:
           Container(
             padding: const EdgeInsets.fromLTRB(
@@ -383,6 +417,7 @@ class ShopCard extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               height: 50, // Increased from 36 to 40
+
               child: ElevatedButton(
                 onPressed: onViewMenu,
                 style: ElevatedButton.styleFrom(
@@ -398,6 +433,7 @@ class ShopCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+
                     Icon(Icons.restaurant_menu, size: 16),
                     SizedBox(width: 6),
                     Text(
@@ -407,6 +443,7 @@ class ShopCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.3,
                         color: Colors.white,
+
                       ),
                     ),
                   ],

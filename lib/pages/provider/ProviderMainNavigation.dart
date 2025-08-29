@@ -1,4 +1,3 @@
-// ProviderMainNavigation.dart - FIXED VERSION with Store Setup Navigation
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/pages/auth/login.dart';
 import 'package:eato/pages/provider/StoreSetupPage.dart';
@@ -11,7 +10,6 @@ import 'package:eato/pages/provider/OrderHomePage.dart';
 import 'package:eato/pages/provider/RequestHome.dart';
 import 'package:eato/pages/provider/ProviderHomePage.dart';
 import 'package:eato/pages/provider/ProfilePage.dart';
-// import 'package:eato/pages/provider/StoreSetupPage.dart'; // Add this import
 import 'package:eato/pages/theme/eato_theme.dart';
 
 class ProviderMainNavigation extends StatefulWidget {
@@ -61,7 +59,6 @@ class _ProviderMainNavigationState extends State<ProviderMainNavigation>
       curve: Curves.easeInOut,
     ));
 
-    // ✅ FIX: Initialize data immediately and wait
     _initializeProviderData();
   }
 
