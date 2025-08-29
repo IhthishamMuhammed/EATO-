@@ -24,7 +24,7 @@ class MealCategoryPage extends StatefulWidget {
 }
 
 class _MealCategoryPageState extends State<MealCategoryPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   bool _isLoading = false;
   List<Map<String, dynamic>> _categoryItems = [];
   List<Map<String, dynamic>> _filteredCategoryItems = [];
@@ -33,6 +33,9 @@ class _MealCategoryPageState extends State<MealCategoryPage>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  @override
+  bool get wantKeepAlive => true; // Add this
 
   // ✅ ROBUST IMAGE LOADING: Multiple fallback URLs for each meal type
   final Map<String, List<String>> _heroImageOptions = {
@@ -398,6 +401,7 @@ class _MealCategoryPageState extends State<MealCategoryPage>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: EatoTheme.backgroundColor,
       body: Stack(
@@ -749,7 +753,7 @@ class _MealCategoryPageState extends State<MealCategoryPage>
               ],
             ),
           ),
-          const FloatingNotificationButton(), // ✅ ADD THIS
+          const EnhancedFloatingNotificationButton(), // ✅ ADD THIS
         ],
       ),
       // ✅ ALWAYS VISIBLE: Bottom Navigation Bar

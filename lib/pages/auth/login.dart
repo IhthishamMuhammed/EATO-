@@ -669,7 +669,7 @@ class _LoginPageState extends State<LoginPage>
           ),
           onPressed: () {
             HapticFeedback.lightImpact();
-            Navigator.pop(context);
+            Navigator.pushReplacementNamed(context, '/role_selection');
           },
         ),
       ),

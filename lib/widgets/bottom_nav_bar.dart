@@ -209,10 +209,6 @@ class _BottomNavBarState extends State<BottomNavBar>
 
     return Consumer<CartProvider>(
       builder: (context, cartProvider, child) {
-        if (cartProvider == null) {
-          return _buildFallbackCartButton();
-        }
-
         final cartCount = cartProvider.cartCount;
         final isLoading = cartProvider.isLoading;
 

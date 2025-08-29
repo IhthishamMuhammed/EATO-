@@ -12,7 +12,6 @@ import 'package:provider/provider.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/userProvider.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io' as io;
 import 'ShopDetailsSection.dart';
 import 'package:eato/EatoComponents.dart';

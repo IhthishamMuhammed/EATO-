@@ -691,10 +691,66 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
-  void _manuallyTriggerRating(CustomerOrder order) {
-    print('🔥 Manually triggering rating for order: ${order.id}');
-    _processedOrdersForRating.remove(order.id); // Reset processing state
-    _checkAndShowRatingDialog(order);
+  void _manuallyTriggerRating(CustomerOrder order) async {
+    print('Manually triggering rating for order: ${order.id}');
+
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final currentUser = userProvider.currentUser;
+
+    if (currentUser == null) {
+      print('No current user for rating dialog');
+      return;
+    }
+
+    if (_isRatingDialogShowing) {
+      print('Rating dialog already showing, skipping');
+      return;
+    }
+
+    try {
+      _isRatingDialogShowing = true;
+
+      // Get existing ratings for edit mode (if any)
+      final ratingProvider =
+          Provider.of<RatingProvider>(context, listen: false);
+      Map<String, Map<String, dynamic>>? existingRatings;
+
+      try {
+        existingRatings = await ratingProvider.getExistingRatings(
+          customerId: currentUser.id,
+          storeId: order.storeId,
+          items: order.items,
+        );
+      } catch (e) {
+        print('Error getting existing ratings: $e');
+        // Continue without existing ratings
+        existingRatings = null;
+      }
+
+      // Show dialog regardless of existing ratings
+      final result = await showRatingDialog(
+        context: context,
+        order: order,
+        customerId: currentUser.id,
+        customerName: currentUser.name,
+        isEditMode: existingRatings != null && existingRatings.isNotEmpty,
+        existingRatings: existingRatings,
+      );
+
+      print('Rating dialog result: $result');
+
+      if (result == true && mounted) {
+        setState(() {
+          // Refresh the UI
+        });
+        _showSnackBar('Rating submitted successfully!', Colors.green);
+      }
+    } catch (e) {
+      print('Error showing manual rating dialog: $e');
+      _showSnackBar('Failed to show rating dialog', Colors.red);
+    } finally {
+      _isRatingDialogShowing = false;
+    }
   }
 
   String _getDisplayOrderNumber(CustomerOrder order) {

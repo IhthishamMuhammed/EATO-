@@ -1,6 +1,7 @@
 // File: lib/pages/provider/ProviderHomePage.dart
 // Modified version without bottom navigation bar
 
+import 'package:eato/EatoComponents.dart';
 import 'package:eato/widgets/store_availability_fab.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -105,12 +106,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
         });
       }
     }
-  }
-
-  void _onFoodsFiltered(List<Food> filteredFoods) {
-    setState(() {
-      _filteredFoods = filteredFoods;
-    });
   }
 
   Future<void> _refreshData() async {
@@ -251,24 +246,10 @@ class _ProviderHomePageState extends State<ProviderHomePage>
     final foodProvider = Provider.of<FoodProvider>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'My Menu',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: EatoTheme.textPrimaryColor,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
+      appBar: EatoComponents.appBar(
+        context: context,
+        title: 'My Menu',
+        titleIcon: Icons.restaurant_menu,
         actions: [
           IconButton(
             icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
@@ -378,12 +359,6 @@ class _ProviderHomePageState extends State<ProviderHomePage>
   Widget _buildFoodListView(FoodProvider foodProvider) {
     final allFoods = foodProvider.foods;
     final searchQuery = _searchController.text.toLowerCase();
-
-    final filteredFoods = searchQuery.isEmpty
-        ? allFoods
-        : allFoods.where((food) {
-            return food.name.toLowerCase().contains(searchQuery);
-          }).toList();
 
     return RefreshIndicator(
       key: _refreshIndicatorKey,

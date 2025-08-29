@@ -32,6 +32,8 @@ class OrderProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  Set<String> _hiddenCompletedOrderIds = <String>{};
+
   // Filtered getters for provider
   List<CustomerOrder> get pendingOrders => _providerOrders
       .where((order) => order.status == OrderStatus.confirmed)
@@ -45,16 +47,49 @@ class OrderProvider with ChangeNotifier {
               order.deliveryOption == 'Delivery'))
       .toList();
 
-  List<CustomerOrder> get completedOrders => _providerOrders
-      .where((order) =>
-          order.status == OrderStatus.delivered ||
-          order.status == OrderStatus.cancelled ||
-          order.status == OrderStatus.rejected)
-      .toList();
+  List<CustomerOrder> get completedOrders {
+    return _providerOrders
+        .where((order) =>
+            _isCompletedStatus(order.status) &&
+            !_hiddenCompletedOrderIds.contains(order.id))
+        .toList()
+      ..sort((a, b) => b.orderTime.compareTo(a.orderTime));
+  }
 
+// Add the missing helper method
+  bool _isCompletedStatus(OrderStatus status) {
+    return status == OrderStatus.delivered ||
+        status == OrderStatus.cancelled ||
+        status == OrderStatus.rejected;
+  }
   // ====================
   // CUSTOMER METHODS
   // ====================
+
+  void hideCompletedOrder(String orderId) {
+    _hiddenCompletedOrderIds.add(orderId);
+    notifyListeners();
+  }
+
+  void clearAllCompletedOrders() {
+    // Get current completed orders before hiding them
+    final currentCompletedOrders = _providerOrders
+        .where((order) => _isCompletedStatus(order.status))
+        .toList();
+
+    for (var order in currentCompletedOrders) {
+      _hiddenCompletedOrderIds.add(order.id);
+    }
+    notifyListeners();
+  }
+
+  void filterHiddenOrders() {
+    _providerOrders = _providerOrders
+        .where((order) => !_hiddenCompletedOrderIds.contains(order.id))
+        .toList();
+
+    notifyListeners();
+  }
 
   /// Listen to customer orders in real-time
   void listenToCustomerOrders(String customerId) {
@@ -195,6 +230,86 @@ class OrderProvider with ChangeNotifier {
     } catch (e) {
       _setError('Error placing orders: $e');
       return [];
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+// Method to soft delete (archive) completed orders
+  Future<void> archiveCompletedOrders() async {
+    try {
+      _setLoading(true);
+
+      // Get current completed orders
+      final currentCompletedOrders = _providerOrders
+          .where((order) => _isCompletedStatus(order.status))
+          .toList();
+
+      if (currentCompletedOrders.isEmpty) {
+        return;
+      }
+
+      // Mark orders as hidden in Firestore
+      final batch = _firestore.batch();
+
+      for (final order in currentCompletedOrders) {
+        final orderRef = _firestore.collection('orders').doc(order.id);
+
+        // Add a field to mark the order as hidden from provider view
+        batch.update(orderRef, {
+          'hiddenFromProvider': true,
+          'hiddenAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+
+      // Update local state to hide orders immediately
+      for (final order in currentCompletedOrders) {
+        _hiddenCompletedOrderIds.add(order.id);
+      }
+
+      notifyListeners();
+      print(
+          'Successfully archived ${currentCompletedOrders.length} completed orders');
+    } catch (e) {
+      _setError('Error archiving completed orders: $e');
+      throw Exception(_error);
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+// Method to restore archived orders (for undo functionality)
+  Future<void> restoreArchivedOrders(List<String> orderIds) async {
+    try {
+      _setLoading(true);
+
+      final batch = _firestore.batch();
+
+      for (final orderId in orderIds) {
+        final orderRef = _firestore.collection('orders').doc(orderId);
+
+        // Remove the hidden flags
+        batch.update(orderRef, {
+          'hiddenFromProvider': FieldValue.delete(),
+          'hiddenAt': FieldValue.delete(),
+        });
+      }
+
+      await batch.commit();
+
+      // Remove from local hidden set
+      for (final orderId in orderIds) {
+        _hiddenCompletedOrderIds.remove(orderId);
+      }
+
+      // Refresh the orders list
+      notifyListeners();
+      print('Successfully restored ${orderIds.length} archived orders');
+    } catch (e) {
+      _setError('Error restoring archived orders: $e');
+      throw Exception(_error);
     } finally {
       _setLoading(false);
     }
@@ -403,7 +518,6 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  /// Listen to provider orders in real-time
   void listenToStoreOrders(String storeId) {
     _providerOrdersSubscription?.cancel();
 
@@ -414,8 +528,22 @@ class OrderProvider with ChangeNotifier {
         .snapshots()
         .listen(
       (snapshot) {
+        // Filter out orders marked as hidden from provider
         _providerOrders = snapshot.docs
-            .map((doc) => CustomerOrder.fromFirestore(doc))
+            .map((doc) {
+              final data = doc.data();
+              // Check if order is hidden in Firestore before creating the object
+              final isHiddenInFirestore = data['hiddenFromProvider'] ?? false;
+
+              if (isHiddenInFirestore) {
+                return null; // Skip hidden orders
+              }
+
+              return CustomerOrder.fromFirestore(doc);
+            })
+            .where((order) => order != null)
+            .cast<CustomerOrder>()
+            .where((order) => !_hiddenCompletedOrderIds.contains(order.id))
             .toList();
         notifyListeners();
       },

@@ -3,7 +3,6 @@ import 'package:eato/Provider/RatingProvider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:eato/Provider/RatingProvider.dart';
 import 'package:eato/Model/Order.dart';
 import 'package:eato/pages/theme/eato_theme.dart';
 
@@ -29,8 +28,6 @@ class RatingDialog extends StatefulWidget {
 
 class _RatingDialogState extends State<RatingDialog> {
   final Map<String, double> _ratings = {};
-  final Map<String, String> _reviews = {};
-  final Map<String, TextEditingController> _reviewControllers = {};
   bool _isSubmitting = false;
   int _currentPage = 0;
   late PageController _pageController;
@@ -44,12 +41,8 @@ class _RatingDialogState extends State<RatingDialog> {
       if (widget.isEditMode && widget.existingRatings != null) {
         final existing = widget.existingRatings![item.foodId];
         _ratings[item.foodId] = existing?['rating'] ?? 0.0;
-        _reviewControllers[item.foodId] =
-            TextEditingController(text: existing?['review'] ?? '');
-        _reviews[item.foodId] = existing?['review'] ?? '';
       } else {
         _ratings[item.foodId] = 0.0;
-        _reviewControllers[item.foodId] = TextEditingController();
       }
     }
   }
@@ -57,9 +50,6 @@ class _RatingDialogState extends State<RatingDialog> {
   @override
   void dispose() {
     _pageController.dispose();
-    for (var controller in _reviewControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -69,7 +59,7 @@ class _RatingDialogState extends State<RatingDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
           maxWidth: 400,
         ),
         child: Column(
@@ -264,31 +254,8 @@ class _RatingDialogState extends State<RatingDialog> {
             }),
           ),
 
-          SizedBox(height: 20),
-
-          // Review TextField
-          TextField(
-            controller: _reviewControllers[item.foodId],
-            decoration: InputDecoration(
-              hintText: 'Write a review (optional)',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: EatoTheme.primaryColor),
-              ),
-            ),
-            maxLines: 3,
-            onChanged: (value) {
-              _reviews[item.foodId] = value;
-            },
-          ),
+          // Remove the review TextField section completely
+          // The SizedBox and TextField that were here are now removed
         ],
       ),
     );
@@ -393,7 +360,6 @@ class _RatingDialogState extends State<RatingDialog> {
         storeId: widget.order.storeId,
         orderId: widget.order.id,
         ratings: _ratings,
-        reviews: _reviews,
         isEditMode: widget.isEditMode, // Pass edit mode flag
       );
 

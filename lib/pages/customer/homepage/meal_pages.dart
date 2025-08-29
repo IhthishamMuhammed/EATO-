@@ -1,7 +1,5 @@
 // FILE: lib/pages/customer/homepage/meal_pages.dart
-// Simplified version without pricing and sorting functionality
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:eato/widgets/floating_notification_button.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,12 +26,16 @@ class MealPage extends StatefulWidget {
   State<MealPage> createState() => _MealPageState();
 }
 
-class _MealPageState extends State<MealPage> {
+class _MealPageState extends State<MealPage>
+    with AutomaticKeepAliveClientMixin {
   List<Food> _mealItems = [];
   List<Food> _filteredMealItems = [];
   bool _isLoading = true;
   String? _error;
   String _searchQuery = '';
+
+  @override
+  bool get wantKeepAlive => true;
 
   // Get effective category title with fallback
   String get _effectiveCategoryTitle =>
@@ -275,6 +277,7 @@ class _MealPageState extends State<MealPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -328,7 +331,7 @@ class _MealPageState extends State<MealPage> {
               ),
             ],
           ),
-          const FloatingNotificationButton(),
+          const EnhancedFloatingNotificationButton(),
         ],
       ),
       bottomNavigationBar: widget.showBottomNav
@@ -453,9 +456,9 @@ class _MealPageState extends State<MealPage> {
                 topLeft: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
               ),
-              child: meal.imageUrl != null && meal.imageUrl!.isNotEmpty
+              child: meal.imageUrl.isNotEmpty
                   ? CachedNetworkImage(
-                      imageUrl: meal.imageUrl!,
+                      imageUrl: meal.imageUrl,
                       width: 120,
                       height: 100,
                       fit: BoxFit.cover,

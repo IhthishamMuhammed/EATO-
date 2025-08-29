@@ -2,12 +2,10 @@
 // Fixed version that matches your OrderProvider method calls
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:eato/services/notification_helper.dart';
 
 class OrderNotificationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ===================================================================
   // 🔔 METHODS CALLED BY YOUR ORDERPROVIDER
@@ -410,6 +408,8 @@ class OrderNotificationService {
         return '🎉 Order Delivered!';
       case 'cancelled':
         return '❌ Order Cancelled';
+      case 'rejected':
+        return '❌ Order Declined';
       default:
         return '📦 Order Update';
     }
@@ -435,6 +435,8 @@ class OrderNotificationService {
         return 'Enjoy your meal from $storeName! Please rate your experience';
       case 'cancelled':
         return 'Your order from $storeName has been cancelled';
+      case 'rejected':
+        return 'Unfortunately, $storeName cannot fulfill your order at this time'; // Add this
       default:
         return 'Your order from $storeName has been updated';
     }

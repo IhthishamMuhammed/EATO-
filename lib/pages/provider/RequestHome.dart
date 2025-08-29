@@ -1,4 +1,6 @@
+import 'package:eato/EatoComponents.dart';
 import 'package:eato/widgets/store_availability_fab.dart';
+import 'package:eato/widgets/compact_food_summary_card.dart';
 import 'package:flutter/material.dart';
 import 'package:eato/Model/coustomUser.dart';
 import 'package:eato/Provider/OrderProvider.dart';
@@ -30,6 +32,9 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
 
   // Loading states for individual requests
   final Set<String> _processingRequests = {};
+
+  // Cache for order data to avoid repeated async calls
+  final Map<String, CustomerOrder> _orderCache = {};
 
   @override
   void initState() {
@@ -118,6 +123,32 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
     if (storeProvider.userStore != null) {
       // Refresh listeners to ensure latest data
       orderProvider.listenToStoreOrderRequests(storeProvider.userStore!.id);
+
+      // Clear cache to force refresh
+      _orderCache.clear();
+      setState(() {});
+    }
+  }
+
+  // Pre-load order data for summary widgets
+  Future<void> _loadOrderData(
+      List<OrderRequest> requests, OrderProvider orderProvider) async {
+    for (var request in requests) {
+      if (!_orderCache.containsKey(request.orderId)) {
+        try {
+          final order = await orderProvider.getOrderById(request.orderId);
+          if (order != null) {
+            _orderCache[request.orderId] = order;
+          }
+        } catch (e) {
+          // Skip if order not found
+          continue;
+        }
+      }
+    }
+
+    if (mounted) {
+      setState(() {}); // Refresh UI with cached data
     }
   }
 
@@ -133,9 +164,6 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
 
       _showSuccessSnackBar(
           'Order request accepted! Check Orders tab to manage it.');
-
-      // Optional: Auto-navigate to Orders tab to show the new order
-      _showNavigateToOrdersDialog();
     } catch (e) {
       _showErrorSnackBar('Failed to accept request: $e');
     } finally {
@@ -191,33 +219,6 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
       ),
     );
     return result ?? false;
-  }
-
-  void _showNavigateToOrdersDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Request Accepted!'),
-        content: Text(
-            'The order is now available in your Orders tab. Would you like to go there now?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Stay Here'),
-            style: EatoTheme.textButtonStyle,
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Note: Navigation will be handled by the main navigation wrapper
-            },
-            style: EatoTheme.primaryButtonStyle,
-            child: Text('Go to Orders'),
-          ),
-        ],
-      ),
-    );
   }
 
   List<OrderRequest> _filterRequests(List<OrderRequest> requests) {
@@ -388,18 +389,43 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
           return _buildNoStoreView();
         }
 
+        final filteredRequests = _filterRequests(orderProvider.orderRequests);
+
+        // Pre-load order data for summary widgets
+        if (filteredRequests.isNotEmpty &&
+            _orderCache.length < filteredRequests.length) {
+          _loadOrderData(filteredRequests, orderProvider);
+        }
+
+        // Get cached orders for widgets
+        final cachedOrders = _orderCache.values.toList();
+
         return Scaffold(
           appBar: _buildAppBar(orderProvider),
           body: Stack(
             children: [
-              // Existing body content
-              orderProvider.isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                          color: EatoTheme.primaryColor))
-                  : _buildRequestsContent(orderProvider),
+              // Main content with food summary widgets
+              Column(
+                children: [
+                  // Food Summary Card (expandable detailed view)
+                  if (filteredRequests.isNotEmpty)
+                    CompactFoodSummaryCard(
+                      requests: filteredRequests,
+                      orders: cachedOrders,
+                    ),
 
-              // Add the floating availability button
+                  // Requests List
+                  Expanded(
+                    child: orderProvider.isLoading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                                color: EatoTheme.primaryColor))
+                        : _buildRequestsContent(orderProvider),
+                  ),
+                ],
+              ),
+
+              // Floating availability button
               StoreAvailabilityFAB(
                 storeId: storeProvider.userStore!.id,
               ),
@@ -434,57 +460,51 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
     );
   }
 
-  AppBar _buildAppBar(OrderProvider orderProvider) {
-    final filteredRequests = _filterRequests(orderProvider.orderRequests);
+  // Add this import at the top of your file
+  // import 'package:eato/EatoComponents.dart';
 
-    return AppBar(
-      title: _showSearchBar
-          ? TextField(
-              controller: _searchController,
-              autofocus: true,
-              decoration: EatoTheme.inputDecoration(
-                hintText: 'Search requests...',
-                prefixIcon:
-                    Icon(Icons.search, color: EatoTheme.textSecondaryColor),
-                suffixIcon: IconButton(
-                  icon: Icon(Icons.close),
-                  onPressed: () {
-                    setState(() {
-                      _showSearchBar = false;
-                      _searchController.clear();
-                    });
-                  },
-                ),
-              ),
-              style: EatoTheme.bodyMedium,
-            )
-          : Text(
-              'Requests',
-              style: TextStyle(
-                color: EatoTheme.textPrimaryColor,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+  AppBar _buildAppBar(OrderProvider orderProvider) {
+    if (_showSearchBar) {
+      // Custom search AppBar when search is active
+      return AppBar(
+        title: TextField(
+          controller: _searchController,
+          autofocus: true,
+          decoration: EatoTheme.inputDecoration(
+            hintText: 'Search requests...',
+            prefixIcon: Icon(Icons.search, color: EatoTheme.textSecondaryColor),
+            suffixIcon: IconButton(
+              icon: Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _showSearchBar = false;
+                  _searchController.clear();
+                });
+              },
             ),
-      backgroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: _showSearchBar ? false : true,
-      leadingWidth: _showSearchBar ? 0 : null,
-      leading: _showSearchBar
-          ? null
-          : (Navigator.canPop(context)
-              ? IconButton(
-                  icon:
-                      Icon(Icons.arrow_back, color: EatoTheme.textPrimaryColor),
-                  onPressed: () => Navigator.pop(context),
-                )
-              : null),
-      actions: [
-        if (!_showSearchBar)
-          IconButton(
-            icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
-            onPressed: () => setState(() => _showSearchBar = true),
+            context: context,
           ),
+          style: EatoTheme.bodyMedium,
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        leadingWidth: 0,
+        leading: null,
+        actions: [],
+      );
+    }
+
+    // Use ProfilePage style AppBar when not searching
+    return EatoComponents.appBar(
+      context: context,
+      title: 'Requests',
+      titleIcon: Icons.inbox,
+      actions: [
+        IconButton(
+          icon: Icon(Icons.search, color: EatoTheme.textPrimaryColor),
+          onPressed: () => setState(() => _showSearchBar = true),
+        ),
       ],
     );
   }
@@ -502,8 +522,14 @@ class _RequestHomeState extends State<RequestHome> with WidgetsBindingObserver {
               itemCount: filteredRequests.length,
               itemBuilder: (context, index) {
                 final request = filteredRequests[index];
+
+                // Use cached order if available, otherwise show loading
+                final cachedOrder = _orderCache[request.orderId];
+
                 return FutureBuilder<CustomerOrder?>(
-                  future: orderProvider.getOrderById(request.orderId),
+                  future: cachedOrder != null
+                      ? Future.value(cachedOrder)
+                      : orderProvider.getOrderById(request.orderId),
                   builder: (context, snapshot) {
                     final order = snapshot.data;
                     final isProcessing =

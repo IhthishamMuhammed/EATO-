@@ -76,28 +76,41 @@ class OrderCard extends StatelessWidget {
           topRight: Radius.circular(12),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(Icons.receipt_outlined, size: 16, color: EatoTheme.primaryColor),
-          SizedBox(width: 6),
-          Text(
-            'Order ${_getDisplayOrderNumber()}',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: EatoTheme.primaryColor,
-              fontSize: 13,
-            ),
+          // First row: Order number and status
+          Row(
+            children: [
+              Icon(Icons.receipt_outlined,
+                  size: 16, color: EatoTheme.primaryColor),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Order ${_getDisplayOrderNumber()}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: EatoTheme.primaryColor,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              _buildStatusWidget(),
+            ],
           ),
-          SizedBox(width: 8),
-          Text(
-            '• ${_formatTime(order.orderTime)}',
-            style: TextStyle(
-              color: EatoTheme.textSecondaryColor,
-              fontSize: 12,
-            ),
+          // Second row: Time
+          Row(
+            children: [
+              SizedBox(width: 22), // Align with icon + spacing above
+              Text(
+                '${_formatTime(order.orderTime)}',
+                style: TextStyle(
+                  color: EatoTheme.textSecondaryColor,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
-          Spacer(),
-          _buildStatusWidget(),
         ],
       ),
     );
@@ -394,7 +407,7 @@ class OrderCard extends StatelessWidget {
 
     return _buildCustomButton(
       text: isUpdating ? 'Updating...' : buttonText,
-      onPressed: isUpdating || nextStatus == null
+      onPressed: (isUpdating)
           ? null
           : () {
               print('🔥 OrderCard: Updating order ${order.id} to $nextStatus');

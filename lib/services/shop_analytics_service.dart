@@ -17,8 +17,8 @@ class ShopAnalyticsService {
       ]);
 
       return {
-        'subscriberCount': futures[0] as int,
-        'totalFoodItems': futures[1] as int,
+        'subscriberCount': futures[0],
+        'totalFoodItems': futures[1],
       };
     } catch (e) {
       print('❌ [ShopAnalyticsService] Error getting analytics for $shopId: $e');
